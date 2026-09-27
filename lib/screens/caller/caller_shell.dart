@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/active_call_manager.dart';
 import '../../core/app_controller.dart';
 import '../../models/app_models.dart';
 import '../../widgets/common_widgets.dart';
-import '../session/session_screen.dart';
 import 'anonymous_profile_screen.dart';
 import 'caller_history_screen.dart';
 import 'caller_home_screen.dart';
@@ -130,12 +130,7 @@ class _CallerShellState extends State<CallerShell> {
     try {
       if (yes == true) {
         final accepted = await context.read<AppController>().api.acceptSession(s.id);
-        if (mounted) {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => SessionScreen(initialSession: accepted, callerSide: true)),
-          );
-        }
+        ActiveCallManager.instance.startCall(accepted, callerSide: true);
       } else {
         await context.read<AppController>().api.rejectSession(s.id, 'Caller declined callback');
       }

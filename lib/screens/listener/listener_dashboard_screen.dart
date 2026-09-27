@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/active_call_manager.dart';
 import '../../core/app_controller.dart';
 import '../../models/app_models.dart';
 import '../../widgets/common_widgets.dart';
-import '../session/session_screen.dart';
 import 'listener_peers_screen.dart';
 import 'listener_reviews_screen.dart';
 
@@ -172,7 +172,7 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
       var current = callback;
       for (var i = 0; i < 40 && mounted; i++) {
         if (const {'ACCEPTED', 'CONNECTED', 'ACTIVE'}.contains(current.status)) {
-          await Navigator.push(context, MaterialPageRoute(builder: (_) => SessionScreen(initialSession: current, callerSide: false)));
+          ActiveCallManager.instance.startCall(current, callerSide: false);
           await _load(silent: true);
           return;
         }
@@ -203,7 +203,12 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
   Widget build(BuildContext context) {
     if (loading) return const Scaffold(backgroundColor: bgCream, body: LoadingBody());
 
-    final displayName = '${profile?['displayName'] ?? profile?['fullName'] ?? 'Listener'}';
+    final app = context.watch<AppController>();
+    final user = app.user;
+    final listenerName = (user?.fullName.trim().isNotEmpty == true
+            ? user!.fullName.trim()
+            : (profile?['name'] ?? profile?['displayName'] ?? profile?['fullName'] ?? 'Listener'))
+        .toString();
     final avatarUrl = profile?['avatarUrl']?.toString();
     final targetSeconds = (attendance?['targetSeconds'] as num?)?.toInt() ?? 10800; // 3h = 10800s
     final online = liveOnlineSeconds.clamp(0, 1 << 30).toInt();
@@ -348,61 +353,82 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
 
                   const SizedBox(width: 8),
 
-                  // Profile Pill
+                  // Profile Pill with Listener Name in place of 'Online Listener'
                   InkWell(
                     borderRadius: BorderRadius.circular(20),
                     onTap: () => widget.onNavigateTab?.call(3), // Navigate to Profile
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Stack(
-                          children: [
-                            RemoteAvatar(
-                              url: avatarUrl,
-                              radius: 17,
-                              fallback: displayName,
-                            ),
-                            Positioned(
-                              right: 0,
-                              bottom: 0,
-                              child: Container(
-                                width: 9,
-                                height: 9,
-                                decoration: BoxDecoration(
-                                  color: isOnline ? emeraldOnline : isBusy ? const Color(0xFFF59E0B) : const Color(0xFF9CA3AF),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 1.5),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: cardBg,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: borderWarm, width: 0.9),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Stack(
+                            children: [
+                              RemoteAvatar(
+                                url: avatarUrl,
+                                radius: 15,
+                                fallback: listenerName,
+                              ),
+                              Positioned(
+                                right: 0,
+                                bottom: 0,
+                                child: Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: isOnline ? emeraldOnline : isBusy ? const Color(0xFFF59E0B) : const Color(0xFF9CA3AF),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white, width: 1.5),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(width: 5),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Row(
+                            ],
+                          ),
+                          const SizedBox(width: 6),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 105),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(
-                                  displayName.split(' ').first,
-                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: textDark),
+                                const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Listener',
+                                      style: TextStyle(fontSize: 8.5, color: textMuted, fontWeight: FontWeight.w500),
+                                    ),
+                                    SizedBox(width: 1),
+                                    Icon(Icons.chevron_right_rounded, size: 12, color: Color(0xFF9CA3AF)),
+                                  ],
                                 ),
-                                const Icon(Icons.chevron_right_rounded, size: 13, color: Color(0xFF9CA3AF)),
+                                Text(
+                                  listenerName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    color: textDark,
+                                  ),
+                                ),
                               ],
                             ),
-                            Text(
-                              isOnline ? 'Online Listener' : isBusy ? 'Busy in Call' : 'Offline',
-                              style: TextStyle(
-                                fontSize: 8.5,
-                                fontWeight: FontWeight.w700,
-                                color: isOnline ? emeraldOnline : isBusy ? const Color(0xFFF59E0B) : textMuted,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -440,8 +466,121 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
                 ],
               ),
 
+              const SizedBox(height: 10),
+
               // ==========================================
-              // 2.5 PEER LISTENERS LIVE STATUS CARD
+              // 2.5 AVAILABILITY & MODALITY CONTROLS CARD (Above Live Listeners Card)
+              // ==========================================
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: cardBg,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: borderWarm, width: 0.9),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFD6C7B8).withValues(alpha: 0.16),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Top Row: Availability title & live status on Left, Presence Slider Switch on Right
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: isOnline ? emeraldOnline : isBusy ? const Color(0xFFF59E0B) : const Color(0xFF9CA3AF),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 7),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Availability',
+                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: textDark),
+                                ),
+                                Text(
+                                  isOnline
+                                      ? 'Accepting calls'
+                                      : isBusy
+                                          ? 'Currently in call'
+                                          : 'Offline · Turn on to receive calls',
+                                  style: TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: isOnline ? emeraldOnline : isBusy ? const Color(0xFFF59E0B) : textMuted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        SizedBox(
+                          width: 135,
+                          child: _PresenceSliderSwitch(
+                            isOnline: isOnline || isBusy,
+                            onToggle: _toggle,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Bottom Row: 3 Beautiful Toggle Buttons for Chat, Voice Call, Video Call
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _ModalityToggleButton(
+                            icon: Icons.chat_bubble_rounded,
+                            label: 'Chat',
+                            isActive: chatAvailable,
+                            isBusy: modalityBusy,
+                            onToggle: () => _toggleModality('chat'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _ModalityToggleButton(
+                            icon: Icons.call_rounded,
+                            label: 'Voice Call',
+                            isActive: audioAvailable,
+                            isBusy: modalityBusy,
+                            onToggle: () => _toggleModality('audio'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _ModalityToggleButton(
+                            icon: Icons.videocam_rounded,
+                            label: 'Video Call',
+                            isActive: videoAvailable,
+                            isBusy: modalityBusy,
+                            onToggle: () => _toggleModality('video'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // ==========================================
+              // 3. OTHER LISTENERS LIVE STATUS CARD
               // ==========================================
               InkWell(
                 borderRadius: BorderRadius.circular(20),
@@ -521,195 +660,6 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
                       ),
                     ],
                   ),
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              // ==========================================
-              // 3. PROFILE MINI-BANNER CARD
-              // ==========================================
-              InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: () => widget.onNavigateTab?.call(3),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: cardBg,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: borderWarm, width: 0.9),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFD6C7B8).withValues(alpha: 0.16),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Stack(
-                        children: [
-                          RemoteAvatar(
-                            url: avatarUrl,
-                            radius: 23,
-                            fallback: displayName,
-                          ),
-                          Positioned(
-                            right: 0,
-                            bottom: 0,
-                            child: Container(
-                              width: 11,
-                              height: 11,
-                              decoration: BoxDecoration(
-                                color: isOnline ? emeraldOnline : isBusy ? const Color(0xFFF59E0B) : const Color(0xFF9CA3AF),
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 2),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Text(
-                                  displayName,
-                                  style: const TextStyle(
-                                    fontSize: 14.5,
-                                    fontWeight: FontWeight.w800,
-                                    color: textDark,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFE8FDF3),
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: emeraldOnline.withValues(alpha: 0.3), width: 0.7),
-                                  ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.check_circle_rounded, size: 10, color: emeraldOnline),
-                                      SizedBox(width: 3),
-                                      Text(
-                                        'VERIFIED PEER',
-                                        style: TextStyle(
-                                          fontSize: 8.5,
-                                          fontWeight: FontWeight.w800,
-                                          color: Color(0xFF047857),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 2),
-                            const Text(
-                              'Manage your incoming calls, instant payouts, and consultation ledger.',
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 11, color: textMuted, height: 1.25),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Icon(Icons.chevron_right_rounded, size: 20, color: Color(0xFF9CA3AF)),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              // ==========================================
-              // 4. AVAILABILITY & MODALITY CONTROLS CARD
-              // ==========================================
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: cardBg,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: borderWarm, width: 0.9),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFD6C7B8).withValues(alpha: 0.16),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    // Availability Switch
-                    Expanded(
-                      flex: 11,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 7,
-                                height: 7,
-                                decoration: BoxDecoration(
-                                  color: isOnline ? emeraldOnline : isBusy ? const Color(0xFFF59E0B) : const Color(0xFF9CA3AF),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 5),
-                              const Text(
-                                'Availability',
-                                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: textDark),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          _PresenceSliderSwitch(
-                            isOnline: isOnline || isBusy,
-                            onToggle: _toggle,
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(width: 10),
-
-                    // 3 Modality Buttons (Chat, Voice Call, Video Call)
-                    Expanded(
-                      flex: 14,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _ModalityButton(
-                            icon: Icons.chat_bubble_rounded,
-                            label: 'Chat',
-                            isActive: chatAvailable,
-                            onTap: () => _toggleModality('chat'),
-                          ),
-                          _ModalityButton(
-                            icon: Icons.call_rounded,
-                            label: 'Voice Call',
-                            isActive: audioAvailable,
-                            onTap: () => _toggleModality('audio'),
-                          ),
-                          _ModalityButton(
-                            icon: Icons.videocam_rounded,
-                            label: 'Video Call',
-                            isActive: videoAvailable,
-                            onTap: () => _toggleModality('video'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
                 ),
               ),
 
@@ -2021,54 +1971,136 @@ class _PresenceSliderSwitch extends StatelessWidget {
   }
 }
 
-class _ModalityButton extends StatelessWidget {
+class _ModalityToggleButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool isActive;
-  final VoidCallback onTap;
+  final bool isBusy;
+  final VoidCallback onToggle;
 
-  const _ModalityButton({
+  const _ModalityToggleButton({
     required this.icon,
     required this.label,
     required this.isActive,
-    required this.onTap,
+    required this.isBusy,
+    required this.onToggle,
   });
 
   @override
   Widget build(BuildContext context) {
+    const primaryOrange = Color(0xFFF95B3D);
+    const textDark = Color(0xFF111827);
+    const textMuted = Color(0xFF6B7280);
+
     return InkWell(
       borderRadius: BorderRadius.circular(14),
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: isActive ? const Color(0xFFFFECE5) : const Color(0xFFF3F4F6),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: isActive ? const Color(0xFFF95B3D).withValues(alpha: 0.4) : const Color(0xFFE5E7EB),
-                width: 0.8,
+      onTap: isBusy ? null : onToggle,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive ? const Color(0xFFFFF6F3) : const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isActive ? primaryOrange.withValues(alpha: 0.45) : const Color(0xFFE5E7EB),
+            width: isActive ? 1.2 : 0.9,
+          ),
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: primaryOrange.withValues(alpha: 0.08),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Row with Icon and Mini Toggle Switch
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: isActive ? const Color(0xFFFFECE5) : const Color(0xFFF3F4F6),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    icon,
+                    size: 15,
+                    color: isActive ? primaryOrange : const Color(0xFF9CA3AF),
+                  ),
+                ),
+                // Smooth Animated iOS-style Toggle Switch
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 32,
+                  height: 18,
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: isActive ? primaryOrange : const Color(0xFFD1D5DB),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  alignment: isActive ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Container(
+                    width: 14,
+                    height: 14,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Color(0x33000000),
+                          blurRadius: 2,
+                          offset: Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
+                color: isActive ? textDark : textMuted,
+                letterSpacing: -0.2,
               ),
             ),
-            child: Icon(
-              icon,
-              size: 20,
-              color: isActive ? const Color(0xFFF95B3D) : const Color(0xFF9CA3AF),
+            const SizedBox(height: 2),
+            Row(
+              children: [
+                Container(
+                  width: 5,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: isActive ? primaryOrange : const Color(0xFF9CA3AF),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 3.5),
+                Text(
+                  isActive ? 'Active' : 'Muted',
+                  style: TextStyle(
+                    fontSize: 8.5,
+                    fontWeight: FontWeight.w700,
+                    color: isActive ? primaryOrange : const Color(0xFF9CA3AF),
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 9.5,
-              fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-              color: isActive ? const Color(0xFF111827) : const Color(0xFF6B7280),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

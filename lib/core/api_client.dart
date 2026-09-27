@@ -28,6 +28,7 @@ class ApiClient {
   Map<String, String> get _headers => {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
+        'X-Client-Platform': 'mobile',
         if (token?.isNotEmpty == true) 'Authorization': 'Bearer $token',
       };
 

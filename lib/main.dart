@@ -7,6 +7,7 @@ import 'screens/caller/caller_shell.dart';
 import 'screens/caller/public_home_screen.dart';
 import 'screens/listener/listener_shell.dart';
 import 'screens/listener/listener_verification_pending_screen.dart';
+import 'widgets/global_call_host.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,6 +21,7 @@ class TalkStrangersApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         title: 'HearMe',
         theme: AppTheme.light,
+        builder: (context, child) => GlobalCallHost(child: child ?? const SizedBox.shrink()),
         home: const InactivityGuard(child: RootGate()),
       );
 }

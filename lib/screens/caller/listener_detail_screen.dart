@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../core/active_call_manager.dart';
 import '../../core/app_controller.dart';
 import '../../models/app_models.dart';
 import '../../widgets/common_widgets.dart';
 import '../auth/login_screen.dart';
-import '../session/session_screen.dart';
 import 'schedule_consultation_screen.dart';
 
 class ListenerDetailScreen extends StatefulWidget {
@@ -176,7 +176,7 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
       }
       final session = await app.api.requestSession(widget.listener.id, type, categorySlug: _categorySlug());
       if (!mounted) return;
-      await Navigator.push(context, MaterialPageRoute(builder: (_) => SessionScreen(initialSession: session, callerSide: true)));
+      ActiveCallManager.instance.startCall(session, callerSide: true);
       await _load();
     } catch (e) {
       if (mounted) showError(context, e);

@@ -3,10 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/active_call_manager.dart';
 import '../../core/app_controller.dart';
 import '../../models/app_models.dart';
 import '../../widgets/common_widgets.dart';
-import '../session/session_screen.dart';
+import '../../widgets/incoming_call_overlay.dart';
 import 'listener_dashboard_screen.dart';
 import 'listener_earnings_screen.dart';
 import 'listener_history_screen.dart';
@@ -39,7 +40,7 @@ class _ListenerShellState extends State<ListenerShell> {
   @override
   void initState() {
     super.initState();
-    poll = Timer.periodic(const Duration(seconds: 2), (_) => _incoming());
+    poll = Timer.periodic(const Duration(milliseconds: 1000), (_) => _incoming());
     nudgePoll = Timer.periodic(const Duration(seconds: 30), (_) => _nudges());
     Future<void>.delayed(const Duration(milliseconds: 900), _nudges);
   }
@@ -54,7 +55,11 @@ class _ListenerShellState extends State<ListenerShell> {
   Future<void> _incoming() async {
     try {
       final s = await context.read<AppController>().api.pendingListenerSession();
-      if (s == null || s.id == shownId || !mounted) return;
+      if (s == null) {
+        shownId = null;
+        return;
+      }
+      if (s.id == shownId || !mounted) return;
       shownId = s.id;
       await _showIncoming(s);
     } catch (_) {}
@@ -114,39 +119,13 @@ class _ListenerShellState extends State<ListenerShell> {
   }
 
   Future<void> _showIncoming(InstantSessionModel s) async {
-    final decision = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Incoming request'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            RemoteAvatar(url: s.callerAvatarUrl, radius: 38, fallback: s.callerNickname),
-            const SizedBox(height: 10),
-            Text(s.callerNickname, style: Theme.of(ctx).textTheme.titleLarge),
-            Text('${s.type.replaceAll('_', ' ')} • ₹${s.ratePerMinute.toStringAsFixed(0)}/min'),
-            const SizedBox(height: 6),
-            const Text('Caller identity is anonymous.'),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Reject')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Accept')),
-        ],
-      ),
-    );
+    final decision = await IncomingCallOverlay.show(context, s);
 
     try {
       if (decision == true) {
         final accepted = await context.read<AppController>().api.acceptSession(s.id);
-        if (mounted) {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => SessionScreen(initialSession: accepted, callerSide: false)),
-          );
-        }
-      } else {
+        ActiveCallManager.instance.startCall(accepted, callerSide: false);
+      } else if (decision == false) {
         await context.read<AppController>().api.rejectSession(s.id, 'Listener declined');
       }
     } catch (e) {

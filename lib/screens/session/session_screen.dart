@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
+import '../../core/active_call_manager.dart';
 import '../../core/app_controller.dart';
 import '../../models/app_models.dart';
 import '../../services/android_voice_fx.dart';
@@ -13,7 +14,14 @@ import '../../widgets/video_privacy_filter.dart';
 class SessionScreen extends StatefulWidget {
   final InstantSessionModel initialSession;
   final bool callerSide;
-  const SessionScreen({super.key, required this.initialSession, required this.callerSide});
+  final bool isHostedInGlobalManager;
+
+  const SessionScreen({
+    super.key,
+    required this.initialSession,
+    required this.callerSide,
+    this.isHostedInGlobalManager = false,
+  });
 
   @override
   State<SessionScreen> createState() => _SessionScreenState();
@@ -64,6 +72,17 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
       if (!mounted) return;
       context.read<AppController>().enterActiveSession();
       registeredActiveSession = true;
+      if (widget.isHostedInGlobalManager) {
+        ActiveCallManager.instance.bindCallControls(
+          toggleMute: _toggleMic,
+          endCall: () {
+            if (!ending && !session.ended) _end();
+          },
+          maximizeCall: () {
+            if (mounted) setState(() {});
+          },
+        );
+      }
     });
     _startPolling();
   }
@@ -80,6 +99,14 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
           everLive = true;
           seconds++;
         });
+        if (widget.isHostedInGlobalManager) {
+          ActiveCallManager.instance.updateState(
+            seconds: seconds,
+            muted: !mic,
+            live: true,
+            updatedSession: session,
+          );
+        }
       } else if (!session.ended) {
         setState(() => ringRemaining = _remainingRingSeconds());
       }
@@ -110,7 +137,11 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
         } else {
           await _showRequestEnded(next);
         }
-        if (mounted) Navigator.pop(context);
+        if (widget.isHostedInGlobalManager) {
+          ActiveCallManager.instance.clearCall();
+        } else if (mounted) {
+          Navigator.pop(context);
+        }
       } else if (isLive && !isChat && pc == null && !joining) {
         await _joinMedia();
       }
@@ -187,7 +218,11 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
         'type': 'VOICE_FX_CAPABILITY',
         'supported': voiceFx.supported,
       }).catchError((_) {});
-      if (widget.callerSide) await _sendOffer();
+      if (widget.callerSide) {
+        await _sendOffer();
+      } else {
+        await api.sendSignal(session.id, {'type': 'peer_ready'}).catchError((_) {});
+      }
       if (mounted) setState(() {});
     } catch (e) {
       if (mounted) showError(context, e);
@@ -297,23 +332,62 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     }
     if (type == 'VIDEO_FILTER_CHANGED') {
       final filter = '${s['filter'] ?? VideoPrivacyFilter.none}';
-      if (mounted) setState(() => peerVideoFilter = filter);
+      if (mounted) {
+        setState(() => peerVideoFilter = filter);
+      }
       return;
     }
     if (type == 'VOICE_FX_CAPABILITY') {
-      if (mounted) setState(() => peerVoiceFxCapable = s['supported'] == true);
+      if (mounted) {
+        setState(() => peerVoiceFxCapable = s['supported'] == true);
+      }
       return;
     }
     if (type == 'VOICE_FILTER_CHANGED') {
       final filter = '${s['filter'] ?? AndroidVoiceFx.normal}';
-      if (mounted) setState(() {
-        peerVoiceFilter = filter;
-        banner = filter == AndroidVoiceFx.normal ? 'Peer returned to natural voice.' : 'Peer enabled a voice privacy effect.';
-      });
+      if (mounted) {
+        setState(() {
+          peerVoiceFilter = filter;
+          banner = filter == AndroidVoiceFx.normal ? 'Peer returned to natural voice.' : 'Peer enabled a voice privacy effect.';
+        });
+      }
       return;
     }
     if (type == 'SAFETY_ALERT') {
-      if (mounted) setState(() => banner = '⚠️ ${s['reason'] ?? 'Safety alert'}');
+      if (mounted) {
+        setState(() => banner = '⚠️ ${s['reason'] ?? 'Safety alert'}');
+      }
+      return;
+    }
+    if (type == 'peer_ready' && widget.callerSide && !isChat) {
+      final peer = pc;
+      if (peer != null) {
+        final state = await peer.getSignalingState();
+        if (state == RTCSignalingState.RTCSignalingStateHaveLocalOffer) {
+          final offer = await peer.getLocalDescription();
+          if (offer != null) {
+            await context.read<AppController>().api.sendSignal(session.id, {
+              'type': 'offer',
+              'sdp': {'type': offer.type, 'sdp': offer.sdp},
+            });
+          }
+        }
+      }
+      return;
+    }
+    if (type == 'IN_CALL_CHAT' && s['message'] is Map) {
+      final msg = Map<String, dynamic>.from(s['message'] as Map);
+      if (mounted) {
+        setState(() {
+          final isDup = messages.any((m) =>
+            (msg['id'] != null && m['id'] == msg['id']) ||
+            (m['text'] == msg['text'] && m['senderRole'] == msg['senderRole'])
+          );
+          if (!isDup) {
+            messages.add(msg);
+          }
+        });
+      }
       return;
     }
 
@@ -368,7 +442,22 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     try {
       final app = context.read<AppController>();
       final name = widget.callerSide ? 'Anonymous' : (app.user?.fullName ?? 'Listener');
-      await app.api.sendMessage(session.id, text, senderName: name, senderRole: widget.callerSide ? 'USER' : 'LISTENER');
+      final role = widget.callerSide ? 'USER' : 'LISTENER';
+      final newMsg = {
+        'id': 'local-${DateTime.now().millisecondsSinceEpoch}',
+        'senderId': app.user?.id,
+        'senderRole': role,
+        'senderName': name,
+        'text': text,
+        'time': '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+      if (mounted) setState(() => messages.add(newMsg));
+      app.api.sendSignal(session.id, {
+        'type': 'IN_CALL_CHAT',
+        'message': newMsg,
+      }).catchError((_) {});
+      await app.api.sendMessage(session.id, text, senderName: name, senderRole: role);
       await _refreshMessages();
     } catch (e) {
       if (mounted) showError(context, e);
@@ -412,7 +501,11 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     } else {
       await _showRequestEnded(ended);
     }
-    if (mounted) Navigator.pop(context);
+    if (widget.isHostedInGlobalManager) {
+      ActiveCallManager.instance.clearCall();
+    } else if (mounted) {
+      Navigator.pop(context);
+    }
   }
 
   Future<void> _end() async {
@@ -427,14 +520,22 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     if (!mounted) return;
     setState(() => session = ended);
     await _showEndSummary(ended);
-    if (mounted) Navigator.pop(context);
+    if (widget.isHostedInGlobalManager) {
+      ActiveCallManager.instance.clearCall();
+    } else if (mounted) {
+      Navigator.pop(context);
+    }
   }
 
   Future<void> _cancel() async {
     ending = true;
     try { await context.read<AppController>().api.cancelSession(session.id); } catch (_) {}
     await _cleanupMedia();
-    if (mounted) Navigator.pop(context);
+    if (widget.isHostedInGlobalManager) {
+      ActiveCallManager.instance.clearCall();
+    } else if (mounted) {
+      Navigator.pop(context);
+    }
   }
 
   Future<void> _cleanupMedia() async {
@@ -481,16 +582,34 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
 
   String _time(int value) => '${(value ~/ 60).toString().padLeft(2, '0')}:${(value % 60).toString().padLeft(2, '0')}';
 
+  void _minimizeCall() {
+    if (widget.isHostedInGlobalManager) {
+      ActiveCallManager.instance.minimize();
+    } else {
+      Navigator.of(context).maybePop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final peerName = widget.callerSide ? session.listenerName : session.callerNickname;
     return PopScope(
       canPop: session.ended,
       onPopInvokedWithResult: (didPop, _) async {
-        if (!didPop && await confirm(context, 'End session?', 'Leaving will end the active session.')) await _end();
+        if (didPop) return;
+        if (isLive && !session.ended) {
+          _minimizeCall();
+        } else if (await confirm(context, 'End session?', 'Leaving will end the active session.')) {
+          await _end();
+        }
       },
       child: Scaffold(
         appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 30),
+            tooltip: 'Minimize call',
+            onPressed: _minimizeCall,
+          ),
           title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(peerName),
             if (!isChat && isLive) Text(_time(seconds), style: Theme.of(context).textTheme.labelSmall),
@@ -610,6 +729,14 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
       for (final t in localStream?.getAudioTracks() ?? <MediaStreamTrack>[]) {
         t.enabled = next;
       }
+    }
+    if (widget.isHostedInGlobalManager) {
+      ActiveCallManager.instance.updateState(
+        seconds: seconds,
+        muted: !next,
+        live: isLive,
+        updatedSession: session,
+      );
     }
     setState(() {});
   }
@@ -767,7 +894,24 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
           if (text.isEmpty) return;
           controller.clear();
           final app = context.read<AppController>();
-          await app.api.sendMessage(session.id, text, senderName: widget.callerSide ? 'Anonymous' : (app.user?.fullName ?? 'Listener'), senderRole: widget.callerSide ? 'USER' : 'LISTENER');
+          final name = widget.callerSide ? 'Anonymous' : (app.user?.fullName ?? 'Listener');
+          final role = widget.callerSide ? 'USER' : 'LISTENER';
+          final newMsg = {
+            'id': 'local-${DateTime.now().millisecondsSinceEpoch}',
+            'senderId': app.user?.id,
+            'senderRole': role,
+            'senderName': name,
+            'text': text,
+            'time': '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
+            'timestamp': DateTime.now().toIso8601String(),
+          };
+          messages.add(newMsg);
+          if (ctx.mounted) setLocal(() {});
+          app.api.sendSignal(session.id, {
+            'type': 'IN_CALL_CHAT',
+            'message': newMsg,
+          }).catchError((_) {});
+          await app.api.sendMessage(session.id, text, senderName: name, senderRole: role);
           messages = await app.api.messages(session.id);
           if (ctx.mounted) setLocal(() {});
         }

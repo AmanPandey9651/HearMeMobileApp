@@ -40,6 +40,10 @@ class AppController extends ChangeNotifier {
   RecordingGovernanceModel? recordingGovernance;
   bool phoneLoginEnabled = false;
   bool googleLoginEnabled = true;
+  int userInactivityMinutes = 30;
+  int listenerInactivityMinutes = 30;
+  int adminInactivityMinutes = 15;
+  int mobileInactivityDays = 30;
   Timer? _governanceTimer;
   Timer? _accountStatusTimer;
   bool _checkingAccountStatus = false;
@@ -66,7 +70,7 @@ class AppController extends ChangeNotifier {
           googleLoginEnabled = parsed['googleLoginEnabled'] != false;
         } catch (_) {}
       }
-      await Future.wait([_refreshGovernance(), refreshAuthGovernance()]);
+      await Future.wait([_refreshGovernance(), refreshAuthGovernance(), refreshInactivityGovernance()]);
       _governanceTimer ??= Timer.periodic(const Duration(seconds: 10), (_) => _refreshGovernance());
       final token = await _storage.read(key: _tokenKey);
       final savedUser = await _storage.read(key: _userKey);
@@ -248,6 +252,17 @@ class AppController extends ChangeNotifier {
         key: _authGovernanceKey,
         value: jsonEncode({'phoneLoginEnabled': phoneLoginEnabled, 'googleLoginEnabled': googleLoginEnabled}),
       );
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> refreshInactivityGovernance() async {
+    try {
+      final settings = await api.inactivityGovernance();
+      userInactivityMinutes = (settings['userInactivityMinutes'] as num?)?.toInt() ?? 30;
+      listenerInactivityMinutes = (settings['listenerInactivityMinutes'] as num?)?.toInt() ?? 30;
+      adminInactivityMinutes = (settings['adminInactivityMinutes'] as num?)?.toInt() ?? 15;
+      mobileInactivityDays = (settings['mobileInactivityDays'] as num?)?.toInt() ?? 30;
       notifyListeners();
     } catch (_) {}
   }

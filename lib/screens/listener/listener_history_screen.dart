@@ -3,10 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/active_call_manager.dart';
 import '../../core/app_controller.dart';
 import '../../models/app_models.dart';
 import '../../widgets/common_widgets.dart';
-import '../session/session_screen.dart';
 
 class ListenerHistoryScreen extends StatefulWidget {
   const ListenerHistoryScreen({super.key});
@@ -187,10 +187,7 @@ class _ListenerHistoryScreenState extends State<ListenerHistoryScreen> {
       ));
       for (var i = 0; i < 40 && mounted; i++) {
         if (const {'ACCEPTED', 'CONNECTED', 'ACTIVE'}.contains(callback.status)) {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => SessionScreen(initialSession: callback, callerSide: false)),
-          );
+          ActiveCallManager.instance.startCall(callback, callerSide: false);
           await _load();
           return;
         }

@@ -12,7 +12,6 @@ class InactivityGuard extends StatefulWidget {
 }
 
 class _InactivityGuardState extends State<InactivityGuard> {
-  static const timeout = Duration(minutes: 10);
   Timer? timer;
 
   @override
@@ -23,7 +22,10 @@ class _InactivityGuardState extends State<InactivityGuard> {
 
   void _reset() {
     timer?.cancel();
-    timer = Timer(timeout, _expire);
+    if (!mounted) return;
+    final app = context.read<AppController>();
+    final days = app.mobileInactivityDays > 0 ? app.mobileInactivityDays : 30;
+    timer = Timer(Duration(days: days), _expire);
   }
 
   Future<void> _expire() async {
