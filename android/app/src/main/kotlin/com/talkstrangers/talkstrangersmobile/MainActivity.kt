@@ -8,7 +8,9 @@ import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.os.Bundle
 import android.os.Process
+import android.os.Build
 import android.view.WindowManager
+import android.view.WindowManager.ScreenCaptureCallback
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -42,15 +44,15 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun registerScreenCaptureDetection() {
-        if (android.os.Build.VERSION.SDK_INT >= 34) {
+        if (Build.VERSION.SDK_INT >= 34) {
             // Android 14+: Use ScreenCaptureCallback — reliable, fires even when FLAG_SECURE blocks it
-            val callback = android.view.WindowManager.ScreenCaptureCallback {
+            val callback = ScreenCaptureCallback {
                 runOnUiThread {
                     privacyEventSink?.success(mapOf("type" to "SCREENSHOT_ATTEMPT", "platform" to "android"))
                 }
             }
             try {
-                val wm = getSystemService(android.view.WindowManager::class.java)
+                val wm = getSystemService(WindowManager::class.java)
                 wm.registerScreenCaptureCallback(mainExecutor, callback)
                 screenCaptureCallback = callback
             } catch (_: Exception) {}
@@ -90,13 +92,13 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun unregisterScreenCaptureDetection() {
-        if (android.os.Build.VERSION.SDK_INT >= 34) {
+        if (Build.VERSION.SDK_INT >= 34) {
             try {
                 val callback = screenCaptureCallback
                 if (callback != null) {
-                    val wm = getSystemService(android.view.WindowManager::class.java)
+                    val wm = getSystemService(WindowManager::class.java)
                     @Suppress("UNCHECKED_CAST")
-                    wm.unregisterScreenCaptureCallback(callback as android.view.WindowManager.ScreenCaptureCallback)
+                    wm.unregisterScreenCaptureCallback(callback as ScreenCaptureCallback)
                 }
             } catch (_: Exception) {}
             screenCaptureCallback = null

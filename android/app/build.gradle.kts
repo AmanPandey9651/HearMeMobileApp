@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.talkstrangers.talkstrangersmobile"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 34        // API 34 needed for WindowManager.ScreenCaptureCallback
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
