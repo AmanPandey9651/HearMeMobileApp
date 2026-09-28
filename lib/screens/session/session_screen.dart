@@ -32,6 +32,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   final localRenderer = RTCVideoRenderer();
   final remoteRenderer = RTCVideoRenderer();
   final voiceFx = AndroidVoiceFx();
+  final _privacyAlerts = PrivacyAlertService();
   final gameSignal = ValueNotifier<Map<String, dynamic>?>(null);
   final messageController = TextEditingController();
 
@@ -85,6 +86,20 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
       }
     });
     _startPolling();
+    _privacyAlerts.start(_onPrivacyAlert);
+  }
+
+  /// Called by PrivacyAlertService whenever native Android detects a
+  /// screenshot or screen-recording attempt during an active session.
+  void _onPrivacyAlert(String type) {
+    // Report silently to backend for admin audit log
+    context.read<AppController>().api
+        .securityAlert(session.id, type, 'Mobile screenshot/screen-recording attempt detected')
+        .catchError((_) {});
+    // Show an in-session warning banner to the user
+    if (mounted) {
+      setState(() => banner = '🚫 Screenshot / recording is prohibited and has been reported.');
+    }
   }
 
   void _startPolling() {
@@ -545,6 +560,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     messagePoll?.cancel();
     clock?.cancel();
     reconnectTimer?.cancel();
+    _privacyAlerts.stop();
     await voiceFx.stop();
     try { await voiceChannel?.close(); } catch (_) {}
     voiceChannel = null;

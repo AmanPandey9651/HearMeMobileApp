@@ -22,10 +22,88 @@ import kotlin.math.sin
 
 class MainActivity : FlutterActivity() {
     private lateinit var voiceFx: VoiceFxEngine
+    private var privacyEventSink: EventChannel.EventSink? = null
+    private var screenCaptureCallback: Any? = null // ScreenCaptureCallback (API 34+)
+    private var mediaObserver: android.database.ContentObserver? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        registerScreenCaptureDetection()
+    }
+
+    override fun onStop() {
+        unregisterScreenCaptureDetection()
+        super.onStop()
+    }
+
+    private fun registerScreenCaptureDetection() {
+        if (android.os.Build.VERSION.SDK_INT >= 34) {
+            // Android 14+: Use ScreenCaptureCallback — reliable, fires even when FLAG_SECURE blocks it
+            val callback = android.view.WindowManager.ScreenCaptureCallback {
+                runOnUiThread {
+                    privacyEventSink?.success(mapOf("type" to "SCREENSHOT_ATTEMPT", "platform" to "android"))
+                }
+            }
+            try {
+                val wm = getSystemService(android.view.WindowManager::class.java)
+                wm.registerScreenCaptureCallback(mainExecutor, callback)
+                screenCaptureCallback = callback
+            } catch (_: Exception) {}
+        } else {
+            // Android 13 and below: Watch MediaStore for new screenshots via ContentObserver
+            val resolver = contentResolver
+            val screenshotUri = android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+            val observer = object : android.database.ContentObserver(android.os.Handler(mainLooper)) {
+                override fun onChange(selfChange: Boolean, uri: android.net.Uri?) {
+                    super.onChange(selfChange, uri)
+                    // Check if the new image is in Screenshots folder
+                    if (uri != null) {
+                        try {
+                            resolver.query(
+                                uri,
+                                arrayOf(android.provider.MediaStore.Images.Media.DISPLAY_NAME, android.provider.MediaStore.Images.Media.RELATIVE_PATH),
+                                null, null, "${android.provider.MediaStore.Images.Media.DATE_ADDED} DESC"
+                            )?.use { cursor ->
+                                if (cursor.moveToFirst()) {
+                                    val path = cursor.getString(cursor.getColumnIndexOrThrow(android.provider.MediaStore.Images.Media.RELATIVE_PATH)) ?: ""
+                                    if (path.lowercase().contains("screenshot")) {
+                                        runOnUiThread {
+                                            privacyEventSink?.success(mapOf("type" to "SCREENSHOT_ATTEMPT", "platform" to "android"))
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (_: Exception) {}
+                    }
+                }
+            }
+            try {
+                resolver.registerContentObserver(screenshotUri, true, observer)
+                mediaObserver = observer
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun unregisterScreenCaptureDetection() {
+        if (android.os.Build.VERSION.SDK_INT >= 34) {
+            try {
+                val callback = screenCaptureCallback
+                if (callback != null) {
+                    val wm = getSystemService(android.view.WindowManager::class.java)
+                    @Suppress("UNCHECKED_CAST")
+                    wm.unregisterScreenCaptureCallback(callback as android.view.WindowManager.ScreenCaptureCallback)
+                }
+            } catch (_: Exception) {}
+            screenCaptureCallback = null
+        } else {
+            try { mediaObserver?.let { contentResolver.unregisterContentObserver(it) } } catch (_: Exception) {}
+            mediaObserver = null
+        }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -84,6 +162,17 @@ class MainActivity : FlutterActivity() {
                     result.notImplemented()
                 }
             }
+
+        // EventChannel: privacy alerts (screenshot/screen-recording attempts) → Flutter
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, "talkstrangers/privacy_alerts")
+            .setStreamHandler(object : EventChannel.StreamHandler {
+                override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                    privacyEventSink = events
+                }
+                override fun onCancel(arguments: Any?) {
+                    privacyEventSink = null
+                }
+            })
     }
 
     override fun onDestroy() {

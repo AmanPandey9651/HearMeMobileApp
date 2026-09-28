@@ -29,6 +29,7 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
   final localRenderer = RTCVideoRenderer();
   final remoteRenderer = RTCVideoRenderer();
   final voiceFx = AndroidVoiceFx();
+  final _privacyAlerts = PrivacyAlertService();
   final gameSignal = ValueNotifier<Map<String, dynamic>?>(null);
   final chatController = TextEditingController();
 
@@ -81,11 +82,21 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
       signalPoll = Timer.periodic(const Duration(milliseconds: 650), (_) => _pollSignals());
       statusPoll = Timer.periodic(const Duration(seconds: 1), (_) => _pollStatus());
       if (mounted) setState(() => loading = false);
+      _privacyAlerts.start(_onPrivacyAlert);
     } catch (e) {
       if (mounted) {
         setState(() => loading = false);
         showError(context, e);
       }
+    }
+  }
+
+  void _onPrivacyAlert(String type) {
+    context.read<AppController>().api
+        .securityAlert(widget.booking.id, type, 'Mobile screenshot/screen-recording attempt detected')
+        .catchError((_) {});
+    if (mounted) {
+      setState(() => banner = '🚫 Screenshot / recording is prohibited and has been reported.');
     }
   }
 
@@ -349,6 +360,7 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
     signalPoll?.cancel();
     statusPoll?.cancel();
     reconnectTimer?.cancel();
+    _privacyAlerts.stop();
     await voiceFx.stop();
     try {
       await voiceChannel?.close();

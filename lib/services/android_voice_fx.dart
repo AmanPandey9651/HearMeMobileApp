@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -83,5 +82,29 @@ class PrivacyPlatform {
   static Future<void> setSecure(bool secure) async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
     try { await _methods.invokeMethod<void>('setSecure', {'secure': secure}); } catch (_) {}
+  }
+}
+
+/// Listens for screenshot / screen-recording attempts reported by the native
+/// Android layer and forwards them to a caller-supplied callback.
+class PrivacyAlertService {
+  static const _alerts = EventChannel('talkstrangers/privacy_alerts');
+  StreamSubscription<dynamic>? _subscription;
+
+  /// Start listening. [onAlert] is called with the event type string
+  /// (e.g. "SCREENSHOT_ATTEMPT") whenever native detects an attempt.
+  void start(void Function(String type) onAlert) {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    _subscription ??= _alerts.receiveBroadcastStream().listen((event) {
+      if (event is Map) {
+        final type = (event['type'] as String?) ?? 'UNKNOWN';
+        onAlert(type);
+      }
+    }, onError: (_) {});
+  }
+
+  void stop() {
+    _subscription?.cancel();
+    _subscription = null;
   }
 }
