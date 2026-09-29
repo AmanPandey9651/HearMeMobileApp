@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../core/app_config.dart';
 import '../../core/app_controller.dart';
+import '../../widgets/backend_selector_sheet.dart';
 import '../../widgets/common_widgets.dart';
 import 'notifications_screen.dart';
 import 'safety_support_screen.dart';
@@ -15,6 +17,7 @@ class AccountMenuScreen extends StatelessWidget{
     ListTile(leading:const Icon(Icons.notifications_outlined),title:const Text('Notifications'),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const NotificationsScreen()))),
     ListTile(leading:const Icon(Icons.shield_outlined),title:const Text('Safety, blocked users & support'),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const SafetySupportScreen()))),
     ListTile(leading:const Icon(Icons.info_outline),title:const Text('How it works'),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const HowItWorksScreen()))),
+    ListTile(leading:const Icon(Icons.dns_outlined),title:const Text('Backend Server'),subtitle:Text('${AppConfig.currentEnvironment.displayName}\n${AppConfig.currentHost}',style:const TextStyle(fontSize:11)),isThreeLine:true,trailing:const Icon(Icons.tune,size:18),onTap:()=>showBackendSelectorSheet(context)),
     const Divider(),ListTile(leading:const Icon(Icons.logout,color:Colors.redAccent),title:const Text('Sign out'),onTap:()async{if(await confirm(context,'Sign out?','You will need to sign in again to use your account.'))await context.read<AppController>().logout();}),
   ]);}
 }

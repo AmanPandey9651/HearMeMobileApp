@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'core/app_config.dart';
 import 'core/app_controller.dart';
 import 'core/app_theme.dart';
 import 'core/inactivity_guard.dart';
@@ -9,8 +10,9 @@ import 'screens/listener/listener_shell.dart';
 import 'screens/listener/listener_verification_pending_screen.dart';
 import 'widgets/global_call_host.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppConfig.initialize();
   runApp(ChangeNotifierProvider(create: (_) => AppController()..bootstrap(), child: const TalkStrangersApp()));
 }
 

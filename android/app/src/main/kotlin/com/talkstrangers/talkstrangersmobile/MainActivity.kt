@@ -10,7 +10,7 @@ import android.os.Bundle
 import android.os.Process
 import android.os.Build
 import android.view.WindowManager
-import android.view.WindowManager.ScreenCaptureCallback
+import android.app.Activity.ScreenCaptureCallback
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -52,8 +52,7 @@ class MainActivity : FlutterActivity() {
                 }
             }
             try {
-                val wm = getSystemService(WindowManager::class.java)
-                wm.registerScreenCaptureCallback(mainExecutor, callback)
+                registerScreenCaptureCallback(mainExecutor, callback)
                 screenCaptureCallback = callback
             } catch (_: Exception) {}
         } else {
@@ -95,10 +94,8 @@ class MainActivity : FlutterActivity() {
         if (Build.VERSION.SDK_INT >= 34) {
             try {
                 val callback = screenCaptureCallback
-                if (callback != null) {
-                    val wm = getSystemService(WindowManager::class.java)
-                    @Suppress("UNCHECKED_CAST")
-                    wm.unregisterScreenCaptureCallback(callback as ScreenCaptureCallback)
+                if (callback is ScreenCaptureCallback) {
+                    unregisterScreenCaptureCallback(callback)
                 }
             } catch (_: Exception) {}
             screenCaptureCallback = null

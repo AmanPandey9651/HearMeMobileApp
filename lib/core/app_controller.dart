@@ -59,6 +59,12 @@ class AppController extends ChangeNotifier {
     client.onUnauthorized = () => logout(markOffline: false);
   }
 
+  Future<void> reconnectBackend() async {
+    loading = true;
+    notifyListeners();
+    await bootstrap();
+  }
+
   Future<void> bootstrap() async {
     try {
       await PrivacyPlatform.setSecure(false);
