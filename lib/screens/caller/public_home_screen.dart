@@ -2,10 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/app_config.dart';
 import '../../core/app_controller.dart';
 import '../../models/app_models.dart';
-import '../../widgets/backend_selector_sheet.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/hero_banner_card.dart';
 import '../../widgets/listener_card_item.dart';
@@ -79,11 +77,6 @@ class _PublicHomeScreenState extends State<PublicHomeScreen> {
           ],
         ),
         actions: [
-          IconButton(
-            tooltip: 'Backend Server (${AppConfig.currentEnvironment.displayName})',
-            icon: const Icon(Icons.dns_outlined, size: 20, color: Color(0xFF6B7280)),
-            onPressed: () => showBackendSelectorSheet(context),
-          ),
           // Solid Orange Pill "Log In" Button
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
