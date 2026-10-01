@@ -4,15 +4,49 @@ import 'package:flutter/material.dart';
 import '../core/app_config.dart';
 import '../main.dart';
 
-ImageProvider? getAvatarImageProvider(String? rawUrl) {
+String? normalizeAvatarUrl(String? rawUrl) {
   if (rawUrl == null) return null;
-  final url = rawUrl.trim();
-  if (url.isEmpty) return null;
+  var url = rawUrl.trim();
+  if (url.isEmpty || url.toLowerCase() == 'null' || url.toLowerCase() == 'undefined') {
+    return null;
+  }
+
+  // Prepend host if it is a relative API path
+  if (url.startsWith('/')) {
+    final origin = AppConfig.apiBaseUrl.replaceAll(RegExp(r'/api/v1/?$'), '');
+    url = '$origin$url';
+  }
+
+  // DiceBear dynamic raster format support:
+  // Convert any DiceBear SVG requests to PNG because Flutter Android ImageDecoder does not support SVG format
+  if (url.contains('dicebear.com')) {
+    url = url.replaceAll('/svg?', '/png?');
+    url = url.replaceAll('/svg/', '/png/');
+    url = url.replaceAll(RegExp(r'/svg(?=[\?#]|$)'), '/png');
+    url = url.replaceAll(RegExp(r'\.svg(?=[\?#]|$)'), '.png');
+  }
+
+  // Reject unhandled SVGs to prevent native Android ImageDecoderDecodeException
+  final lower = url.toLowerCase();
+  if (lower.startsWith('data:image/svg') ||
+      lower.contains('.svg?') ||
+      lower.endsWith('.svg')) {
+    return null;
+  }
+
+  return url;
+}
+
+ImageProvider? getAvatarImageProvider(String? rawUrl) {
+  final url = normalizeAvatarUrl(rawUrl);
+  if (url == null || url.isEmpty) return null;
 
   if (url.startsWith('data:image') && url.contains('base64,')) {
     try {
       final base64String = url.split('base64,').last.trim();
+      if (base64String.isEmpty) return null;
       final Uint8List bytes = base64Decode(base64String);
+      if (bytes.isEmpty) return null;
       return MemoryImage(bytes);
     } catch (_) {
       return null;
@@ -21,11 +55,6 @@ ImageProvider? getAvatarImageProvider(String? rawUrl) {
 
   if (url.startsWith('http://') || url.startsWith('https://')) {
     return NetworkImage(url);
-  }
-
-  if (url.startsWith('/')) {
-    final origin = AppConfig.apiBaseUrl.replaceAll(RegExp(r'/api/v1/?$'), '');
-    return NetworkImage('$origin$url');
   }
 
   return null;
@@ -38,17 +67,24 @@ Widget buildAvatarImage(
   BoxFit fit = BoxFit.cover,
   Widget Function(BuildContext, Object, StackTrace?)? errorBuilder,
 }) {
-  if (rawUrl == null || rawUrl.trim().isEmpty) {
-    if (errorBuilder != null) return Builder(builder: (ctx) => errorBuilder(ctx, 'empty', null));
+  final url = normalizeAvatarUrl(rawUrl);
+  if (url == null || url.isEmpty) {
+    if (errorBuilder != null) return Builder(builder: (ctx) => errorBuilder(ctx, 'empty or unsupported', null));
     return const SizedBox();
   }
-
-  final url = rawUrl.trim();
 
   if (url.startsWith('data:image') && url.contains('base64,')) {
     try {
       final base64String = url.split('base64,').last.trim();
+      if (base64String.isEmpty) {
+        if (errorBuilder != null) return Builder(builder: (ctx) => errorBuilder(ctx, 'empty base64', null));
+        return const SizedBox();
+      }
       final Uint8List bytes = base64Decode(base64String);
+      if (bytes.isEmpty) {
+        if (errorBuilder != null) return Builder(builder: (ctx) => errorBuilder(ctx, 'empty bytes', null));
+        return const SizedBox();
+      }
       return Image.memory(
         bytes,
         width: width,
@@ -72,48 +108,58 @@ Widget buildAvatarImage(
     );
   }
 
-  if (url.startsWith('/')) {
-    final origin = AppConfig.apiBaseUrl.replaceAll(RegExp(r'/api/v1/?$'), '');
-    return Image.network(
-      '$origin$url',
-      width: width,
-      height: height,
-      fit: fit,
-      errorBuilder: errorBuilder,
-    );
-  }
-
   if (errorBuilder != null) return Builder(builder: (ctx) => errorBuilder(ctx, 'invalid url', null));
   return const SizedBox();
 }
 
-class RemoteAvatar extends StatelessWidget {
+class RemoteAvatar extends StatefulWidget {
   final String? url;
   final double radius;
   final String fallback;
   const RemoteAvatar({super.key, this.url, this.radius = 28, this.fallback = 'U'});
 
   @override
+  State<RemoteAvatar> createState() => _RemoteAvatarState();
+}
+
+class _RemoteAvatarState extends State<RemoteAvatar> {
+  bool _loadFailed = false;
+
+  @override
+  void didUpdateWidget(covariant RemoteAvatar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url) {
+      _loadFailed = false;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final provider = getAvatarImageProvider(url);
+    final cleanUrl = normalizeAvatarUrl(widget.url);
+    final provider = (_loadFailed || cleanUrl == null) ? null : getAvatarImageProvider(cleanUrl);
+    final initial = widget.fallback.trim().isEmpty ? 'U' : widget.fallback.trim().substring(0, 1).toUpperCase();
+
     if (provider != null) {
       return CircleAvatar(
-        radius: radius,
+        radius: widget.radius,
         backgroundImage: provider,
         backgroundColor: const Color(0xFFFFECE5),
-        onBackgroundImageError: (_, __) {},
+        onBackgroundImageError: (_, __) {
+          if (mounted) setState(() => _loadFailed = true);
+        },
         child: null,
       );
     }
+
     return CircleAvatar(
-      radius: radius,
+      radius: widget.radius,
       backgroundColor: const Color(0xFFF95B3D),
       child: Text(
-        fallback.trim().isEmpty ? 'U' : fallback.trim().substring(0, 1).toUpperCase(),
+        initial,
         style: TextStyle(
           color: Colors.white,
           fontWeight: FontWeight.bold,
-          fontSize: radius * 0.75,
+          fontSize: widget.radius * 0.75,
         ),
       ),
     );

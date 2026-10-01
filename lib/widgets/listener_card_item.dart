@@ -30,8 +30,8 @@ class ListenerCardItem extends StatelessWidget {
   ];
 
   String _getResolvedAvatar() {
-    final url = listener.avatarUrl?.trim();
-    if (url != null && url.isNotEmpty) return url;
+    final clean = normalizeAvatarUrl(listener.avatarUrl);
+    if (clean != null && clean.isNotEmpty) return clean;
     final idx = (listener.displayName.hashCode.abs()) % _fallbackAvatars.length;
     return _fallbackAvatars[idx];
   }
