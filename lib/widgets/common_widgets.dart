@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../core/app_config.dart';
+import '../main.dart';
 
 ImageProvider? getAvatarImageProvider(String? rawUrl) {
   if (rawUrl == null) return null;
@@ -132,19 +133,81 @@ void showSuccess(BuildContext context, String message) {
   );
 }
 
+BuildContext getSafeNavigatorContext(BuildContext context) {
+  if (Navigator.maybeOf(context) != null) {
+    return context;
+  }
+  final overlayCtx = TalkStrangersApp.navigatorKey.currentState?.overlay?.context;
+  if (overlayCtx != null && Navigator.maybeOf(overlayCtx) != null) {
+    return overlayCtx;
+  }
+  return context;
+}
+
 Future<bool> confirm(BuildContext context, String title, String message) async {
-  return await showDialog<bool>(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: Text(title),
-          content: Text(message),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Continue')),
-          ],
+  final targetContext = getSafeNavigatorContext(context);
+  final hasLocalNav = Navigator.maybeOf(targetContext) != null;
+
+  final res = await showDialog<bool>(
+    context: targetContext,
+    barrierDismissible: false,
+    useRootNavigator: !hasLocalNav,
+    builder: (dialogCtx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      backgroundColor: const Color(0xFFFAF5EE),
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w800,
+          color: Color(0xFF0F172A),
         ),
-      ) ??
-      false;
+      ),
+      content: Text(
+        message,
+        style: const TextStyle(
+          fontSize: 14,
+          color: Color(0xFF64748B),
+        ),
+      ),
+      actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      actions: [
+        TextButton(
+          onPressed: () {
+            if (Navigator.of(dialogCtx).canPop()) {
+              Navigator.of(dialogCtx).pop(false);
+            }
+          },
+          child: const Text(
+            'Cancel',
+            style: TextStyle(
+              color: Color(0xFF64748B),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFF95B3D),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          onPressed: () {
+            if (Navigator.of(dialogCtx).canPop()) {
+              Navigator.of(dialogCtx).pop(true);
+            }
+          },
+          child: const Text(
+            'Continue',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  return res ?? false;
 }
 
 class LoadingBody extends StatelessWidget {

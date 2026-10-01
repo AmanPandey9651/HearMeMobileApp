@@ -407,8 +407,14 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
     final elapsed = status?.elapsedSeconds ?? 0;
     return PopScope(
       canPop: ending,
-      onPopInvokedWithResult: (didPop, _) async {
-        if (!didPop && await confirm(context, 'End call?', 'Leaving will end this scheduled consultation.')) await _end();
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted) return;
+          if (await confirm(context, 'End call?', 'Leaving will end this scheduled consultation.')) {
+            if (mounted) await _end();
+          }
+        });
       },
       child: Scaffold(
         appBar: AppBar(

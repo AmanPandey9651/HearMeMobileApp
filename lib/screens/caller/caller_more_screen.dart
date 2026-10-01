@@ -7,6 +7,7 @@ import '../../widgets/common_widgets.dart';
 import '../common/how_it_works_screen.dart';
 import '../common/notifications_screen.dart';
 import '../common/safety_support_screen.dart';
+import '../../main.dart';
 import 'anonymous_profile_screen.dart';
 import 'followed_listeners_screen.dart';
 
@@ -36,10 +37,10 @@ class CallerMoreScreen extends StatelessWidget {
         children: [
           // 1. Favourite Listeners Card matching Screenshot 2 (Right)
           _MenuActionCard(
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const FollowedListenersScreen()),
-            ),
+            onTap: () {
+              final nav = TalkStrangersApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
+              nav.push(MaterialPageRoute(builder: (_) => const FollowedListenersScreen()));
+            },
             leading: Container(
               width: 44,
               height: 44,
@@ -65,10 +66,10 @@ class CallerMoreScreen extends StatelessWidget {
 
           // 2. Customer Profile Card matching Screenshot 2 (Right)
           _MenuActionCard(
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AnonymousProfileScreen()),
-            ),
+            onTap: () {
+              final nav = TalkStrangersApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
+              nav.push(MaterialPageRoute(builder: (_) => const AnonymousProfileScreen()));
+            },
             leading: Container(
               width: 46,
               height: 46,
@@ -125,40 +126,40 @@ class CallerMoreScreen extends StatelessWidget {
           _MenuItemTile(
             icon: Icons.manage_accounts_outlined,
             title: 'Profile',
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AnonymousProfileScreen()),
-            ),
+            onTap: () {
+              final nav = TalkStrangersApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
+              nav.push(MaterialPageRoute(builder: (_) => const AnonymousProfileScreen()));
+            },
           ),
           const SizedBox(height: 10),
 
           _MenuItemTile(
             icon: Icons.notifications_none_rounded,
             title: 'Notifications',
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-            ),
+            onTap: () {
+              final nav = TalkStrangersApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
+              nav.push(MaterialPageRoute(builder: (_) => const NotificationsScreen()));
+            },
           ),
           const SizedBox(height: 10),
 
           _MenuItemTile(
             icon: Icons.shield_outlined,
             title: 'Safety, blocked users & support',
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SafetySupportScreen()),
-            ),
+            onTap: () {
+              final nav = TalkStrangersApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
+              nav.push(MaterialPageRoute(builder: (_) => const SafetySupportScreen()));
+            },
           ),
           const SizedBox(height: 10),
 
           _MenuItemTile(
             icon: Icons.info_outline_rounded,
             title: 'How it works',
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const HowItWorksScreen()),
-            ),
+            onTap: () {
+              final nav = TalkStrangersApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
+              nav.push(MaterialPageRoute(builder: (_) => const HowItWorksScreen()));
+            },
           ),
 
           const SizedBox(height: 18),

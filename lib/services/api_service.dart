@@ -303,6 +303,16 @@ class ApiService {
     return Map<String, dynamic>.from(await client.post('/listeners/availability/modalities', body: body));
   }
   Future<Map<String, dynamic>> listenerAttendance() async => Map<String, dynamic>.from(await client.get('/listeners/attendance'));
+  Future<List<Map<String, dynamic>>> listenerAttendanceHistory({String? from, String? to}) async {
+    final query = <String, dynamic>{};
+    if (from != null) query['from'] = from;
+    if (to != null) query['to'] = to;
+    final res = await client.get('/listeners/attendance/history', query: query.isNotEmpty ? query : null);
+    if (res is List) {
+      return res.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    }
+    return [];
+  }
 
   Future<List<dynamic>> payoutHistory() async => _content(await client.get('/listener/payouts'));
   Future<Map<String, dynamic>> requestPayout(double amount, String vpa, {String? notes}) async => Map<String, dynamic>.from(await client.post('/listener/payouts/request-upi', body: {'amount': amount, 'vpa': vpa, if (notes != null) 'notes': notes}));

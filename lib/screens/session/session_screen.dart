@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +8,7 @@ import '../../core/active_call_manager.dart';
 import '../../core/app_controller.dart';
 import '../../models/app_models.dart';
 import '../../services/android_voice_fx.dart';
+import '../../widgets/call_pulse_avatar.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/in_call_mini_games.dart';
 import '../../widgets/video_privacy_filter.dart';
@@ -27,7 +29,8 @@ class SessionScreen extends StatefulWidget {
   State<SessionScreen> createState() => _SessionScreenState();
 }
 
-class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserver {
+class _SessionScreenState extends State<SessionScreen>
+    with WidgetsBindingObserver, TickerProviderStateMixin {
   late InstantSessionModel session = widget.initialSession;
   final localRenderer = RTCVideoRenderer();
   final remoteRenderer = RTCVideoRenderer();
@@ -35,12 +38,16 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   final _privacyAlerts = PrivacyAlertService();
   final gameSignal = ValueNotifier<Map<String, dynamic>?>(null);
   final messageController = TextEditingController();
+  late final AnimationController _pulseController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1600),
+  )..repeat(reverse: true);
 
   RTCPeerConnection? pc;
   RTCDataChannel? voiceChannel;
   MediaStream? localStream;
   Timer? sessionPoll, signalPoll, heartbeat, clock, messagePoll, reconnectTimer;
-  int seconds = 0, signalSince = 0, reconnectSeconds = 30, ringRemaining = 45;
+  int seconds = 0, signalSince = 0, reconnectSeconds = 30, ringRemaining = 45, elapsedRinging = 1;
   bool joining = false, mic = true, camera = true, speaker = true, ending = false;
   bool reconnecting = false, gameSheetOpen = false, registeredActiveSession = false, everLive = false;
   bool peerVoiceFxCapable = false, nativeVoiceFxActive = false;
@@ -61,7 +68,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     everLive = isLive;
-    ringRemaining = _remainingRingSeconds();
+    ringRemaining = _initRingRemaining();
     localRenderer.initialize();
     remoteRenderer.initialize();
     voiceFx.onFrame = (frame) {
@@ -123,7 +130,15 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
           );
         }
       } else if (!session.ended) {
-        setState(() => ringRemaining = _remainingRingSeconds());
+        setState(() {
+          elapsedRinging++;
+          if (ringRemaining > 0) {
+            ringRemaining--;
+          }
+        });
+        if (ringRemaining <= 0 && !ending) {
+          _handleRingTimeout();
+        }
       }
     });
     messagePoll = Timer.periodic(const Duration(milliseconds: 1100), (_) {
@@ -142,7 +157,6 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
       setState(() {
         session = next;
         if (isLive) everLive = true;
-        if (!isLive && !next.ended) ringRemaining = _remainingRingSeconds();
       });
       if (next.ended) {
         await _cleanupMedia();
@@ -479,19 +493,58 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     }
   }
 
-  int _remainingRingSeconds() {
+  int _initRingRemaining() {
     final expires = DateTime.tryParse(session.expiresAt ?? '')?.toLocal();
-    if (expires == null) return ringRemaining.clamp(0, 45).toInt();
+    if (expires == null) return 45;
     final left = expires.difference(DateTime.now()).inSeconds;
-    return left.clamp(0, 45).toInt();
+    if (left <= 0 || left > 45) return 45;
+    return left.toInt();
+  }
+
+  Future<void> _handleRingTimeout() async {
+    if (ending || session.ended) return;
+    ending = true;
+    try {
+      await context.read<AppController>().api.cancelSession(session.id);
+    } catch (_) {}
+    await _cleanupMedia();
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('No Answer'),
+        content: Text(
+          widget.callerSide
+              ? 'Listener did not answer within 45 seconds. No money was deducted.'
+              : 'Caller did not answer your callback.',
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+    if (widget.isHostedInGlobalManager) {
+      ActiveCallManager.instance.clearCall();
+    } else if (mounted) {
+      Navigator.pop(context);
+    }
   }
 
   Future<void> _showRequestEnded(InstantSessionModel ended) async {
     if (!mounted) return;
     final message = switch (ended.status) {
-      'REJECTED' => 'Listener is currently unavailable. No money was deducted.',
-      'EXPIRED' => 'Listener did not answer within the ringing window. No money was deducted.',
-      'CANCELLED' => 'Connection request was cancelled. No money was deducted.',
+      'REJECTED' => widget.callerSide
+          ? 'Listener is currently unavailable. No money was deducted.'
+          : 'Caller declined your callback.',
+      'EXPIRED' => widget.callerSide
+          ? 'Listener did not answer within the ringing window. No money was deducted.'
+          : 'Caller did not answer your callback.',
+      'CANCELLED' => widget.callerSide
+          ? 'Connection request was cancelled. No money was deducted.'
+          : 'Callback was cancelled.',
       _ => 'The connection request ended before the session started.',
     };
     await showDialog<void>(
@@ -585,6 +638,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _pulseController.dispose();
     _cleanupMedia();
     if (registeredActiveSession) {
       try { context.read<AppController>().exitActiveSession(); } catch (_) {}
@@ -609,125 +663,1440 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   @override
   Widget build(BuildContext context) {
     final peerName = widget.callerSide ? session.listenerName : session.callerNickname;
+    final isRinging = !isLive && !session.ended;
+    final isCallback = session.reference.startsWith('CB-') || (!widget.callerSide && session.status == 'REQUESTED');
+    final peerAvatar = widget.callerSide ? session.listenerAvatarUrl : session.callerAvatarUrl;
+
+    final isMinimized = widget.isHostedInGlobalManager && ActiveCallManager.instance.isMinimized;
     return PopScope(
-      canPop: session.ended,
-      onPopInvokedWithResult: (didPop, _) async {
-        if (didPop) return;
-        if (isLive && !session.ended) {
-          _minimizeCall();
-        } else if (await confirm(context, 'End session?', 'Leaving will end the active session.')) {
-          await _end();
-        }
+      canPop: isMinimized || session.ended,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || isMinimized) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted) return;
+          if (isLive && !session.ended) {
+            _minimizeCall();
+          } else if (!isLive && !session.ended) {
+            final shouldCancel = await confirm(
+              context,
+              widget.callerSide ? 'Cancel call request?' : 'Cancel callback?',
+              'Do you want to cancel and go back?',
+            );
+            if (shouldCancel && mounted) {
+              await _cancel();
+            }
+          } else {
+            final shouldEnd = await confirm(
+              context,
+              'End session?',
+              'Leaving will end the active session.',
+            );
+            if (shouldEnd && mounted) {
+              await _end();
+            }
+          }
+        });
       },
-      child: Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 30),
-            tooltip: 'Minimize call',
-            onPressed: _minimizeCall,
-          ),
-          title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(peerName),
-            if (!isChat && isLive) Text(_time(seconds), style: Theme.of(context).textTheme.labelSmall),
-          ]),
-          actions: [IconButton(onPressed: _showTools, icon: const Icon(Icons.auto_awesome))],
-        ),
-        body: Column(
-          children: [
-            if (banner != null)
-              MaterialBanner(
-                content: Text(banner!),
-                actions: [TextButton(onPressed: () => setState(() => banner = null), child: const Text('Dismiss'))],
+      child: isRinging
+          ? Scaffold(
+              backgroundColor: const Color(0xFFFAF5EE),
+              appBar: AppBar(
+                backgroundColor: const Color(0xFFFAF5EE),
+                elevation: 0,
+                surfaceTintColor: Colors.transparent,
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A), size: 22),
+                  onPressed: () async {
+                    if (await confirm(context, widget.callerSide ? 'Cancel call request?' : 'Cancel callback?', 'Do you want to cancel and go back?')) {
+                      await _cancel();
+                    }
+                  },
+                ),
+                titleSpacing: 0,
+                title: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFFECE5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: ClipOval(
+                        child: peerAvatar != null && peerAvatar.isNotEmpty
+                            ? RemoteAvatar(
+                                url: peerAvatar,
+                                radius: 16,
+                                fallback: peerName,
+                              )
+                            : const Center(
+                                child: Icon(
+                                  Icons.person_rounded,
+                                  size: 20,
+                                  color: Color(0xFFF95B3D),
+                                ),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        peerName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.more_horiz_rounded, color: Color(0xFF0F172A), size: 22),
+                    onPressed: _showTools,
+                  ),
+                ],
               ),
-            Expanded(
-              child: !isLive && !session.ended
-                  ? _ringingBody(peerName)
-                  : isChat
-                      ? _chatBody()
-                      : _callBody(peerName),
+              body: SafeArea(
+                child: Column(
+                  children: [
+                    const Spacer(flex: 2),
+
+                    // Animated Centerpiece with Concentric Waves
+                    Center(
+                      child: CallPulseAvatar(
+                        name: peerName,
+                        avatarUrl: peerAvatar,
+                        size: 200,
+                      ),
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    // Status Pill: ● REQUESTED (Image 2) or ● OUTGOING (Image 4)
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFECE5),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFF95B3D),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              isCallback ? 'REQUESTED' : 'OUTGOING',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFFF95B3D),
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Peer Name Heading
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                        peerName,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF0F172A),
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    // Subtitle
+                    Text(
+                      isCallback ? 'Ringing for callback…' : 'Calling…',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // Big Timer: 45s remaining countdown
+                    Text(
+                      '${ringRemaining}s',
+                      style: const TextStyle(
+                        fontSize: 38,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFFF95B3D),
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'remaining',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Info Notice Row
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.phone_rounded,
+                          size: 15,
+                          color: Color(0xFFF95B3D),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          isCallback
+                              ? 'Waiting for caller to accept your callback.'
+                              : 'Connecting you to the listener.',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Outlined Pill Action Button: Cancel callback or Cancel call
+                    InkWell(
+                      onTap: _cancel,
+                      borderRadius: BorderRadius.circular(26),
+                      child: Container(
+                        width: 210,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(26),
+                          border: Border.all(
+                            color: const Color(0xFFF95B3D),
+                            width: 1.2,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(
+                              Icons.cancel_outlined,
+                              size: 18,
+                              color: Color(0xFFF95B3D),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              isCallback ? 'Cancel callback' : 'Cancel call',
+                              style: const TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFFF95B3D),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const Spacer(flex: 3),
+
+                    // Bottom Privacy Card
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFECE5).withValues(alpha: 0.4),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: const Color(0xFFFFD4C4).withValues(alpha: 0.6),
+                            width: 0.8,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFECE5),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Icon(
+                                Icons.verified_user_rounded,
+                                size: 16,
+                                color: Color(0xFFF95B3D),
+                              ),
+                            ),
+                            Container(
+                              width: 1,
+                              height: 18,
+                              color: const Color(0xFFFFC5B2),
+                              margin: const EdgeInsets.symmetric(horizontal: 10),
+                            ),
+                            Expanded(
+                              child: Text(
+                                isCallback
+                                    ? "You'll be connected when they accept."
+                                    : "Your call stays private and secure.",
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : (isChat
+              ? _buildLiveChatScreen(peerName, peerAvatar)
+              : isVideo
+                  ? _buildLiveVideoScreen(peerName, peerAvatar)
+                  : _buildLiveAudioScreen(peerName, peerAvatar)),
+    );
+  }
+
+  /// Floating notification banner for reconnection/security alerts
+  Widget _buildTopBanner() {
+    if (banner == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFEF2F2),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFFCA5A5)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
-            if (isChat && isLive && !session.ended) _chatInput(),
+          ],
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.info_outline_rounded, color: Color(0xFFDC2626), size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                banner!,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF991B1B),
+                ),
+              ),
+            ),
+            GestureDetector(
+              onTap: () => setState(() => banner = null),
+              child: const Icon(Icons.close_rounded, color: Color(0xFF991B1B), size: 18),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _ringingBody(String peerName) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 18),
-            Text('Ringing $peerName…', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            Text('${ringRemaining}s remaining • Status: ${session.status}'),
-            const SizedBox(height: 6),
-            const Text('You are charged only after the listener accepts and the session starts.', textAlign: TextAlign.center),
-            const SizedBox(height: 24),
-            OutlinedButton(onPressed: _cancel, child: const Text('Cancel request')),
-          ]),
-        ),
-      );
-
-  Widget _callBody(String peerName) {
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: isVideo
-              ? FilteredVideoView(
-                  filter: peerVideoFilter,
-                  child: RTCVideoView(remoteRenderer, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
-                )
-              : Container(
-                  alignment: Alignment.center,
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    RemoteAvatar(url: widget.callerSide ? session.listenerAvatarUrl : session.callerAvatarUrl, radius: 70, fallback: peerName),
-                    const SizedBox(height: 16),
-                    Text(peerName, style: Theme.of(context).textTheme.headlineSmall),
-                    const SizedBox(height: 6),
-                    Text(_time(seconds), style: Theme.of(context).textTheme.titleLarge),
-                    if (peerVoiceFilter != AndroidVoiceFx.normal)
-                      const Padding(padding: EdgeInsets.only(top: 8), child: Chip(label: Text('🎭 Peer voice privacy effect active'))),
-                  ]),
-                ),
-        ),
-        if (isVideo)
-          Positioned(
-            right: 16,
-            top: 16,
-            width: 110,
-            height: 160,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: FilteredVideoView(
-                filter: activeVideoFilter,
-                showBadge: false,
-                child: RTCVideoView(localRenderer, mirror: true, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
-              ),
+  /// -------------------------------------------------------------
+  /// LIVE AUDIO CALL SCREEN (Matches media_1790781859761.png)
+  /// -------------------------------------------------------------
+  Widget _buildLiveAudioScreen(String peerName, String? peerAvatar) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFFAF5EE),
+      body: Stack(
+        children: [
+          // Background Painter with fluid silk curves and subtle ambient sparkle dots
+          Positioned.fill(
+            child: CustomPaint(
+              painter: SilkWavesPainter(),
             ),
           ),
-        Positioned(
-          left: 12,
-          right: 12,
-          bottom: 22,
-          child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-            _round(Icons.mic, mic, _toggleMic),
-            if (isVideo) _round(Icons.videocam, camera, _toggleCamera),
-            _round(Icons.volume_up, speaker, _toggleSpeaker),
-            FloatingActionButton(backgroundColor: Colors.red, onPressed: _end, child: const Icon(Icons.call_end)),
-          ]),
-        ),
-      ],
+
+          SafeArea(
+            child: Column(
+              children: [
+                // Top Bar: Minimize button, Center Peer Name, Sparkles/Tools button
+                _buildLiveAudioTopBar(peerName),
+
+                // Floating Banner if any
+                if (banner != null) _buildTopBanner(),
+
+                const Spacer(flex: 2),
+
+                // Center Visualizer: Equalizer Waves + Glowing Avatar + Equalizer Waves
+                Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      EqualizerBars(animation: _pulseController, isLeft: true),
+                      const SizedBox(width: 8),
+                      _buildPickedUpAvatarOrb(peerName, peerAvatar),
+                      const SizedBox(width: 8),
+                      EqualizerBars(animation: _pulseController, isLeft: false),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 28),
+
+                // Peer Name Heading
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Text(
+                    peerName,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF0F172A),
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+
+                // Call Duration Timer
+                Text(
+                  _time(seconds),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF64748B),
+                    letterSpacing: 0.5,
+                  ),
+                ),
+
+                if (peerVoiceFilter != AndroidVoiceFx.normal) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFECE5),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Text(
+                      '🎭 Peer voice privacy effect active',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFFF95B3D),
+                      ),
+                    ),
+                  ),
+                ],
+
+                const Spacer(flex: 3),
+
+                // Bottom Floating Controls: 3 circular buttons (Mic, Speaker, End Call)
+                _buildLiveAudioControls(),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _round(IconData icon, bool active, VoidCallback tap) => FloatingActionButton.small(
-        heroTag: null,
-        onPressed: tap,
-        backgroundColor: active ? Colors.white24 : Colors.redAccent,
-        child: Icon(icon),
+  /// Top Bar for Picked-Up Audio Call
+  Widget _buildLiveAudioTopBar(String peerName) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Minimize Button (Frosted circular button with downward chevron)
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              HapticFeedback.lightImpact();
+              _minimizeCall();
+            },
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFF4E4D9).withValues(alpha: 0.7),
+              ),
+              child: const Icon(
+                Icons.keyboard_arrow_down_rounded,
+                color: Color(0xFF1E293B),
+                size: 28,
+              ),
+            ),
+          ),
+
+          // Center Peer Name
+          Expanded(
+            child: Text(
+              peerName,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 16.5,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1E293B),
+                letterSpacing: -0.2,
+              ),
+            ),
+          ),
+
+          // Tools / Sparkle Button
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              _showTools();
+            },
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFF4E4D9).withValues(alpha: 0.7),
+              ),
+              child: const Icon(
+                Icons.auto_awesome,
+                color: Color(0xFF1E293B),
+                size: 20,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Center glowing avatar orb with concentric aura and silhouette
+  Widget _buildPickedUpAvatarOrb(String peerName, String? peerAvatar) {
+    return AnimatedBuilder(
+      animation: _pulseController,
+      builder: (context, _) {
+        final pulse = _pulseController.value;
+        final scale = 1.0 + 0.02 * pulse;
+
+        return SizedBox(
+          width: 250,
+          height: 250,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Outermost soft glowing halo
+              Container(
+                width: 235 * scale,
+                height: 235 * scale,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFFFFF2EB).withValues(alpha: 0.65),
+                ),
+              ),
+
+              // Middle thin luminous cream ring
+              Container(
+                width: 195,
+                height: 195,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.85),
+                    width: 1.5,
+                  ),
+                ),
+              ),
+
+              // Inner peach-rose glowing orb
+              Container(
+                width: 156,
+                height: 156,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const RadialGradient(
+                    center: Alignment(-0.15, -0.25),
+                    radius: 0.85,
+                    colors: [
+                      Color(0xFFFFBBA8),
+                      Color(0xFFF99D85),
+                      Color(0xFFFED8C5),
+                    ],
+                    stops: [0.0, 0.65, 1.0],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFF97316).withValues(alpha: 0.28),
+                      blurRadius: 34,
+                      spreadRadius: 4,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: ClipOval(
+                  child: peerAvatar != null && peerAvatar.isNotEmpty
+                      ? RemoteAvatar(
+                          url: peerAvatar,
+                          radius: 78,
+                          fallback: peerName,
+                        )
+                      : _buildDefaultSilhouette(),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Translucent white avatar silhouette matching screenshot
+  Widget _buildDefaultSilhouette() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.85),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(height: 7),
+          Container(
+            width: 82,
+            height: 46,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.85),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(41)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Bottom Controls Dock (3 circular buttons: Mic, Speaker, End Call)
+  Widget _buildLiveAudioControls() {
+    return Padding(
+      padding: const EdgeInsets.only(left: 24, right: 24, bottom: 28),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // 1. Microphone Toggle
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              _toggleMic();
+            },
+            child: Container(
+              width: 66,
+              height: 66,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: mic ? const Color(0xFFF7ECE4) : const Color(0xFFFFE4E1),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.07),
+                    blurRadius: 18,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Icon(
+                mic ? Icons.mic_rounded : Icons.mic_off_rounded,
+                color: mic ? const Color(0xFF475569) : const Color(0xFFE11D48),
+                size: 28,
+              ),
+            ),
+          ),
+
+          // 2. Speaker Toggle
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              _toggleSpeaker();
+            },
+            child: Container(
+              width: 66,
+              height: 66,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFF7ECE4),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.07),
+                    blurRadius: 18,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Icon(
+                speaker ? Icons.volume_up_rounded : Icons.volume_down_rounded,
+                color: const Color(0xFF475569),
+                size: 28,
+              ),
+            ),
+          ),
+
+          // 3. End Call Button
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.heavyImpact();
+              _end();
+            },
+            child: Container(
+              width: 68,
+              height: 68,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFF5E5E), Color(0xFFE53935)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFFF4B4B).withValues(alpha: 0.38),
+                    blurRadius: 22,
+                    spreadRadius: 3,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.call_end_rounded,
+                color: Colors.white,
+                size: 30,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// -------------------------------------------------------------
+  /// LIVE VIDEO CALL SCREEN (Modern State-of-the-Art Luxury)
+  /// -------------------------------------------------------------
+  Widget _buildLiveVideoScreen(String peerName, String? peerAvatar) {
+    final mediaQuery = MediaQuery.of(context);
+    final topPadding = mediaQuery.padding.top;
+    final bottomPadding = mediaQuery.padding.bottom;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF0F172A),
+      body: Stack(
+        children: [
+          // 1. Fullscreen Remote Video or Fallback
+          Positioned.fill(
+            child: remoteRenderer.srcObject != null
+                ? FilteredVideoView(
+                    filter: peerVideoFilter,
+                    child: RTCVideoView(
+                      remoteRenderer,
+                      objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                    ),
+                  )
+                : Container(
+                    color: const Color(0xFF0F172A),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildPickedUpAvatarOrb(peerName, peerAvatar),
+                          const SizedBox(height: 18),
+                          Text(
+                            peerName,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Connecting video feed…',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Color(0xFF94A3B8),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+          ),
+
+          // 2. Subtle Vignette Overlays
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 140,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.black.withValues(alpha: 0.65),
+                    Colors.transparent,
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: 180,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.75),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+            ),
+          ),
+
+          // 3. Floating PiP Local Video (top right)
+          Positioned(
+            right: 16,
+            top: topPadding + 56,
+            width: 112,
+            height: 158,
+            child: GestureDetector(
+              onTap: _switchCamera,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.4),
+                    width: 2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.45),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      FilteredVideoView(
+                        filter: activeVideoFilter,
+                        showBadge: false,
+                        child: RTCVideoView(
+                          localRenderer,
+                          mirror: true,
+                          objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                        ),
+                      ),
+                      Positioned(
+                        right: 6,
+                        bottom: 6,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.black.withValues(alpha: 0.5),
+                          ),
+                          child: const Icon(
+                            Icons.flip_camera_ios_rounded,
+                            size: 13,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // 4. Floating Top Bar
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      _minimizeCall();
+                    },
+                    child: Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.black.withValues(alpha: 0.4),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                      ),
+                      child: const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        color: Colors.white,
+                        size: 26,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF22C55E),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 7),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 130),
+                          child: Text(
+                            peerName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _time(seconds),
+                          style: const TextStyle(
+                            color: Color(0xFFE2E8F0),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const Spacer(),
+
+                  GestureDetector(
+                    onTap: _showTools,
+                    child: Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.black.withValues(alpha: 0.4),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                      ),
+                      child: const Icon(
+                        Icons.auto_awesome,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          if (banner != null)
+            Positioned(
+              top: topPadding + 60,
+              left: 16,
+              right: 140,
+              child: _buildTopBanner(),
+            ),
+
+          // 5. Floating Bottom Controls Capsule
+          Positioned(
+            left: 20,
+            right: 20,
+            bottom: bottomPadding + 20,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E212B).withValues(alpha: 0.88),
+                borderRadius: BorderRadius.circular(36),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.4),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildVideoGlassButton(
+                    icon: mic ? Icons.mic_rounded : Icons.mic_off_rounded,
+                    isActive: mic,
+                    onTap: _toggleMic,
+                  ),
+                  _buildVideoGlassButton(
+                    icon: camera ? Icons.videocam_rounded : Icons.videocam_off_rounded,
+                    isActive: camera,
+                    onTap: _toggleCamera,
+                  ),
+                  _buildVideoGlassButton(
+                    icon: Icons.face_retouching_natural_rounded,
+                    isActive: activeVideoFilter != VideoPrivacyFilter.none,
+                    onTap: _videoFilters,
+                  ),
+                  _buildVideoGlassButton(
+                    icon: speaker ? Icons.volume_up_rounded : Icons.volume_down_rounded,
+                    isActive: speaker,
+                    onTap: _toggleSpeaker,
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      HapticFeedback.heavyImpact();
+                      _end();
+                    },
+                    child: Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFF5E5E), Color(0xFFE53935)],
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFFF4B4B).withValues(alpha: 0.45),
+                            blurRadius: 14,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.call_end_rounded,
+                        color: Colors.white,
+                        size: 26,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVideoGlassButton({
+    required IconData icon,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap();
+      },
+      child: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: isActive ? Colors.white.withValues(alpha: 0.15) : const Color(0xFFEF4444).withValues(alpha: 0.8),
+        ),
+        child: Icon(
+          icon,
+          color: Colors.white,
+          size: 22,
+        ),
+      ),
+    );
+  }
+
+  /// -------------------------------------------------------------
+  /// LIVE CHAT SCREEN (Silk Cream Luxury HearMe Theme)
+  /// -------------------------------------------------------------
+  Widget _buildLiveChatScreen(String peerName, String? peerAvatar) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFFAF5EE),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFFAF5EE),
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 28, color: Color(0xFF0F172A)),
+          tooltip: 'Minimize chat',
+          onPressed: _minimizeCall,
+        ),
+        titleSpacing: 0,
+        title: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: const BoxDecoration(
+                color: Color(0xFFFFECE5),
+                shape: BoxShape.circle,
+              ),
+              child: ClipOval(
+                child: peerAvatar != null && peerAvatar.isNotEmpty
+                    ? RemoteAvatar(
+                        url: peerAvatar,
+                        radius: 18,
+                        fallback: peerName,
+                      )
+                    : const Center(
+                        child: Icon(Icons.person_rounded, size: 22, color: Color(0xFFF95B3D)),
+                      ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    peerName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  Text(
+                    'Chatting • ${_time(seconds)}',
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFFF95B3D),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            onPressed: _showTools,
+            icon: const Icon(Icons.auto_awesome, color: Color(0xFF0F172A)),
+          ),
+          IconButton(
+            onPressed: _end,
+            icon: const Icon(Icons.close_rounded, color: Color(0xFFE11D48)),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          if (banner != null) _buildTopBanner(),
+
+          // Security & anonymity reassurance pill
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFECE5).withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.lock_rounded, size: 12, color: Color(0xFFF95B3D)),
+                SizedBox(width: 6),
+                Text(
+                  'End-to-end encrypted • Anonymous Chat',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFFF95B3D),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Messages list
+          Expanded(child: _chatBody()),
+
+          // Quick Action Pills Row (Icebreakers, Gifts, Games)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: Row(
+              children: [
+                _buildQuickActionChip(
+                  icon: Icons.lightbulb_outline_rounded,
+                  label: 'Topic',
+                  onTap: _topic,
+                ),
+                if (widget.callerSide)
+                  _buildQuickActionChip(
+                    icon: Icons.card_giftcard_rounded,
+                    label: 'Send Gift',
+                    onTap: _gift,
+                  ),
+                _buildQuickActionChip(
+                  icon: Icons.sports_esports_rounded,
+                  label: 'Play Game',
+                  onTap: () => _openGames(),
+                ),
+                _buildQuickActionChip(
+                  icon: Icons.report_outlined,
+                  label: 'Report',
+                  onTap: _report,
+                ),
+              ],
+            ),
+          ),
+
+          // Chat Input Bar
+          _chatInput(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActionChip({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          onTap();
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFFFECE5)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 14, color: const Color(0xFFF95B3D)),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF475569),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _chatBody() => ListView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        itemCount: messages.length,
+        itemBuilder: (context, i) {
+          final m = Map<String, dynamic>.from(messages[i]);
+          final mine = (m['senderRole'] == 'USER') == widget.callerSide;
+          return Align(
+            alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 290),
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                gradient: mine
+                    ? const LinearGradient(
+                        colors: [Color(0xFFF95B3D), Color(0xFFFF7A59)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : null,
+                color: mine ? null : Colors.white,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(18),
+                  topRight: const Radius.circular(18),
+                  bottomLeft: Radius.circular(mine ? 18 : 4),
+                  bottomRight: Radius.circular(mine ? 4 : 18),
+                ),
+                border: mine
+                    ? null
+                    : Border.all(
+                        color: const Color(0xFFFFECE5),
+                        width: 1,
+                      ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (!mine)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: Text(
+                        '${m['senderName'] ?? ''}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFFF95B3D),
+                        ),
+                      ),
+                    ),
+                  Text(
+                    '${m['text'] ?? ''}',
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      color: mine ? Colors.white : const Color(0xFF0F172A),
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       );
+
+  Widget _chatInput() => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: const Color(0xFFFFECE5)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                const SizedBox(width: 14),
+                Expanded(
+                  child: TextField(
+                    controller: messageController,
+                    onSubmitted: (_) => _sendMessage(),
+                    style: const TextStyle(fontSize: 15, color: Color(0xFF0F172A)),
+                    decoration: const InputDecoration(
+                      hintText: 'Type a message…',
+                      hintStyle: TextStyle(fontSize: 14.5, color: Color(0xFF94A3B8)),
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: _sendMessage,
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    margin: const EdgeInsets.all(5),
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [Color(0xFFF95B3D), Color(0xFFFF7A59)],
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.arrow_upward_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+
+  Future<void> _switchCamera() async {
+    final tracks = localStream?.getVideoTracks() ?? [];
+    if (tracks.isNotEmpty) {
+      await Helper.switchCamera(tracks.first);
+      if (mounted) setState(() {});
+    }
+  }
 
   void _toggleMic() {
     final next = !mic;
@@ -770,40 +2139,6 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     Helper.setSpeakerphoneOn(speaker).catchError((_) {});
     setState(() {});
   }
-
-  Widget _chatBody() => ListView.builder(
-        padding: const EdgeInsets.all(12),
-        itemCount: messages.length,
-        itemBuilder: (context, i) {
-          final m = Map<String, dynamic>.from(messages[i]);
-          final mine = (m['senderRole'] == 'USER') == widget.callerSide;
-          return Align(
-            alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 300),
-              margin: const EdgeInsets.symmetric(vertical: 4),
-              padding: const EdgeInsets.all(11),
-              decoration: BoxDecoration(color: mine ? Theme.of(context).colorScheme.primaryContainer : Colors.white10, borderRadius: BorderRadius.circular(14)),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('${m['senderName'] ?? ''}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                Text('${m['text'] ?? ''}'),
-              ]),
-            ),
-          );
-        },
-      );
-
-  Widget _chatInput() => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Row(children: [
-            Expanded(child: TextField(controller: messageController, onSubmitted: (_) => _sendMessage(), decoration: const InputDecoration(hintText: 'Type a message…'))),
-            const SizedBox(width: 8),
-            IconButton.filled(onPressed: _sendMessage, icon: const Icon(Icons.send)),
-            IconButton(onPressed: _end, icon: const Icon(Icons.close, color: Colors.redAccent)),
-          ]),
-        ),
-      );
 
   Future<void> _showTools() async {
     await showModalBottomSheet(
@@ -1096,4 +2431,148 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     rating.dispose();
     comment.dispose();
   }
+}
+
+/// Animated multi-bar soundwave equalizer for live call
+class EqualizerBars extends StatelessWidget {
+  final Animation<double> animation;
+  final bool isLeft;
+
+  const EqualizerBars({
+    super.key,
+    required this.animation,
+    required this.isLeft,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // 6 bars with harmonious resting and active heights
+    final baseHeights = isLeft
+        ? const [14.0, 22.0, 38.0, 48.0, 30.0, 16.0]
+        : const [16.0, 30.0, 48.0, 38.0, 22.0, 14.0];
+
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, _) {
+        final t = animation.value;
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: List.generate(baseHeights.length, (i) {
+            final phase = (i * 0.22);
+            final wave = 0.5 + 0.5 * ((t + phase) % 1.0);
+            final dynamicHeight = (baseHeights[i] * (0.65 + 0.45 * wave)).clamp(8.0, 50.0);
+
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 2.2),
+              width: 3.5,
+              height: dynamicHeight,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(3.5),
+                gradient: LinearGradient(
+                  colors: [
+                    const Color(0xFFFDBA74).withValues(alpha: 0.85),
+                    const Color(0xFFF97316).withValues(alpha: 0.65),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+            );
+          }),
+        );
+      },
+    );
+  }
+}
+
+/// Custom painter for soft peach silk waves and subtle ambient sparkle dots
+class SilkWavesPainter extends CustomPainter {
+  SilkWavesPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    // Base background gradient
+    final bgPaint = Paint()
+      ..shader = const LinearGradient(
+        colors: [Color(0xFFFFF9F5), Color(0xFFFDECE2), Color(0xFFFAF0E6)],
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+      ).createShader(Rect.fromLTWH(0, 0, w, h));
+    canvas.drawRect(Rect.fromLTWH(0, 0, w, h), bgPaint);
+
+    // Wave 1: Flowing from top left across to right
+    final wave1Paint = Paint()
+      ..shader = LinearGradient(
+        colors: [
+          const Color(0xFFFCEADE).withValues(alpha: 0.65),
+          const Color(0xFFFADCCB).withValues(alpha: 0.35),
+        ],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ).createShader(Rect.fromLTWH(0, 0, w, h))
+      ..style = PaintingStyle.fill;
+
+    final path1 = Path();
+    path1.moveTo(0, h * 0.14);
+    path1.cubicTo(w * 0.3, h * 0.22, w * 0.7, h * 0.08, w, h * 0.26);
+    path1.lineTo(w, h * 0.40);
+    path1.cubicTo(w * 0.6, h * 0.24, w * 0.25, h * 0.36, 0, h * 0.24);
+    path1.close();
+    canvas.drawPath(path1, wave1Paint);
+
+    // Wave 2: Sweeping across lower-middle
+    final wave2Paint = Paint()
+      ..shader = LinearGradient(
+        colors: [
+          const Color(0xFFFDE8DC).withValues(alpha: 0.55),
+          const Color(0xFFF9D6C4).withValues(alpha: 0.30),
+        ],
+        begin: Alignment.bottomLeft,
+        end: Alignment.topRight,
+      ).createShader(Rect.fromLTWH(0, 0, w, h))
+      ..style = PaintingStyle.fill;
+
+    final path2 = Path();
+    path2.moveTo(0, h * 0.54);
+    path2.cubicTo(w * 0.35, h * 0.66, w * 0.65, h * 0.50, w, h * 0.70);
+    path2.lineTo(w, h * 0.84);
+    path2.cubicTo(w * 0.6, h * 0.68, w * 0.3, h * 0.80, 0, h * 0.68);
+    path2.close();
+    canvas.drawPath(path2, wave2Paint);
+
+    // Wave 3: Bottom subtle wave
+    final wave3Paint = Paint()
+      ..shader = LinearGradient(
+        colors: [
+          const Color(0xFFFCE6D6).withValues(alpha: 0.50),
+          const Color(0xFFFBD7C4).withValues(alpha: 0.20),
+        ],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ).createShader(Rect.fromLTWH(0, 0, w, h))
+      ..style = PaintingStyle.fill;
+
+    final path3 = Path();
+    path3.moveTo(0, h * 0.80);
+    path3.cubicTo(w * 0.4, h * 0.73, w * 0.7, h * 0.90, w, h * 0.86);
+    path3.lineTo(w, h);
+    path3.lineTo(0, h);
+    path3.close();
+    canvas.drawPath(path3, wave3Paint);
+
+    // Subtle ambient sparkle dots matching screenshot
+    final dotPaint = Paint()..color = const Color(0xFFF6C8B2).withValues(alpha: 0.55);
+    canvas.drawCircle(Offset(w * 0.25, h * 0.26), 2.0, dotPaint);
+    canvas.drawCircle(Offset(w * 0.63, h * 0.25), 2.2, dotPaint);
+    canvas.drawCircle(Offset(w * 0.32, h * 0.49), 2.0, dotPaint);
+    canvas.drawCircle(Offset(w * 0.55, h * 0.52), 1.8, dotPaint);
+    canvas.drawCircle(Offset(w * 0.81, h * 0.30), 2.0, dotPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

@@ -17,6 +17,7 @@ class _GlobalCallHostState extends State<GlobalCallHost> {
   final ActiveCallManager _manager = ActiveCallManager.instance;
   Widget? _activeSessionWidget;
   String? _lastSessionId;
+  GlobalKey<NavigatorState>? _callNavigatorKey;
 
   Offset? _pipOffset;
   bool _isDragging = false;
@@ -32,6 +33,7 @@ class _GlobalCallHostState extends State<GlobalCallHost> {
         if (hasCall && session != null) {
           if (_lastSessionId != session.id || _activeSessionWidget == null) {
             _lastSessionId = session.id;
+            _callNavigatorKey = GlobalKey<NavigatorState>();
             _activeSessionWidget = SessionScreen(
               key: ValueKey('call_${session.id}'),
               initialSession: session,
@@ -42,6 +44,7 @@ class _GlobalCallHostState extends State<GlobalCallHost> {
         } else {
           _activeSessionWidget = null;
           _lastSessionId = null;
+          _callNavigatorKey = null;
           _pipOffset = null;
         }
 
@@ -74,7 +77,19 @@ class _GlobalCallHostState extends State<GlobalCallHost> {
                   offstage: _manager.isMinimized,
                   child: TickerMode(
                     enabled: !_manager.isMinimized,
-                    child: _activeSessionWidget!,
+                    child: HeroControllerScope.none(
+                      child: Navigator(
+                        key: _callNavigatorKey,
+                        onGenerateRoute: (settings) => PageRouteBuilder(
+                          pageBuilder: (ctx, anim1, anim2) => Material(
+                            type: MaterialType.transparency,
+                            child: _activeSessionWidget!,
+                          ),
+                          transitionDuration: Duration.zero,
+                          reverseTransitionDuration: Duration.zero,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),

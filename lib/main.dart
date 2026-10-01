@@ -17,9 +17,13 @@ void main() async {
 }
 
 class TalkStrangersApp extends StatelessWidget {
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
   const TalkStrangersApp({super.key});
+
   @override
   Widget build(BuildContext context) => MaterialApp(
+        navigatorKey: navigatorKey,
         debugShowCheckedModeBanner: false,
         title: 'HearMe',
         theme: AppTheme.light,

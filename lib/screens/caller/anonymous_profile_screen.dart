@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../../core/app_controller.dart';
 import '../../core/app_theme.dart';
 import '../../models/app_models.dart';
+import '../../main.dart';
 import '../../widgets/common_widgets.dart';
 
 class AnonymousProfileScreen extends StatefulWidget {
@@ -310,7 +311,13 @@ class _AnonymousProfileScreenState extends State<AnonymousProfileScreen> {
               elevation: 0,
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back_ios_new_rounded, color: textDark, size: 20),
-                onPressed: () => Navigator.pop(context),
+                onPressed: () {
+                  if (Navigator.of(context).canPop()) {
+                    Navigator.of(context).pop();
+                  } else {
+                    TalkStrangersApp.navigatorKey.currentState?.maybePop();
+                  }
+                },
               ),
               title: const Text(
                 'Anonymous Profile',

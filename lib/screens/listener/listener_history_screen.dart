@@ -8,6 +8,35 @@ import '../../core/app_controller.dart';
 import '../../models/app_models.dart';
 import '../../widgets/common_widgets.dart';
 
+class ListenerDailyAttendance {
+  final DateTime date;
+  final String dateStr;
+  final int onlineSeconds;
+  final int targetSeconds;
+  final int callsCount;
+  final int completedCalls;
+  final int missedCalls;
+  final double earnings;
+  final int missedDaysStreak;
+  final String status; // 'TARGET_MET', 'IN_PROGRESS', 'MISSED'
+
+  const ListenerDailyAttendance({
+    required this.date,
+    required this.dateStr,
+    required this.onlineSeconds,
+    this.targetSeconds = 10800,
+    required this.callsCount,
+    required this.completedCalls,
+    required this.missedCalls,
+    required this.earnings,
+    this.missedDaysStreak = 0,
+    required this.status,
+  });
+
+  double get progress => (onlineSeconds / targetSeconds).clamp(0.0, 1.0);
+  int get remainingSeconds => (targetSeconds - onlineSeconds).clamp(0, targetSeconds);
+}
+
 class ListenerHistoryScreen extends StatefulWidget {
   const ListenerHistoryScreen({super.key});
 
@@ -20,13 +49,24 @@ class _ListenerHistoryScreenState extends State<ListenerHistoryScreen> {
   final search = TextEditingController();
   bool loading = true;
 
-  // Filter & Sort State
+  // View Mode: 0 = Call Sessions, 1 = Daily Attendance
+  int viewMode = 0;
+
+  // Filter & Sort State for Sessions
   String serviceType = 'ALL'; // ALL, AUDIO_CALL, VIDEO_CALL, CHAT
   String statusFilter = 'ALL'; // ALL, COMPLETED, ACTIVE, MISSED, CANCELLED
   String dateFilter = 'ALL'; // ALL, TODAY, YESTERDAY, 7_DAYS, 30_DAYS, THIS_MONTH, CUSTOM
   DateTimeRange? customRange;
   String sort = 'NEWEST'; // NEWEST, OLDEST, RUPEES, DURATION
   String earningsFilter = 'ALL'; // ALL, PAID, GIFTS, PROMO, UNBILLED
+
+  // Attendance State & Filters
+  Map<String, dynamic>? attendanceSummary;
+  List<Map<String, dynamic>> attendanceHistoryRecords = [];
+  String attendanceStatusFilter = 'ALL'; // ALL, TARGET_MET, IN_PROGRESS, MISSED
+  final attendanceSearch = TextEditingController();
+  String attendanceDateFilter = 'ALL'; // ALL, TODAY, YESTERDAY, 7_DAYS, 30_DAYS, THIS_MONTH, CUSTOM
+  DateTimeRange? attendanceCustomRange;
 
   static const Color bgCream = Color(0xFFFAF5EE);
   static const Color borderWarm = Color(0xFFF1E6D8);
@@ -40,6 +80,7 @@ class _ListenerHistoryScreenState extends State<ListenerHistoryScreen> {
   void initState() {
     super.initState();
     search.addListener(_changed);
+    attendanceSearch.addListener(_changed);
     _load();
   }
 
@@ -47,6 +88,8 @@ class _ListenerHistoryScreenState extends State<ListenerHistoryScreen> {
   void dispose() {
     search.removeListener(_changed);
     search.dispose();
+    attendanceSearch.removeListener(_changed);
+    attendanceSearch.dispose();
     super.dispose();
   }
 
@@ -57,6 +100,12 @@ class _ListenerHistoryScreenState extends State<ListenerHistoryScreen> {
   Future<void> _load() async {
     try {
       final next = await context.read<AppController>().api.listenerHistory();
+      try {
+        attendanceSummary = await context.read<AppController>().api.listenerAttendance();
+      } catch (_) {}
+      try {
+        attendanceHistoryRecords = await context.read<AppController>().api.listenerAttendanceHistory();
+      } catch (_) {}
       if (mounted) {
         setState(() {
           items = next;
@@ -177,26 +226,150 @@ class _ListenerHistoryScreenState extends State<ListenerHistoryScreen> {
     }
   }
 
+  List<ListenerDailyAttendance> get computedDailyAttendance {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final map = <String, ListenerDailyAttendance>{};
+
+    final sessionsByDate = <String, List<InstantSessionModel>>{};
+    for (final s in items) {
+      final dt = _when(s);
+      if (dt != null) {
+        final key = DateFormat('yyyy-MM-dd').format(dt);
+        sessionsByDate.putIfAbsent(key, () => []).add(s);
+      }
+    }
+
+    final telemetryByDate = <String, Map<String, dynamic>>{};
+    for (final h in attendanceHistoryRecords) {
+      final d = h['date']?.toString();
+      if (d != null) {
+        telemetryByDate[d] = h;
+      }
+    }
+
+    for (int i = 0; i < 30; i++) {
+      final day = today.subtract(Duration(days: i));
+      final dateStr = DateFormat('yyyy-MM-dd').format(day);
+      final daySessions = sessionsByDate[dateStr] ?? [];
+      final telemetry = telemetryByDate[dateStr];
+
+      int onlineSecs = 0;
+      if (telemetry != null && telemetry['onlineSeconds'] != null) {
+        onlineSecs = (telemetry['onlineSeconds'] as num).toInt();
+      } else if (i == 0 && attendanceSummary != null) {
+        onlineSecs = (attendanceSummary!['onlineSeconds'] as num?)?.toInt() ?? 0;
+      } else {
+        final sessionDuration = daySessions.fold<int>(0, (sum, s) => sum + s.billableSeconds);
+        onlineSecs = sessionDuration > 0 ? (sessionDuration * 1.35).toInt() : 0;
+      }
+
+      int completed = daySessions.where((s) => s.isCompleted).length;
+      int missed = daySessions.where((s) => s.isMissed).length;
+      double dayEarned = daySessions.fold<double>(0.0, (sum, s) => sum + s.effectiveListenerEarnings);
+      int missedStreak = (telemetry?['missedDays'] as num?)?.toInt() ?? 0;
+
+      String st;
+      if (onlineSecs >= 10800) {
+        st = 'TARGET_MET';
+      } else if (onlineSecs > 0) {
+        st = 'IN_PROGRESS';
+      } else {
+        st = 'MISSED';
+      }
+
+      map[dateStr] = ListenerDailyAttendance(
+        date: day,
+        dateStr: dateStr,
+        onlineSeconds: onlineSecs,
+        callsCount: daySessions.length,
+        completedCalls: completed,
+        missedCalls: missed,
+        earnings: dayEarned,
+        missedDaysStreak: missedStreak,
+        status: st,
+      );
+    }
+
+    var list = map.values.toList();
+    list.sort((a, b) => b.date.compareTo(a.date));
+    return list;
+  }
+
+  bool _attendanceDateOk(DateTime d) {
+    if (attendanceDateFilter == 'ALL') return true;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(d.year, d.month, d.day);
+
+    if (attendanceDateFilter == 'TODAY') return day == today;
+    if (attendanceDateFilter == 'YESTERDAY') return day == today.subtract(const Duration(days: 1));
+    if (attendanceDateFilter == '7_DAYS') {
+      return !day.isBefore(today.subtract(const Duration(days: 6))) && !day.isAfter(now);
+    }
+    if (attendanceDateFilter == '30_DAYS') {
+      return !day.isBefore(today.subtract(const Duration(days: 29))) && !day.isAfter(now);
+    }
+    if (attendanceDateFilter == 'THIS_MONTH') {
+      return d.year == now.year && d.month == now.month;
+    }
+    if (attendanceDateFilter == 'CUSTOM' && attendanceCustomRange != null) {
+      final startDay = DateTime(attendanceCustomRange!.start.year, attendanceCustomRange!.start.month, attendanceCustomRange!.start.day);
+      final endDay = DateTime(attendanceCustomRange!.end.year, attendanceCustomRange!.end.month, attendanceCustomRange!.end.day, 23, 59, 59);
+      return !d.isBefore(startDay) && !d.isAfter(endDay);
+    }
+    return true;
+  }
+
+  List<ListenerDailyAttendance> get filteredAttendance {
+    final q = attendanceSearch.text.trim().toLowerCase();
+    return computedDailyAttendance.where((d) {
+      if (attendanceStatusFilter != 'ALL' && d.status != attendanceStatusFilter) {
+        return false;
+      }
+      if (!_attendanceDateOk(d.date)) return false;
+      if (q.isNotEmpty) {
+        final dateFormatted = DateFormat('EEEE, d MMMM yyyy').format(d.date).toLowerCase();
+        final shortDate = DateFormat('d MMM').format(d.date).toLowerCase();
+        final dayName = DateFormat('EEEE').format(d.date).toLowerCase();
+        final statusLabel = d.status == 'TARGET_MET' ? 'present met target completed' : (d.status == 'IN_PROGRESS' ? 'in progress partial half' : 'missed absent');
+        return dateFormatted.contains(q) || shortDate.contains(q) || dayName.contains(q) || statusLabel.contains(q);
+      }
+      return true;
+    }).toList();
+  }
+
+  Future<void> _pickAttendanceCustomRange() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2024),
+      lastDate: now,
+      initialDateRange: attendanceCustomRange ?? DateTimeRange(start: now.subtract(const Duration(days: 7)), end: now),
+    );
+    if (picked != null) {
+      setState(() {
+        attendanceCustomRange = picked;
+        attendanceDateFilter = 'CUSTOM';
+      });
+    }
+  }
+
+  String _formatDurationHMS(int seconds) {
+    final h = seconds ~/ 3600;
+    final m = (seconds % 3600) ~/ 60;
+    if (h > 0) {
+      return '${h}h ${m}m';
+    }
+    return '${m}m';
+  }
+
   Future<void> _callback(InstantSessionModel s) async {
     try {
-      var callback = await context.read<AppController>().api.callbackSession(s.id);
+      final callback = await context.read<AppController>().api.callbackSession(s.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Ringing ${s.callerNickname}…'),
-        backgroundColor: const Color(0xFF10B981),
-      ));
-      for (var i = 0; i < 40 && mounted; i++) {
-        if (const {'ACCEPTED', 'CONNECTED', 'ACTIVE'}.contains(callback.status)) {
-          ActiveCallManager.instance.startCall(callback, callerSide: false);
-          await _load();
-          return;
-        }
-        if (const {'EXPIRED', 'REJECTED', 'CANCELLED'}.contains(callback.status)) {
-          throw Exception('Callback was not picked up. Try again later.');
-        }
-        await Future<void>.delayed(const Duration(milliseconds: 1500));
-        callback = await context.read<AppController>().api.session(callback.id);
-      }
+      ActiveCallManager.instance.startCall(callback, callerSide: false);
+      await _load();
     } catch (e) {
       if (mounted) showError(context, e);
     }
@@ -523,412 +696,450 @@ class _ListenerHistoryScreenState extends State<ListenerHistoryScreen> {
                       letterSpacing: -0.5,
                     ),
                   ),
-                  const SizedBox(height: 16),
-
-                  // 1. Top 3 Stat Cards Row matching Screenshot 4
-                  Row(
-                    children: [
-                      // Card 1: Total Earnings (Coral/Orange Gradient)
-                      Expanded(
-                        flex: 12,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(20),
-                            gradient: const LinearGradient(
-                              colors: [primaryOrange, secondaryOrange],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: primaryOrange.withValues(alpha: 0.35),
-                                blurRadius: 10,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Expanded(
-                                    child: Text(
-                                      'Total Earnings',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w600),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Container(
-                                    width: 20,
-                                    height: 20,
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withValues(alpha: 0.25),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Center(
-                                      child: Icon(Icons.monetization_on_rounded, color: Colors.white, size: 12),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                '₹${totalEarnings.toStringAsFixed(2)}',
-                                style: const TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w900,
-                                  color: Colors.white,
-                                  letterSpacing: -0.5,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Incl. ₹${totalGifts.toStringAsFixed(0)} gifts 🎁',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.9),
-                                  fontSize: 9.5,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-
-                      // Card 2: Sessions Taken (White Card)
-                      Expanded(
-                        flex: 10,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: borderWarm),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.03),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Expanded(
-                                    child: Text(
-                                      'Sessions Taken',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(color: textMuted, fontSize: 10.5, fontWeight: FontWeight.w600),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Container(
-                                    width: 20,
-                                    height: 20,
-                                    decoration: const BoxDecoration(
-                                      color: softPeach,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Center(
-                                      child: Icon(Icons.headphones_rounded, color: primaryOrange, size: 12),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                '${items.length}',
-                                style: const TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w900,
-                                  color: textDark,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '$completedCount done • $missedCount missed',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(color: textMuted, fontSize: 9, fontWeight: FontWeight.w500),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-
-                      // Card 3: Total (White Card)
-                      Expanded(
-                        flex: 9,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: borderWarm),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.03),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Expanded(
-                                    child: Text(
-                                      'Total',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(color: textMuted, fontSize: 10.5, fontWeight: FontWeight.w600),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Container(
-                                    width: 20,
-                                    height: 20,
-                                    decoration: const BoxDecoration(
-                                      color: softPeach,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Center(
-                                      child: Icon(Icons.bar_chart_rounded, color: primaryOrange, size: 12),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                '${items.length}',
-                                style: const TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w900,
-                                  color: textDark,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${totalHours.toStringAsFixed(1)} hours',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(color: textMuted, fontSize: 9, fontWeight: FontWeight.w500),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
                   const SizedBox(height: 14),
 
-                  // 2. Channel Filter Pills (Horizontal Scrolling Row matching Screenshot 4)
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
+                  // Sub-Tab Switcher: Call Sessions vs Daily Attendance
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3ECE0),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: borderWarm, width: 0.9),
+                    ),
                     child: Row(
                       children: [
-                        _buildChannelPill(
-                          label: 'All Channels',
-                          count: channelAll,
-                          icon: Icons.grid_view_rounded,
-                          isSelected: serviceType == 'ALL',
-                          onTap: () => setState(() => serviceType = 'ALL'),
+                        Expanded(
+                          child: _buildTopSegment(
+                            icon: Icons.phone_in_talk_rounded,
+                            title: 'Call Sessions',
+                            count: items.length,
+                            isSelected: viewMode == 0,
+                            onTap: () => setState(() => viewMode = 0),
+                          ),
                         ),
-                        const SizedBox(width: 8),
-                        _buildChannelPill(
-                          label: 'Audio Calls',
-                          count: channelAudio,
-                          icon: Icons.call_rounded,
-                          isSelected: serviceType == 'AUDIO_CALL',
-                          onTap: () => setState(() => serviceType = 'AUDIO_CALL'),
-                        ),
-                        const SizedBox(width: 8),
-                        _buildChannelPill(
-                          label: 'Video Calls',
-                          count: channelVideo,
-                          icon: Icons.videocam_rounded,
-                          isSelected: serviceType == 'VIDEO_CALL',
-                          onTap: () => setState(() => serviceType = 'VIDEO_CALL'),
-                        ),
-                        const SizedBox(width: 8),
-                        _buildChannelPill(
-                          label: 'Chat Sessions',
-                          count: channelChat,
-                          icon: Icons.chat_bubble_rounded,
-                          isSelected: serviceType == 'CHAT',
-                          onTap: () => setState(() => serviceType = 'CHAT'),
+                        Expanded(
+                          child: _buildTopSegment(
+                            icon: Icons.calendar_month_rounded,
+                            title: 'Daily Attendance',
+                            count: computedDailyAttendance.length,
+                            isSelected: viewMode == 1,
+                            onTap: () => setState(() => viewMode = 1),
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
 
-                  // 3. Search and Date/Filter Bar matching Screenshot 4
-                  Row(
-                    children: [
-                      // Search Input (Expanded)
-                      Expanded(
-                        child: Container(
-                          height: 46,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: borderWarm),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.02),
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
+                  if (viewMode == 0) ...[
+                    // 1. Top 3 Stat Cards Row matching Screenshot 4
+                    Row(
+                      children: [
+                        // Card 1: Total Earnings (Coral/Orange Gradient)
+                        Expanded(
+                          flex: 12,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(20),
+                              gradient: const LinearGradient(
+                                colors: [primaryOrange, secondaryOrange],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
                               ),
-                            ],
-                          ),
-                          child: TextField(
-                            controller: search,
-                            style: const TextStyle(fontWeight: FontWeight.w600, color: textDark, fontSize: 13),
-                            decoration: const InputDecoration(
-                              hintText: 'Search caller, ID, ref...',
-                              hintStyle: TextStyle(color: Color(0xFF9CA3AF), fontSize: 12.5),
-                              prefixIcon: Icon(Icons.search_rounded, color: primaryOrange, size: 20),
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(vertical: 12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: primaryOrange.withValues(alpha: 0.35),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
                             ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-
-                      // Date Dropdown
-                      Container(
-                        height: 46,
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: borderWarm),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.02),
-                              blurRadius: 6,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: dateFilter == 'CUSTOM' ? 'CUSTOM' : dateFilter,
-                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: textMuted, size: 18),
-                            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: textDark),
-                            items: [
-                              DropdownMenuItem(
-                                value: 'ALL',
-                                child: Row(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    const Icon(Icons.calendar_today_rounded, color: primaryOrange, size: 15),
-                                    const SizedBox(width: 6),
-                                    const Text('All time'),
+                                    const Expanded(
+                                      child: Text(
+                                        'Total Earnings',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w600),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Container(
+                                      width: 20,
+                                      height: 20,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(alpha: 0.25),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Center(
+                                        child: Icon(Icons.monetization_on_rounded, color: Colors.white, size: 12),
+                                      ),
+                                    ),
                                   ],
                                 ),
-                              ),
-                              const DropdownMenuItem(value: 'TODAY', child: Text('Today')),
-                              const DropdownMenuItem(value: 'YESTERDAY', child: Text('Yesterday')),
-                              const DropdownMenuItem(value: '7_DAYS', child: Text('7 days')),
-                              const DropdownMenuItem(value: '30_DAYS', child: Text('30 days')),
-                              const DropdownMenuItem(value: 'THIS_MONTH', child: Text('This month')),
-                              DropdownMenuItem(
-                                value: 'CUSTOM',
-                                child: Text(customRange != null
-                                    ? '${DateFormat('d/M').format(customRange!.start)}–${DateFormat('d/M').format(customRange!.end)}'
-                                    : 'Custom…'),
-                              ),
-                            ],
-                            onChanged: (v) {
-                              if (v == 'CUSTOM') {
-                                _pickCustomRange();
-                              } else {
-                                setState(() {
-                                  dateFilter = v ?? 'ALL';
-                                  customRange = null;
-                                });
-                              }
-                            },
+                                const SizedBox(height: 6),
+                                Text(
+                                  '₹${totalEarnings.toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white,
+                                    letterSpacing: -0.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Incl. ₹${totalGifts.toStringAsFixed(0)} gifts 🎁',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.9),
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
+                        const SizedBox(width: 8),
 
-                      // Filter Sliders Icon Button
-                      InkWell(
-                        onTap: () => _showFilterSheet(),
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          width: 46,
-                          height: 46,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: borderWarm),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.02),
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: const Center(
-                            child: Icon(Icons.tune_rounded, color: primaryOrange, size: 20),
+                        // Card 2: Sessions Taken (White Card)
+                        Expanded(
+                          flex: 10,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: borderWarm),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.03),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Expanded(
+                                      child: Text(
+                                        'Sessions Taken',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(color: textMuted, fontSize: 10.5, fontWeight: FontWeight.w600),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Container(
+                                      width: 20,
+                                      height: 20,
+                                      decoration: const BoxDecoration(
+                                        color: softPeach,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Center(
+                                        child: Icon(Icons.headphones_rounded, color: primaryOrange, size: 12),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  '${items.length}',
+                                  style: const TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w900,
+                                    color: textDark,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '$completedCount done • $missedCount missed',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: textMuted, fontSize: 9, fontWeight: FontWeight.w500),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
+                        const SizedBox(width: 8),
 
-                  // 4. Session Cards List matching Screenshot 4
-                  if (list.isEmpty)
-                    Container(
-                      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: borderWarm),
-                      ),
-                      child: const Column(
-                        mainAxisSize: MainAxisSize.min,
+                        // Card 3: Total (White Card)
+                        Expanded(
+                          flex: 9,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: borderWarm),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.03),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Expanded(
+                                      child: Text(
+                                        'Total',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(color: textMuted, fontSize: 10.5, fontWeight: FontWeight.w600),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Container(
+                                      width: 20,
+                                      height: 20,
+                                      decoration: const BoxDecoration(
+                                        color: softPeach,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Center(
+                                        child: Icon(Icons.bar_chart_rounded, color: primaryOrange, size: 12),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  '${items.length}',
+                                  style: const TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w900,
+                                    color: textDark,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${totalHours.toStringAsFixed(1)} hours',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: textMuted, fontSize: 9, fontWeight: FontWeight.w500),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+
+                    // 2. Channel Filter Pills (Horizontal Scrolling Row matching Screenshot 4)
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
                         children: [
-                          Icon(Icons.history_toggle_off_rounded, size: 48, color: Color(0xFFD1D5DB)),
-                          SizedBox(height: 12),
-                          Text(
-                            'No sessions found',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textDark),
+                          _buildChannelPill(
+                            label: 'All Channels',
+                            count: channelAll,
+                            icon: Icons.grid_view_rounded,
+                            isSelected: serviceType == 'ALL',
+                            onTap: () => setState(() => serviceType = 'ALL'),
                           ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Try changing filters or search terms.',
-                            style: TextStyle(fontSize: 12.5, color: textMuted),
+                          const SizedBox(width: 8),
+                          _buildChannelPill(
+                            label: 'Audio Calls',
+                            count: channelAudio,
+                            icon: Icons.call_rounded,
+                            isSelected: serviceType == 'AUDIO_CALL',
+                            onTap: () => setState(() => serviceType = 'AUDIO_CALL'),
+                          ),
+                          const SizedBox(width: 8),
+                          _buildChannelPill(
+                            label: 'Video Calls',
+                            count: channelVideo,
+                            icon: Icons.videocam_rounded,
+                            isSelected: serviceType == 'VIDEO_CALL',
+                            onTap: () => setState(() => serviceType = 'VIDEO_CALL'),
+                          ),
+                          const SizedBox(width: 8),
+                          _buildChannelPill(
+                            label: 'Chat Sessions',
+                            count: channelChat,
+                            icon: Icons.chat_bubble_rounded,
+                            isSelected: serviceType == 'CHAT',
+                            onTap: () => setState(() => serviceType = 'CHAT'),
                           ),
                         ],
                       ),
-                    )
-                  else
-                    ...list.map((s) => _buildSessionCard(s)),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // 3. Search and Date/Filter Bar matching Screenshot 4
+                    Row(
+                      children: [
+                        // Search Input (Expanded)
+                        Expanded(
+                          child: Container(
+                            height: 46,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: borderWarm),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.02),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: TextField(
+                              controller: search,
+                              style: const TextStyle(fontWeight: FontWeight.w600, color: textDark, fontSize: 13),
+                              decoration: const InputDecoration(
+                                hintText: 'Search caller, ID, ref...',
+                                hintStyle: TextStyle(color: Color(0xFF9CA3AF), fontSize: 12.5),
+                                prefixIcon: Icon(Icons.search_rounded, color: primaryOrange, size: 20),
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.symmetric(vertical: 12),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+
+                        // Date Dropdown
+                        Container(
+                          height: 46,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: borderWarm),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.02),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: dateFilter == 'CUSTOM' ? 'CUSTOM' : dateFilter,
+                              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: textMuted, size: 18),
+                              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: textDark),
+                              items: [
+                                DropdownMenuItem(
+                                  value: 'ALL',
+                                  child: Row(
+                                    children: const [
+                                      Icon(Icons.calendar_today_rounded, color: primaryOrange, size: 15),
+                                      SizedBox(width: 6),
+                                      Text('All time'),
+                                    ],
+                                  ),
+                                ),
+                                const DropdownMenuItem(value: 'TODAY', child: Text('Today')),
+                                const DropdownMenuItem(value: 'YESTERDAY', child: Text('Yesterday')),
+                                const DropdownMenuItem(value: '7_DAYS', child: Text('7 days')),
+                                const DropdownMenuItem(value: '30_DAYS', child: Text('30 days')),
+                                const DropdownMenuItem(value: 'THIS_MONTH', child: Text('This month')),
+                                DropdownMenuItem(
+                                  value: 'CUSTOM',
+                                  child: Text(customRange != null
+                                      ? '${DateFormat('d/M').format(customRange!.start)}–${DateFormat('d/M').format(customRange!.end)}'
+                                      : 'Custom…'),
+                                ),
+                              ],
+                              onChanged: (v) {
+                                if (v == 'CUSTOM') {
+                                  _pickCustomRange();
+                                } else {
+                                  setState(() {
+                                    dateFilter = v ?? 'ALL';
+                                    customRange = null;
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+
+                        // Filter Sliders Icon Button
+                        InkWell(
+                          onTap: () => _showFilterSheet(),
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            width: 46,
+                            height: 46,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: borderWarm),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.02),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: const Center(
+                              child: Icon(Icons.tune_rounded, color: primaryOrange, size: 20),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+
+                    // 4. Session Cards List matching Screenshot 4
+                    if (list.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: borderWarm),
+                        ),
+                        child: const Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.history_toggle_off_rounded, size: 48, color: Color(0xFFD1D5DB)),
+                            SizedBox(height: 12),
+                            Text(
+                              'No sessions found',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textDark),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'Try changing filters or search terms.',
+                              style: TextStyle(fontSize: 12.5, color: textMuted),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      ...list.map((s) => _buildSessionCard(s)),
+                  ] else ...[
+                    // Daily Attendance View with Filters & Search
+                    ..._buildAttendanceViewChildren(),
+                  ],
                 ],
               ),
             ),
@@ -1278,42 +1489,43 @@ class _ListenerHistoryScreenState extends State<ListenerHistoryScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-
-                  // Call Back Button
-                  InkWell(
-                    onTap: () => _callback(s),
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: primaryOrange,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: primaryOrange.withValues(alpha: 0.3),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            isChat ? Icons.chat_bubble_rounded : (isVideo ? Icons.videocam_rounded : Icons.call_rounded),
-                            size: 14,
-                            color: Colors.white,
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            isChat ? 'Chat Back' : 'Call Back',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white),
-                          ),
-                        ],
+                  // Call Back / Chat Back / Video Call Back Button (Only for missed calls)
+                  if (s.isMissed) ...[
+                    const SizedBox(width: 8),
+                    InkWell(
+                      onTap: () => _callback(s),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: primaryOrange,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: primaryOrange.withValues(alpha: 0.3),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isChat ? Icons.chat_bubble_rounded : (isVideo ? Icons.videocam_rounded : Icons.call_rounded),
+                              size: 14,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              isChat ? 'Chat Back' : (isVideo ? 'Video Call Back' : 'Call Back'),
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ],
@@ -1363,7 +1575,6 @@ class _ListenerHistoryScreenState extends State<ListenerHistoryScreen> {
                 );
               }).toList(),
             ),
-            const SizedBox(height: 14),
             const Text('Sort By', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textDark)),
             const SizedBox(height: 6),
             Wrap(
@@ -1373,21 +1584,971 @@ class _ListenerHistoryScreenState extends State<ListenerHistoryScreen> {
                 {'id': 'OLDEST', 'label': 'Oldest First'},
                 {'id': 'RUPEES', 'label': 'Highest Earnings'},
                 {'id': 'DURATION', 'label': 'Longest Duration'},
-              ].map((s) {
-                final sel = sort == s['id'];
+              ].map((m) {
+                final sel = sort == m['id'];
                 return ChoiceChip(
-                  label: Text('${s['label']}'),
+                  label: Text('${m['label']}'),
                   selected: sel,
                   selectedColor: softPeach,
                   labelStyle: TextStyle(color: sel ? primaryOrange : textDark, fontWeight: FontWeight.bold, fontSize: 12),
                   side: BorderSide(color: sel ? primaryOrange : borderWarm),
                   backgroundColor: Colors.white,
                   onSelected: (_) {
-                    setState(() => sort = '${s['id']}');
+                    setState(() => sort = '${m['id']}');
                     Navigator.pop(ctx);
                   },
                 );
               }).toList(),
+            ),
+            const SizedBox(height: 14),
+            const Text('Earnings Type', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textDark)),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              children: [
+                {'id': 'ALL', 'label': 'All Types'},
+                {'id': 'PAID', 'label': 'Paid Sessions'},
+                {'id': 'GIFTS', 'label': 'With Gifts'},
+                {'id': 'PROMO', 'label': 'Promo / Seed'},
+                {'id': 'UNBILLED', 'label': 'Unbilled'},
+              ].map((m) {
+                final sel = earningsFilter == m['id'];
+                return ChoiceChip(
+                  label: Text('${m['label']}'),
+                  selected: sel,
+                  selectedColor: softPeach,
+                  labelStyle: TextStyle(color: sel ? primaryOrange : textDark, fontWeight: FontWeight.bold, fontSize: 12),
+                  side: BorderSide(color: sel ? primaryOrange : borderWarm),
+                  backgroundColor: Colors.white,
+                  onSelected: (_) {
+                    setState(() => earningsFilter = '${m['id']}');
+                    Navigator.pop(ctx);
+                  },
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () {
+                  setState(() {
+                    statusFilter = 'ALL';
+                    sort = 'NEWEST';
+                    earningsFilter = 'ALL';
+                    dateFilter = 'ALL';
+                    customRange = null;
+                    search.clear();
+                  });
+                  Navigator.pop(ctx);
+                },
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: primaryOrange,
+                  side: const BorderSide(color: primaryOrange),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                child: const Text('Reset All Session Filters', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopSegment({
+    required IconData icon,
+    required String title,
+    required int count,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isSelected ? primaryOrange : textMuted,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                color: isSelected ? textDark : textMuted,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: isSelected ? softPeach : Colors.black.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: isSelected ? primaryOrange : textMuted,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildAttendanceViewChildren() {
+    final attItems = filteredAttendance;
+    final totalAttDays = computedDailyAttendance.length;
+    final metDays = computedDailyAttendance.where((d) => d.status == 'TARGET_MET').length;
+    final inProgressDays = computedDailyAttendance.where((d) => d.status == 'IN_PROGRESS').length;
+    final missedDays = computedDailyAttendance.where((d) => d.status == 'MISSED').length;
+    final totalOnlineSecs = computedDailyAttendance.fold<int>(0, (sum, d) => sum + d.onlineSeconds);
+    final currentMissedStreak = computedDailyAttendance.isNotEmpty ? computedDailyAttendance.first.missedDaysStreak : 0;
+    final targetRate = totalAttDays > 0 ? ((metDays / totalAttDays) * 100).toInt() : 0;
+
+    return [
+      // Top 3 Attendance KPI Cards Row
+      Row(
+        children: [
+          // Card 1: Target Met / Present Days (Gradient Card)
+          Expanded(
+            flex: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                gradient: const LinearGradient(
+                  colors: [primaryOrange, secondaryOrange],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: primaryOrange.withValues(alpha: 0.35),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Present Days',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      Container(
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.25),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Center(
+                          child: Icon(Icons.verified_rounded, color: Colors.white, size: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '$metDays / $totalAttDays',
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '$targetRate% Target Met 🎯',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // Card 2: Hours Logged (White Card)
+          Expanded(
+            flex: 10,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: borderWarm),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Hours Logged',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: textMuted, fontSize: 10.5, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      Container(
+                        width: 20,
+                        height: 20,
+                        decoration: const BoxDecoration(
+                          color: softPeach,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Center(
+                          child: Icon(Icons.timer_rounded, color: primaryOrange, size: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${(totalOnlineSecs / 3600).toStringAsFixed(1)}h',
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                      color: textDark,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Target: 3.0h / day ⏱',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: textMuted, fontSize: 9, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // Card 3: Compliance Status (White Card)
+          Expanded(
+            flex: 9,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: borderWarm),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Compliance',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: textMuted, fontSize: 10.5, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      Container(
+                        width: 20,
+                        height: 20,
+                        decoration: const BoxDecoration(
+                          color: softPeach,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Center(
+                          child: Icon(Icons.shield_outlined, color: primaryOrange, size: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    currentMissedStreak == 0 ? 'Active' : '$currentMissedStreak Missed',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                      color: currentMissedStreak == 0 ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Limit: 7 missed days',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: textMuted, fontSize: 9, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 14),
+
+      // Attendance Status Filter Pills
+      SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _buildChannelPill(
+              label: 'All Days',
+              count: totalAttDays,
+              icon: Icons.calendar_month_rounded,
+              isSelected: attendanceStatusFilter == 'ALL',
+              onTap: () => setState(() => attendanceStatusFilter = 'ALL'),
+            ),
+            const SizedBox(width: 8),
+            _buildChannelPill(
+              label: 'Target Met',
+              count: metDays,
+              icon: Icons.check_circle_rounded,
+              isSelected: attendanceStatusFilter == 'TARGET_MET',
+              onTap: () => setState(() => attendanceStatusFilter = 'TARGET_MET'),
+            ),
+            const SizedBox(width: 8),
+            _buildChannelPill(
+              label: 'In Progress',
+              count: inProgressDays,
+              icon: Icons.hourglass_top_rounded,
+              isSelected: attendanceStatusFilter == 'IN_PROGRESS',
+              onTap: () => setState(() => attendanceStatusFilter = 'IN_PROGRESS'),
+            ),
+            const SizedBox(width: 8),
+            _buildChannelPill(
+              label: 'Missed Days',
+              count: missedDays,
+              icon: Icons.cancel_rounded,
+              isSelected: attendanceStatusFilter == 'MISSED',
+              onTap: () => setState(() => attendanceStatusFilter = 'MISSED'),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 12),
+
+      // Attendance Search and Date Filter Bar
+      Row(
+        children: [
+          // Search Input
+          Expanded(
+            child: Container(
+              height: 46,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: borderWarm),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: TextField(
+                controller: attendanceSearch,
+                style: const TextStyle(fontWeight: FontWeight.w600, color: textDark, fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'Search date, day (e.g. today, monday)...',
+                  hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 12.5),
+                  prefixIcon: const Icon(Icons.search_rounded, color: primaryOrange, size: 20),
+                  suffixIcon: attendanceSearch.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear_rounded, size: 16, color: textMuted),
+                          onPressed: () {
+                            attendanceSearch.clear();
+                            setState(() {});
+                          },
+                        )
+                      : null,
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // Date Dropdown
+          Container(
+            height: 46,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: borderWarm),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: attendanceDateFilter == 'CUSTOM' ? 'CUSTOM' : attendanceDateFilter,
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: textMuted, size: 18),
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: textDark),
+                items: [
+                  DropdownMenuItem(
+                    value: 'ALL',
+                    child: Row(
+                      children: const [
+                        Icon(Icons.calendar_today_rounded, color: primaryOrange, size: 15),
+                        SizedBox(width: 6),
+                        Text('All time'),
+                      ],
+                    ),
+                  ),
+                  const DropdownMenuItem(value: 'TODAY', child: Text('Today')),
+                  const DropdownMenuItem(value: 'YESTERDAY', child: Text('Yesterday')),
+                  const DropdownMenuItem(value: '7_DAYS', child: Text('7 days')),
+                  const DropdownMenuItem(value: '30_DAYS', child: Text('30 days')),
+                  const DropdownMenuItem(value: 'THIS_MONTH', child: Text('This month')),
+                  DropdownMenuItem(
+                    value: 'CUSTOM',
+                    child: Text(attendanceCustomRange != null
+                        ? '${DateFormat('d/M').format(attendanceCustomRange!.start)}–${DateFormat('d/M').format(attendanceCustomRange!.end)}'
+                        : 'Custom…'),
+                  ),
+                ],
+                onChanged: (v) {
+                  if (v == 'CUSTOM') {
+                    _pickAttendanceCustomRange();
+                  } else {
+                    setState(() {
+                      attendanceDateFilter = v ?? 'ALL';
+                      attendanceCustomRange = null;
+                    });
+                  }
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // Filter Button
+          InkWell(
+            onTap: () => _showAttendanceFilterSheet(),
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: borderWarm),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Center(
+                child: Icon(Icons.tune_rounded, color: primaryOrange, size: 20),
+              ),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 14),
+
+      // Attendance Cards List
+      if (attItems.isEmpty)
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: borderWarm),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.event_busy_rounded, size: 48, color: Color(0xFFD1D5DB)),
+              const SizedBox(height: 12),
+              const Text(
+                'No attendance records found',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textDark),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Try changing date filters or clearing your search.',
+                style: TextStyle(fontSize: 12.5, color: textMuted),
+              ),
+              const SizedBox(height: 14),
+              OutlinedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    attendanceStatusFilter = 'ALL';
+                    attendanceDateFilter = 'ALL';
+                    attendanceCustomRange = null;
+                    attendanceSearch.clear();
+                  });
+                },
+                icon: const Icon(Icons.refresh_rounded, size: 16),
+                label: const Text('Reset Attendance Filters'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: primaryOrange,
+                  side: const BorderSide(color: primaryOrange),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
+          ),
+        )
+      else
+        ...attItems.map((d) => _buildAttendanceCard(d)),
+    ];
+  }
+
+  Widget _buildAttendanceCard(ListenerDailyAttendance d) {
+    final now = DateTime.now();
+    final isToday = d.date.year == now.year && d.date.month == now.month && d.date.day == now.day;
+    final isYesterday = d.date.year == now.year &&
+        d.date.month == now.month &&
+        d.date.day == now.subtract(const Duration(days: 1)).day;
+
+    final dayText = isToday
+        ? 'Today'
+        : (isYesterday ? 'Yesterday' : DateFormat('EEEE').format(d.date));
+    final fullDateText = DateFormat('d MMMM yyyy').format(d.date);
+
+    final isTargetMet = d.status == 'TARGET_MET';
+    final isInProgress = d.status == 'IN_PROGRESS';
+
+    final Color statusColor = isTargetMet
+        ? const Color(0xFF10B981)
+        : (isInProgress ? const Color(0xFFF59E0B) : const Color(0xFFEF4444));
+
+    final Color statusBg = isTargetMet
+        ? const Color(0xFFE8F5E9)
+        : (isInProgress ? const Color(0xFFFFF3E0) : const Color(0xFFFFEBEE));
+
+    final String statusLabel = isTargetMet
+        ? 'Target Met (3h+)'
+        : (isInProgress ? 'In Progress (${(d.progress * 100).toInt()}%)' : 'Missed Day (0h)');
+
+    final IconData statusIcon = isTargetMet
+        ? Icons.check_circle_rounded
+        : (isInProgress ? Icons.hourglass_top_rounded : Icons.cancel_outlined);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderWarm),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.025),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header: Date & Status Badge
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Date Box Avatar
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: isTargetMet ? const Color(0xFFE8F5E9) : softPeach,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: isTargetMet ? const Color(0xFFC8E6C9) : const Color(0xFFFFD8C7),
+                    width: 0.8,
+                  ),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      DateFormat('d').format(d.date),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        color: isTargetMet ? const Color(0xFF10B981) : primaryOrange,
+                        height: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      DateFormat('MMM').format(d.date).toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        color: isTargetMet ? const Color(0xFF2E7D32) : primaryOrange,
+                        height: 1.0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+
+              // Day name and Full Date
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          dayText,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: textDark,
+                          ),
+                        ),
+                        if (isToday || isYesterday) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                            decoration: BoxDecoration(
+                              color: isToday ? primaryOrange : textMuted.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              isToday ? 'Today' : 'Yesterday',
+                              style: TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w800,
+                                color: isToday ? Colors.white : textDark,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      fullDateText,
+                      style: const TextStyle(fontSize: 11.5, color: textMuted, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Status Pill
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                decoration: BoxDecoration(
+                  color: statusBg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(statusIcon, color: statusColor, size: 13),
+                    const SizedBox(width: 4),
+                    Text(
+                      statusLabel,
+                      style: TextStyle(
+                        color: statusColor,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 10.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Shift Progress Bar & Indicator
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '${_formatDurationHMS(d.onlineSeconds)} logged',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: textDark),
+              ),
+              Text(
+                isTargetMet
+                    ? '3.0h target met 🎉'
+                    : (d.remainingSeconds > 0
+                        ? '${_formatDurationHMS(d.remainingSeconds)} to 3.0h target'
+                        : 'Target met'),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: isTargetMet ? const Color(0xFF10B981) : textMuted,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: Container(
+              height: 7,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3ECE0),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: FractionallySizedBox(
+                alignment: Alignment.centerLeft,
+                widthFactor: d.progress,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(6),
+                    gradient: LinearGradient(
+                      colors: isTargetMet
+                          ? const [Color(0xFF34D399), Color(0xFF10B981)]
+                          : (isInProgress
+                              ? const [Color(0xFFFBBF24), Color(0xFFF59E0B)]
+                              : const [Color(0xFFF87171), Color(0xFFEF4444)]),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Daily Telemetry Stats Card
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFAF7F2),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: borderWarm.withValues(alpha: 0.7)),
+            ),
+            child: Row(
+              children: [
+                // Stat 1: Online Time
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Online Time', style: TextStyle(fontSize: 10, color: textMuted, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 2),
+                      Text(
+                        _formatDurationHMS(d.onlineSeconds),
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: textDark),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(width: 1, height: 26, color: borderWarm),
+
+                // Stat 2: Sessions Taken
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Calls Handled', style: TextStyle(fontSize: 10, color: textMuted, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${d.callsCount} (${d.completedCalls} done)',
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: textDark),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Container(width: 1, height: 26, color: borderWarm),
+
+                // Stat 3: Daily Earnings
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Day Earnings', style: TextStyle(fontSize: 10, color: textMuted, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 2),
+                        Text(
+                          '₹${d.earnings.toStringAsFixed(2)}',
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: textDark),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Quick Filter Sessions Button (if calls exist)
+          if (d.callsCount > 0) ...[
+            const SizedBox(height: 10),
+            InkWell(
+              onTap: () {
+                setState(() {
+                  dateFilter = 'CUSTOM';
+                  customRange = DateTimeRange(start: d.date, end: d.date);
+                  viewMode = 0; // Switch to call sessions tab
+                });
+              },
+              borderRadius: BorderRadius.circular(10),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text(
+                      'View ${d.callsCount} call sessions for this date',
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: primaryOrange,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.arrow_forward_rounded, size: 14, color: primaryOrange),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _showAttendanceFilterSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      backgroundColor: Colors.white,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Filter Attendance Records', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textDark)),
+                IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => Navigator.pop(ctx)),
+              ],
+            ),
+            const Divider(color: borderWarm),
+            const SizedBox(height: 8),
+            const Text('Shift Status', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textDark)),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              children: [
+                {'id': 'ALL', 'label': 'All Days'},
+                {'id': 'TARGET_MET', 'label': 'Target Met (3h+)'},
+                {'id': 'IN_PROGRESS', 'label': 'In Progress (<3h)'},
+                {'id': 'MISSED', 'label': 'Missed (0h)'},
+              ].map((st) {
+                final sel = attendanceStatusFilter == st['id'];
+                return ChoiceChip(
+                  label: Text('${st['label']}'),
+                  selected: sel,
+                  selectedColor: softPeach,
+                  labelStyle: TextStyle(color: sel ? primaryOrange : textDark, fontWeight: FontWeight.bold, fontSize: 12),
+                  side: BorderSide(color: sel ? primaryOrange : borderWarm),
+                  backgroundColor: Colors.white,
+                  onSelected: (_) {
+                    setState(() => attendanceStatusFilter = '${st['id']}');
+                    Navigator.pop(ctx);
+                  },
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () {
+                  setState(() {
+                    attendanceStatusFilter = 'ALL';
+                    attendanceDateFilter = 'ALL';
+                    attendanceCustomRange = null;
+                    attendanceSearch.clear();
+                  });
+                  Navigator.pop(ctx);
+                },
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: primaryOrange,
+                  side: const BorderSide(color: primaryOrange),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                child: const Text('Reset All Attendance Filters', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
             ),
           ],
         ),

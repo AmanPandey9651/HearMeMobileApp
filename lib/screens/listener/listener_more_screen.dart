@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/app_controller.dart';
+import '../../main.dart';
+import '../../models/app_models.dart';
 import '../../widgets/common_widgets.dart';
 import '../common/how_it_works_screen.dart';
 import '../common/notifications_screen.dart';
 import '../common/safety_support_screen.dart';
+import 'listener_dashboard_screen.dart';
 import 'listener_peers_screen.dart';
 import 'listener_profile_screen.dart';
 import 'listener_reviews_screen.dart';
@@ -36,20 +39,35 @@ class ListenerMoreScreen extends StatefulWidget {
 
 class _ListenerMoreScreenState extends State<ListenerMoreScreen> {
   Map<String, dynamic>? liveProfile;
+  WalletModel? wallet;
+  List<InstantSessionModel> sessions = [];
+  bool loading = true;
 
   @override
   void initState() {
     super.initState();
-    _fetchLivePresence();
+    _fetchData();
   }
 
-  Future<void> _fetchLivePresence() async {
+  Future<void> _fetchData() async {
     try {
-      final p = await context.read<AppController>().api.myExpertProfile();
+      final api = context.read<AppController>().api;
+      final results = await Future.wait<dynamic>([
+        api.myExpertProfile(),
+        api.wallet(),
+        api.listenerHistory(),
+      ]);
       if (mounted) {
-        setState(() => liveProfile = p);
+        setState(() {
+          liveProfile = results[0] as Map<String, dynamic>?;
+          wallet = results[1] as WalletModel?;
+          sessions = results[2] as List<InstantSessionModel>;
+          loading = false;
+        });
       }
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) setState(() => loading = false);
+    }
   }
 
   @override
@@ -60,12 +78,12 @@ class _ListenerMoreScreenState extends State<ListenerMoreScreen> {
 
     final displayName = user?.fullName.trim().isNotEmpty == true
         ? user!.fullName.trim()
-        : ('${expert?['name'] ?? 'Verified Listener'}'.trim());
+        : ('${expert?['name'] ?? expert?['displayName'] ?? expert?['fullName'] ?? 'Verified Listener'}'.trim());
     final email = user?.email.isNotEmpty == true
         ? user!.email
         : '${expert?['email'] ?? 'listener@talkstrangers.com'}';
     final avatarUrl = expert?['avatarUrl']?.toString() ?? user?.avatarUrl;
-    const role = 'LISTENER';
+    const role = 'VERIFIED LISTENER';
 
     final presence = (expert?['presenceStatus'] ?? expert?['presence'] ?? 'OFFLINE').toString().toUpperCase();
     final activeSessionType = expert?['activeSessionType']?.toString();
@@ -78,6 +96,31 @@ class _ListenerMoreScreenState extends State<ListenerMoreScreen> {
         : (isOnline
             ? const Color(0xFF10B981) // Online: green dot
             : const Color(0xFF9CA3AF)); // Offline: grey dot
+
+    final String presenceLabel = isBusy
+        ? 'In a Consultation'
+        : (isOnline ? 'Available for Calls' : 'Currently Offline');
+
+    // Rates calculation
+    final ratePerMin = (expert?['ratePerMinute'] as num?)?.toDouble() ?? 39.5;
+    final videoRatePerMin = (expert?['videoRatePerMinute'] as num?)?.toDouble() ?? (ratePerMin * 1.5);
+    final chatRatePerMin = (expert?['chatRatePerMinute'] as num?)?.toDouble() ?? (ratePerMin * 0.6);
+    final netShareAudio = (ratePerMin * 0.50).round();
+    final netShareVideo = (videoRatePerMin * 0.50).round();
+    final netShareChat = (chatRatePerMin * 0.50).round();
+
+    // Wallet & Gifts
+    final walletBalance = wallet?.formattedBalance ?? '₹0.00';
+    final totalGifts = sessions.fold<double>(0.0, (acc, s) => acc + s.giftEarnings);
+
+    // Reviews & Ratings
+    final rawReviews = (expert?['reviewCount'] ?? expert?['ratingCount'] as num?)?.toInt() ?? 0;
+    final rawRating = (expert?['ratingAvg'] as num?)?.toDouble() ?? 0.0;
+    final hasRatings = rawReviews > 0 && rawRating > 0;
+    final ratingAvg = hasRatings ? rawRating : 4.8;
+    final ratingSub = rawReviews == 0
+        ? 'No caller reviews yet'
+        : '⭐ ${ratingAvg.toStringAsFixed(1)} • Across $rawReviews caller ${rawReviews == 1 ? "review" : "reviews"}';
 
     return Scaffold(
       backgroundColor: bgCream,
@@ -104,90 +147,93 @@ class _ListenerMoreScreenState extends State<ListenerMoreScreen> {
           ),
 
           SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
-              children: [
-                // Page Title Header
-                const Text(
-                  'More',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w900,
-                    color: textDark,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                const SizedBox(height: 18),
-
-                // Card 1: Caller reviews
-                _MenuItemCard(
-                  icon: Icons.rate_review_rounded,
-                  title: 'Caller reviews',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ListenerReviewsScreen()),
-                  ),
-                ),
-                const SizedBox(height: 14),
-
-                // Card 2: User Profile Banner Card
-                Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(22),
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFFFF2EB), Color(0xFFFFE6D8)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+            child: RefreshIndicator(
+              color: primaryOrange,
+              backgroundColor: Colors.white,
+              onRefresh: _fetchData,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(18, 14, 18, 40),
+                children: [
+                  // Page Title Header
+                  const Text(
+                    'More',
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
+                      color: textDark,
+                      letterSpacing: -0.5,
                     ),
-                    border: Border.all(color: const Color(0xFFFCDFD5), width: 1.2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: primaryOrange.withValues(alpha: 0.08),
-                        blurRadius: 14,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
                   ),
-                  child: Row(
-                    children: [
-                      // Avatar with online beacon dot
-                      Stack(
-                        children: [
-                          Container(
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 2.5),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.08),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: ClipOval(
-                              child: SizedBox(
-                                width: 72,
-                                height: 72,
-                                child: buildAvatarImage(
-                                  avatarUrl,
-                                  width: 72,
-                                  height: 72,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
-                                    width: 72,
-                                    height: 72,
-                                    color: primaryOrange,
-                                    child: Center(
-                                      child: Text(
-                                        displayName.isNotEmpty
-                                            ? displayName.substring(0, 1).toUpperCase()
-                                            : 'L',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 26,
+                  const SizedBox(height: 2),
+                  const Text(
+                    'Consultation rates, reviews, peers & preferences',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 1. Profile Hero Banner Card
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(22),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFFF2EB), Color(0xFFFFE6D8)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      border: Border.all(color: const Color(0xFFFCDFD5), width: 1.2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: primaryOrange.withValues(alpha: 0.08),
+                          blurRadius: 12,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        // Avatar with online beacon dot
+                        Stack(
+                          children: [
+                            Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 2.5),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.08),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: ClipOval(
+                                child: SizedBox(
+                                  width: 64,
+                                  height: 64,
+                                  child: buildAvatarImage(
+                                    avatarUrl,
+                                    width: 64,
+                                    height: 64,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Container(
+                                      width: 64,
+                                      height: 64,
+                                      color: primaryOrange,
+                                      child: Center(
+                                        child: Text(
+                                          displayName.isNotEmpty
+                                              ? displayName.substring(0, 1).toUpperCase()
+                                              : 'L',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 24,
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -195,173 +241,566 @@ class _ListenerMoreScreenState extends State<ListenerMoreScreen> {
                                 ),
                               ),
                             ),
-                          ),
-                          Positioned(
-                            bottom: 2,
-                            right: 2,
-                            child: Container(
-                              width: 15,
-                              height: 15,
-                              decoration: BoxDecoration(
-                                color: presenceColor,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 2.2),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: presenceColor.withValues(alpha: 0.4),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 1),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(width: 16),
-
-                      // User Info
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              displayName,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
-                                color: textDark,
-                                letterSpacing: -0.2,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              email,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                color: textMuted,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3.5),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFFECE5),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: primaryOrange.withValues(alpha: 0.25),
-                                  width: 0.8,
-                                ),
-                              ),
-                              child: Text(
-                                role,
-                                style: const TextStyle(
-                                  color: primaryOrange,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.6,
+                            Positioned(
+                              bottom: 1,
+                              right: 1,
+                              child: Container(
+                                width: 14,
+                                height: 14,
+                                decoration: BoxDecoration(
+                                  color: presenceColor,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white, width: 2.2),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: presenceColor.withValues(alpha: 0.4),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 1),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
+                        const SizedBox(width: 14),
 
-                // Card 3: Settings Menu Card (4 items with dividers)
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: borderWarm),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.03),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
+                        // User Info
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                displayName,
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w900,
+                                  color: textDark,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                email,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: textMuted,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFFECE5),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: primaryOrange.withValues(alpha: 0.25),
+                                        width: 0.8,
+                                      ),
+                                    ),
+                                    child: const Text(
+                                      role,
+                                      style: TextStyle(
+                                        color: primaryOrange,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: presenceColor.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      presenceLabel,
+                                      style: TextStyle(
+                                        color: presenceColor,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  child: Column(
-                    children: [
-                      _MenuRowItem(
-                        icon: Icons.person_outline_rounded,
-                        title: 'Profile',
-                        onTap: () {
-                          if (widget.onNavigateTab != null) {
-                            widget.onNavigateTab!(3); // Switch to Profile Tab
-                          } else {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const ListenerProfileScreen()),
+                  const SizedBox(height: 14),
+
+                  // 2. Consultation Rates Card (Relocated from homepage)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: borderWarm),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.03),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: const BoxDecoration(
+                                    color: softPeach,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Center(
+                                    child: Icon(Icons.price_change_outlined, color: primaryOrange, size: 20),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                const Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Consultation Rates',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w800,
+                                        color: textDark,
+                                      ),
+                                    ),
+                                    Text(
+                                      '50% net listener share credited',
+                                      style: TextStyle(fontSize: 11, color: textMuted),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            InkWell(
+                              onTap: () {
+                                if (widget.onNavigateTab != null) {
+                                  widget.onNavigateTab!(3); // Switch to Profile
+                                } else {
+                                  final nav = TalkStrangersApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
+                                  nav.push(MaterialPageRoute(builder: (_) => const ListenerProfileScreen()));
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFF4EE),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFFFCDFD5), width: 0.8),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Edit',
+                                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: primaryOrange),
+                                    ),
+                                    SizedBox(width: 2),
+                                    Icon(Icons.chevron_right_rounded, size: 14, color: primaryOrange),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+
+                        // 3 Rate Pillars
+                        Row(
+                          children: [
+                            // Audio Call Rate
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFAF5EE),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: borderWarm),
+                                ),
+                                child: Column(
+                                  children: [
+                                    const Icon(Icons.call_rounded, color: primaryOrange, size: 18),
+                                    const SizedBox(height: 4),
+                                    const Text('Voice', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: textMuted)),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '₹${ratePerMin.toStringAsFixed(1)}/m',
+                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: textDark),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFE8FDF3),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        '₹$netShareAudio net',
+                                        style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: Color(0xFF059669)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+
+                            // Video Call Rate
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFAF5EE),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: borderWarm),
+                                ),
+                                child: Column(
+                                  children: [
+                                    const Icon(Icons.videocam_rounded, color: Color(0xFF8B5CF6), size: 18),
+                                    const SizedBox(height: 4),
+                                    const Text('Video', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: textMuted)),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '₹${videoRatePerMin.toStringAsFixed(1)}/m',
+                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: textDark),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFE8FDF3),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        '₹$netShareVideo net',
+                                        style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: Color(0xFF059669)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+
+                            // Text Chat Rate
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFAF5EE),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: borderWarm),
+                                ),
+                                child: Column(
+                                  children: [
+                                    const Icon(Icons.chat_bubble_rounded, color: Color(0xFF2563EB), size: 18),
+                                    const SizedBox(height: 4),
+                                    const Text('Chat', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: textMuted)),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '₹${chatRatePerMin.toStringAsFixed(1)}/m',
+                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: textDark),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFE8FDF3),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        '₹$netShareChat net',
+                                        style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: Color(0xFF059669)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Tap for full breakdown
+                        InkWell(
+                          onTap: () {
+                            showConsultationRatesSheet(
+                              context: context,
+                              audioRate: ratePerMin,
+                              videoRate: videoRatePerMin,
+                              chatRate: chatRatePerMin,
+                              audioNet: netShareAudio,
+                              videoNet: netShareVideo,
+                              chatNet: netShareChat,
+                              onEditRates: () {
+                                Navigator.of(context).pop();
+                                widget.onNavigateTab?.call(3);
+                              },
                             );
-                          }
-                        },
-                      ),
-                      const Divider(height: 1, color: borderWarm, indent: 64),
-                      _MenuRowItem(
-                        icon: Icons.notifications_none_rounded,
-                        title: 'Notifications',
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                          },
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            alignment: Alignment.center,
+                            child: const Text(
+                              'View full pricing breakdown & share policy ›',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: primaryOrange),
+                            ),
+                          ),
                         ),
-                      ),
-                      const Divider(height: 1, color: borderWarm, indent: 64),
-                      _MenuRowItem(
-                        icon: Icons.shield_outlined,
-                        title: 'Safety, blocked users & support',
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const SafetySupportScreen()),
-                        ),
-                      ),
-                      const Divider(height: 1, color: borderWarm, indent: 64),
-                      _MenuRowItem(
-                        icon: Icons.info_outline_rounded,
-                        title: 'How it works',
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const HowItWorksScreen()),
-                        ),
-                      ),
-                      const Divider(height: 1, color: borderWarm, indent: 64),
-                      _MenuRowItem(
-                        icon: Icons.people_outline_rounded,
-                        title: 'Other Listeners (Live Status)',
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const ListenerPeersScreen()),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 14),
+                  const SizedBox(height: 14),
 
-                // Card 4: Sign out Card
-                _MenuItemCard(
-                  icon: Icons.logout_rounded,
-                  title: 'Sign out',
-                  iconColor: primaryOrange,
-                  onTap: () async {
-                    final shouldLogout = await confirm(
-                      context,
-                      'Sign out',
-                      'Are you sure you want to sign out of your listener account?',
-                    );
-                    if (shouldLogout) {
-                      await app.logout();
-                    }
-                  },
-                ),
-              ],
+                  // 3. Earnings & Gifts Quick Card (Relocated from homepage)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: borderWarm),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.03),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        // Left: Available Balance & UPI Payout
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => widget.onNavigateTab?.call(2), // Tab 2 Earnings
+                            borderRadius: BorderRadius.circular(12),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Row(
+                                    children: [
+                                      Icon(Icons.account_balance_wallet_outlined, size: 16, color: primaryOrange),
+                                      SizedBox(width: 5),
+                                      Text('Available Payout', style: TextStyle(fontSize: 11, color: textMuted, fontWeight: FontWeight.w600)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    walletBalance,
+                                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFFEA580C)),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  const Row(
+                                    children: [
+                                      Text('UPI Payouts', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: primaryOrange)),
+                                      SizedBox(width: 2),
+                                      Icon(Icons.chevron_right_rounded, size: 14, color: primaryOrange),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        Container(width: 1, height: 48, color: borderWarm),
+                        const SizedBox(width: 14),
+
+                        // Right: Virtual Gifts & Tips
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => widget.onNavigateTab?.call(2), // Tab 2 Earnings
+                            borderRadius: BorderRadius.circular(12),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Row(
+                                    children: [
+                                      Icon(Icons.card_giftcard_rounded, size: 16, color: Color(0xFFEC4899)),
+                                      SizedBox(width: 5),
+                                      Text('Caller Gifts', style: TextStyle(fontSize: 11, color: textMuted, fontWeight: FontWeight.w600)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '₹${totalGifts.toStringAsFixed(2)}',
+                                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: textDark),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  const Row(
+                                    children: [
+                                      Text('Gift History', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFEC4899))),
+                                      SizedBox(width: 2),
+                                      Icon(Icons.chevron_right_rounded, size: 14, color: Color(0xFFEC4899)),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // 4. Community & Reputation Card (Reviews & Live Peers)
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: borderWarm),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.03),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        _MenuRowItemWithSubtitle(
+                          icon: Icons.star_rounded,
+                          iconColor: const Color(0xFFF59E0B),
+                          iconBgColor: const Color(0xFFFEF3C7),
+                          title: 'Caller Reviews & Ratings',
+                          subtitle: ratingSub,
+                          onTap: () {
+                            final nav = TalkStrangersApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
+                            nav.push(MaterialPageRoute(builder: (_) => const ListenerReviewsScreen()));
+                          },
+                        ),
+                        const Divider(height: 1, color: borderWarm, indent: 64),
+                        _MenuRowItemWithSubtitle(
+                          icon: Icons.people_alt_rounded,
+                          iconColor: const Color(0xFF0D9488),
+                          iconBgColor: const Color(0xFFCCFBF1),
+                          title: 'Other Listeners (Live Status)',
+                          subtitle: 'See who is online, offline or busy',
+                          onTap: () {
+                            final nav = TalkStrangersApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
+                            nav.push(MaterialPageRoute(builder: (_) => const ListenerPeersScreen()));
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // 5. Account & Preferences Card
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: borderWarm),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.03),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        _MenuRowItem(
+                          icon: Icons.person_outline_rounded,
+                          title: 'Profile Settings',
+                          onTap: () {
+                            if (widget.onNavigateTab != null) {
+                              widget.onNavigateTab!(3); // Switch to Profile Tab
+                            } else {
+                              final nav = TalkStrangersApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
+                              nav.push(
+                                MaterialPageRoute(builder: (_) => const ListenerProfileScreen()),
+                              );
+                            }
+                          },
+                        ),
+                        const Divider(height: 1, color: borderWarm, indent: 64),
+                        _MenuRowItem(
+                          icon: Icons.notifications_none_rounded,
+                          title: 'Notifications',
+                          onTap: () {
+                            final nav = TalkStrangersApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
+                            nav.push(
+                              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                            );
+                          },
+                        ),
+                        const Divider(height: 1, color: borderWarm, indent: 64),
+                        _MenuRowItem(
+                          icon: Icons.shield_outlined,
+                          title: 'Safety, blocked users & support',
+                          onTap: () {
+                            final nav = TalkStrangersApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
+                            nav.push(
+                              MaterialPageRoute(builder: (_) => const SafetySupportScreen()),
+                            );
+                          },
+                        ),
+                        const Divider(height: 1, color: borderWarm, indent: 64),
+                        _MenuRowItem(
+                          icon: Icons.info_outline_rounded,
+                          title: 'How it works',
+                          onTap: () {
+                            final nav = TalkStrangersApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
+                            nav.push(
+                              MaterialPageRoute(builder: (_) => const HowItWorksScreen()),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // 6. Sign out Card
+                  _MenuItemCard(
+                    icon: Icons.logout_rounded,
+                    title: 'Sign out',
+                    iconColor: primaryOrange,
+                    onTap: () async {
+                      final shouldLogout = await confirm(
+                        context,
+                        'Sign out',
+                        'Are you sure you want to sign out of your listener account?',
+                      );
+                      if (shouldLogout) {
+                        await app.logout();
+                      }
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -389,7 +828,7 @@ class _MenuItemCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: ListenerMoreScreen.borderWarm),
+        border: Border.all(color: borderWarm),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
@@ -411,7 +850,7 @@ class _MenuItemCard extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: ListenerMoreScreen.softPeach,
+                    color: softPeach,
                     shape: BoxShape.circle,
                     border: Border.all(
                       color: const Color(0xFFFCDFD5),
@@ -421,7 +860,7 @@ class _MenuItemCard extends StatelessWidget {
                   child: Center(
                     child: Icon(
                       icon,
-                      color: iconColor ?? ListenerMoreScreen.primaryOrange,
+                      color: iconColor ?? primaryOrange,
                       size: 20,
                     ),
                   ),
@@ -433,7 +872,7 @@ class _MenuItemCard extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 15.5,
                       fontWeight: FontWeight.w700,
-                      color: ListenerMoreScreen.textDark,
+                      color: textDark,
                     ),
                   ),
                 ),
@@ -476,7 +915,7 @@ class _MenuRowItem extends StatelessWidget {
                 width: 38,
                 height: 38,
                 decoration: BoxDecoration(
-                  color: ListenerMoreScreen.softPeach,
+                  color: softPeach,
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: const Color(0xFFFCDFD5),
@@ -486,7 +925,7 @@ class _MenuRowItem extends StatelessWidget {
                 child: Center(
                   child: Icon(
                     icon,
-                    color: ListenerMoreScreen.primaryOrange,
+                    color: primaryOrange,
                     size: 19,
                   ),
                 ),
@@ -498,8 +937,88 @@ class _MenuRowItem extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
-                    color: ListenerMoreScreen.textDark,
+                    color: textDark,
                   ),
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: Color(0xFF9CA3AF),
+                size: 20,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MenuRowItemWithSubtitle extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBgColor;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _MenuRowItemWithSubtitle({
+    required this.icon,
+    required this.iconColor,
+    required this.iconBgColor,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: iconBgColor,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Icon(
+                    icon,
+                    color: iconColor,
+                    size: 20,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: textDark,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: textMuted,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const Icon(

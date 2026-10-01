@@ -7,6 +7,7 @@ import '../../core/active_call_manager.dart';
 import '../../core/app_controller.dart';
 import '../../models/app_models.dart';
 import '../../widgets/common_widgets.dart';
+import '../../widgets/incoming_call_overlay.dart';
 import 'anonymous_profile_screen.dart';
 import 'caller_history_screen.dart';
 import 'caller_home_screen.dart';
@@ -86,46 +87,7 @@ class _CallerShellState extends State<CallerShell> {
   }
 
   Future<void> _showCallback(InstantSessionModel s) async {
-    final yes = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: borderWarm),
-        ),
-        title: const Text('Listener is calling you back', style: TextStyle(color: textDark, fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            RemoteAvatar(url: s.listenerAvatarUrl, radius: 38, fallback: s.listenerName),
-            const SizedBox(height: 10),
-            Text(s.listenerName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textDark)),
-            const SizedBox(height: 4),
-            Text(
-              '${s.type.replaceAll('_', ' ')} • ₹${s.ratePerMinute.toStringAsFixed(0)}/min',
-              style: const TextStyle(fontSize: 13, color: primaryOrange, fontWeight: FontWeight.w600),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Decline', style: TextStyle(color: textMuted)),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: primaryOrange,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: const Text('Accept', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
+    final yes = await IncomingCallOverlay.show(context, s, isCallback: true);
 
     try {
       if (yes == true) {

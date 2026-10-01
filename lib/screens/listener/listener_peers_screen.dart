@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/app_controller.dart';
 import '../../models/app_models.dart';
+import '../../main.dart';
 import '../../widgets/common_widgets.dart';
 
 class ListenerPeersScreen extends StatefulWidget {
@@ -134,9 +135,15 @@ class _ListenerPeersScreenState extends State<ListenerPeersScreen> {
                   // App Bar / Top Navigation
                   Row(
                     children: [
-                      InkWell(
-                        onTap: () => Navigator.maybePop(context),
-                        borderRadius: BorderRadius.circular(12),
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          if (Navigator.of(context).canPop()) {
+                            Navigator.of(context).pop();
+                          } else {
+                            TalkStrangersApp.navigatorKey.currentState?.maybePop();
+                          }
+                        },
                         child: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(

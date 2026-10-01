@@ -173,7 +173,7 @@ class _ListenerEarningsScreenState extends State<ListenerEarningsScreen> {
     final vpa = TextEditingController();
     final notes = TextEditingController();
     await showDialog<void>(
-      context: context,
+      context: getSafeNavigatorContext(context),
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         backgroundColor: Colors.white,

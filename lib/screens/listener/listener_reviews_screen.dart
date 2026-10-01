@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/app_controller.dart';
+import '../../main.dart';
 import '../../widgets/common_widgets.dart';
 
 class ListenerReviewsScreen extends StatefulWidget {
@@ -233,7 +234,13 @@ class _ListenerReviewsScreenState extends State<ListenerReviewsScreen> {
                     children: [
                       IconButton(
                         icon: const Icon(Icons.arrow_back_rounded, color: textDark, size: 24),
-                        onPressed: () => Navigator.of(context).maybePop(),
+                        onPressed: () {
+                          if (Navigator.of(context).canPop()) {
+                            Navigator.of(context).pop();
+                          } else {
+                            TalkStrangersApp.navigatorKey.currentState?.maybePop();
+                          }
+                        },
                       ),
                       const SizedBox(width: 4),
                       const Expanded(

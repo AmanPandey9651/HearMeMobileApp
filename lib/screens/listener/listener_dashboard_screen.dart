@@ -8,8 +8,6 @@ import '../../core/active_call_manager.dart';
 import '../../core/app_controller.dart';
 import '../../models/app_models.dart';
 import '../../widgets/common_widgets.dart';
-import 'listener_peers_screen.dart';
-import 'listener_reviews_screen.dart';
 
 class ListenerDashboardScreen extends StatefulWidget {
   final void Function(int tabIndex)? onNavigateTab;
@@ -44,7 +42,6 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
   static const Color borderWarm = Color(0xFFF1E6D8);
   static const Color primaryOrange = Color(0xFFF95B3D);
   static const Color secondaryOrange = Color(0xFFFF7A45);
-  static const Color softPeach = Color(0xFFFFECE5);
   static const Color textDark = Color(0xFF111827);
   static const Color textMuted = Color(0xFF6B7280);
   static const Color emeraldOnline = Color(0xFF10B981);
@@ -168,20 +165,8 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
     try {
       final callback = await context.read<AppController>().api.callbackSession(s.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Calling ${s.callerNickname} back…')));
-      var current = callback;
-      for (var i = 0; i < 40 && mounted; i++) {
-        if (const {'ACCEPTED', 'CONNECTED', 'ACTIVE'}.contains(current.status)) {
-          ActiveCallManager.instance.startCall(current, callerSide: false);
-          await _load(silent: true);
-          return;
-        }
-        if (const {'EXPIRED', 'REJECTED', 'CANCELLED'}.contains(current.status)) {
-          throw Exception('Callback was not picked up. You can try again later.');
-        }
-        await Future<void>.delayed(const Duration(milliseconds: 1500));
-        current = await context.read<AppController>().api.session(current.id);
-      }
+      ActiveCallManager.instance.startCall(callback, callerSide: false);
+      await _load(silent: true);
     } catch (e) {
       if (mounted) showError(context, e);
     }
@@ -216,32 +201,25 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
     final percent = targetSeconds <= 0 ? 0.0 : (online / targetSeconds).clamp(0.0, 1.0).toDouble();
     final isOnline = presence == 'ONLINE';
     final isBusy = presence == 'BUSY_IN_CALL' || presence == 'BUSY' || (activeSessionType != null && activeSessionType!.isNotEmpty);
-    final ratePerMin = (profile?['ratePerMinute'] as num?)?.toDouble() ?? 39.5;
-    final videoRatePerMin = (profile?['videoRatePerMinute'] as num?)?.toDouble() ?? (ratePerMin * 1.5);
-    final chatRatePerMin = (profile?['chatRatePerMinute'] as num?)?.toDouble() ?? (ratePerMin * 0.6);
-    final netShareAudio = (ratePerMin * 0.50).round();
-    final netShareVideo = (videoRatePerMin * 0.50).round();
-    final netShareChat = (chatRatePerMin * 0.50).round();
-
-    final completedSessionsCount = sessions.where((s) => s.status == 'COMPLETED' || (s.durationSeconds > 0 && !const {'CANCELLED', 'REJECTED'}.contains(s.status))).length;
-    final dbConsultations = (profile?['totalConsultations'] as num?)?.toInt() ?? 0;
-    final totalConsultations = dbConsultations > completedSessionsCount ? dbConsultations : (completedSessionsCount > 0 ? completedSessionsCount : (sessions.isNotEmpty ? sessions.length : 0));
-
     final rawReviews = (profile?['reviewCount'] ?? profile?['ratingCount'] as num?)?.toInt() ?? 0;
     final rawRating = (profile?['ratingAvg'] as num?)?.toDouble() ?? 0.0;
     final hasRatings = rawReviews > 0 && rawRating > 0;
-    final ratingCount = rawReviews;
     final ratingAvg = hasRatings ? rawRating : 0.0;
     final ratingDisplay = hasRatings ? '⭐ ${ratingAvg.toStringAsFixed(1)}' : '⭐ New';
-    final ratingSub = rawReviews == 0
-        ? 'No caller ratings yet'
-        : 'Across $ratingCount caller ${ratingCount == 1 ? "rating" : "ratings"}';
-    final walletBalance = wallet?.formattedBalance ?? '₹1628.00';
-    final totalGifts = sessions.fold<double>(0.0, (acc, s) => acc + s.giftEarnings);
-
+    final walletBalance = wallet?.formattedBalance ?? '₹0.00';
     final missed = sessions
         .where((s) => const {'EXPIRED', 'REJECTED', 'CANCELLED', 'MISSED'}.contains(s.status) && !s.reference.startsWith('CB-') && !dismissedMissed.contains(s.id))
         .toList();
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final todaySessions = sessions.where((s) {
+      final dt = DateTime.tryParse(s.connectedAt ?? s.startedAt ?? s.requestedAt ?? '')?.toLocal();
+      if (dt == null) return false;
+      return dt.year == today.year && dt.month == today.month && dt.day == today.day;
+    }).toList();
+    final todayEarnings = todaySessions.fold<double>(0.0, (acc, s) => acc + s.effectiveListenerEarnings);
+    final todayCompleted = todaySessions.where((s) => s.isCompleted || (s.durationSeconds > 0 && !const {'CANCELLED', 'REJECTED'}.contains(s.status))).length;
 
     return Scaffold(
       backgroundColor: bgCream,
@@ -314,8 +292,8 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
                   const Spacer(),
 
                   // Earnings Pill
-                  InkWell(
-                    borderRadius: BorderRadius.circular(18),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
                     onTap: () => widget.onNavigateTab?.call(2), // Navigate to Earnings
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
@@ -354,8 +332,8 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
                   const SizedBox(width: 8),
 
                   // Profile Pill with Listener Name in place of 'Online Listener'
-                  InkWell(
-                    borderRadius: BorderRadius.circular(20),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
                     onTap: () => widget.onNavigateTab?.call(3), // Navigate to Profile
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
@@ -434,48 +412,16 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
                 ],
               ),
 
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
 
               // ==========================================
-              // 2. ROW 1: Daily Target Card + Missed Calls Card
-              // ==========================================
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Left: Daily 3-Hour Target Card
-                  Expanded(
-                    flex: 11,
-                    child: _DailyTargetCard(
-                      onlineSeconds: online,
-                      remainingSeconds: remaining,
-                      percent: percent,
-                      isOnline: isOnline,
-                      isBusy: isBusy,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-
-                  // Right: Missed Calls & Callback Card
-                  Expanded(
-                    flex: 9,
-                    child: _MissedCallsCard(
-                      missedList: missed,
-                      onCallback: _callback,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 10),
-
-              // ==========================================
-              // 2.5 AVAILABILITY & MODALITY CONTROLS CARD (Above Live Listeners Card)
+              // 2. HERO AVAILABILITY & CHANNEL CONTROLS
               // ==========================================
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
                   color: cardBg,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(22),
                   border: Border.all(color: borderWarm, width: 0.9),
                   boxShadow: [
                     BoxShadow(
@@ -496,20 +442,29 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
                         Row(
                           children: [
                             Container(
-                              width: 8,
-                              height: 8,
+                              width: 10,
+                              height: 10,
                               decoration: BoxDecoration(
                                 color: isOnline ? emeraldOnline : isBusy ? const Color(0xFFF59E0B) : const Color(0xFF9CA3AF),
                                 shape: BoxShape.circle,
+                                boxShadow: isOnline
+                                    ? [
+                                        BoxShadow(
+                                          color: emeraldOnline.withValues(alpha: 0.5),
+                                          blurRadius: 6,
+                                          spreadRadius: 1,
+                                        ),
+                                      ]
+                                    : null,
                               ),
                             ),
-                            const SizedBox(width: 7),
+                            const SizedBox(width: 8),
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const Text(
                                   'Availability',
-                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: textDark),
+                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: textDark),
                                 ),
                                 Text(
                                   isOnline
@@ -518,7 +473,7 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
                                           ? 'Currently in call'
                                           : 'Offline · Turn on to receive calls',
                                   style: TextStyle(
-                                    fontSize: 9.5,
+                                    fontSize: 10.5,
                                     fontWeight: FontWeight.w600,
                                     color: isOnline ? emeraldOnline : isBusy ? const Color(0xFFF59E0B) : textMuted,
                                   ),
@@ -537,7 +492,7 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
                       ],
                     ),
 
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
 
                     // Bottom Row: 3 Beautiful Toggle Buttons for Chat, Voice Call, Video Call
                     Row(
@@ -577,392 +532,227 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
                 ),
               ),
 
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
 
               // ==========================================
-              // 3. OTHER LISTENERS LIVE STATUS CARD
+              // 3. DAILY 3-HOUR SHIFT & MISSED CALLBACK
               // ==========================================
-              InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ListenerPeersScreen()),
-                ),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: cardBg,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: borderWarm, width: 0.9),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFD6C7B8).withValues(alpha: 0.16),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEFF6FF),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Icon(Icons.people_outline_rounded, size: 22, color: Color(0xFF2563EB)),
-                      ),
-                      const SizedBox(width: 12),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Other Listeners Live Status',
-                              style: TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w800,
-                                color: textDark,
-                              ),
-                            ),
-                            SizedBox(height: 2),
-                            Text(
-                              'Monitor who is online, offline or busy in calls',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: textMuted,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: softPeach,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Row(
-                          children: [
-                            Text(
-                              'View Live',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                color: primaryOrange,
-                              ),
-                            ),
-                            SizedBox(width: 2),
-                            Icon(Icons.chevron_right_rounded, size: 14, color: primaryOrange),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              // ==========================================
-              // 5. FINANCIAL & PERFORMANCE METRICS
-              // ==========================================
-              // Grid Row 1: Available Payout Balance + Lifetime Earnings
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Available Payout Balance
+                  // Left: Daily 3-Hour Target Card
                   Expanded(
-                    child: _MetricCard(
-                      icon: Icons.account_balance_wallet_outlined,
-                      title: 'Available Payout Balance',
-                      value: walletBalance,
-                      actionLabel: 'Withdraw to UPI',
-                      actionIcon: Icons.arrow_downward_rounded,
-                      onActionTap: () => widget.onNavigateTab?.call(2),
-                      illustration: _RupeeCardIllustration(),
+                    flex: 11,
+                    child: _DailyTargetCard(
+                      onlineSeconds: online,
+                      remainingSeconds: remaining,
+                      percent: percent,
+                      isOnline: isOnline,
+                      isBusy: isBusy,
                     ),
                   ),
                   const SizedBox(width: 10),
 
-                  // Lifetime Earnings
+                  // Right: Missed Calls & Callback Card
                   Expanded(
-                    child: _MetricCard(
-                      icon: Icons.bar_chart_rounded,
-                      title: 'Lifetime Earnings',
-                      value: walletBalance,
-                      illustration: _BarChartIllustration(),
-                      onTap: () => widget.onNavigateTab?.call(2),
+                    flex: 9,
+                    child: _MissedCallsCard(
+                      missedList: missed,
+                      onCallback: _callback,
                     ),
                   ),
                 ],
               ),
 
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
 
-              // Grid Row 2: Consultation Rates (Voice, Video & Chat) + Sessions & Rating
-              IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Consultation Rates (Audio, Video, Chat)
-                    Expanded(
-                      child: _ConsultationRatesCard(
-                        audioRate: ratePerMin,
-                        videoRate: videoRatePerMin,
-                        chatRate: chatRatePerMin,
-                        audioNet: netShareAudio,
-                        videoNet: netShareVideo,
-                        chatNet: netShareChat,
-                        onTap: () => widget.onNavigateTab?.call(3),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-
-                    // Sessions & Rating
-                    Expanded(
-                      child: _SessionsRatingCard(
-                        totalConsultations: totalConsultations,
-                        completedCount: completedSessionsCount,
-                        ratingDisplay: ratingDisplay,
-                        ratingSub: ratingSub,
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const ListenerReviewsScreen()),
-                        ),
-                      ),
+              // ==========================================
+              // 4. TODAY'S SNAPSHOT CARD
+              // ==========================================
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: borderWarm, width: 0.9),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFD6C7B8).withValues(alpha: 0.12),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
                     ),
                   ],
                 ),
-              ),
-
-              const SizedBox(height: 10),
-
-              // Gifts & Tips Card (Full Width)
-              InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: () => widget.onNavigateTab?.call(2),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: cardBg,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: borderWarm, width: 0.9),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFD6C7B8).withValues(alpha: 0.16),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: softPeach,
-                          borderRadius: BorderRadius.circular(12),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "Today's Overview",
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: textDark,
+                          ),
                         ),
-                        child: const Icon(Icons.card_giftcard_rounded, color: primaryOrange, size: 20),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Row(
+                        InkWell(
+                          onTap: () => widget.onNavigateTab?.call(2),
+                          borderRadius: BorderRadius.circular(8),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'View in Earnings',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: primaryOrange,
+                                ),
+                              ),
+                              SizedBox(width: 2),
+                              Icon(Icons.chevron_right_rounded, size: 14, color: primaryOrange),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        // Stat 1: Today's Earnings
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Today Earned', style: TextStyle(fontSize: 10.5, color: textMuted, fontWeight: FontWeight.w600)),
+                              const SizedBox(height: 3),
+                              Text(
+                                '₹${todayEarnings.toStringAsFixed(2)}',
+                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: textDark),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(width: 1, height: 28, color: borderWarm),
+                        // Stat 2: Completed Calls
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Gifts & Tips', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: textDark)),
-                                SizedBox(width: 3),
-                                Icon(Icons.chevron_right_rounded, size: 14, color: Color(0xFF9CA3AF)),
+                                const Text('Calls Today', style: TextStyle(fontSize: 10.5, color: textMuted, fontWeight: FontWeight.w600)),
+                                const SizedBox(height: 3),
+                                Text(
+                                  '$todayCompleted',
+                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: textDark),
+                                ),
                               ],
                             ),
-                            const SizedBox(height: 1),
-                            Text('₹${totalGifts.toStringAsFixed(2)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: primaryOrange)),
-                            const Text('0 virtual gifts (Rose, etc.)', style: TextStyle(fontSize: 10.5, color: textMuted)),
-                          ],
+                          ),
                         ),
-                      ),
-                      // 3D Gift box with hearts
-                      _GiftBoxIllustration(),
-                    ],
-                  ),
+                        Container(width: 1, height: 28, color: borderWarm),
+                        // Stat 3: Caller Rating
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Rating', style: TextStyle(fontSize: 10.5, color: textMuted, fontWeight: FontWeight.w600)),
+                                const SizedBox(height: 3),
+                                Text(
+                                  ratingDisplay,
+                                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: primaryOrange),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
 
               const SizedBox(height: 14),
 
               // ==========================================
-              // 6. SUB-NAVIGATION HORIZONTAL RAIL
+              // 5. PENDING MISSED CALLS QUEUE OR PEACEFUL STATE
               // ==========================================
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                child: Row(
+              if (missed.isNotEmpty) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _SubNavTab(
-                      icon: Icons.phone_in_talk_rounded,
-                      label: 'Calls & Chats (${sessions.length})',
-                      isSelected: selectedSubTab == 0,
-                      onTap: () => setState(() => selectedSubTab = 0),
+                    Row(
+                      children: [
+                        const Text(
+                          'Missed Callers',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: textDark),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEE2E2),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '${missed.length}',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFFDC2626),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    _SubNavTab(
-                      icon: Icons.calendar_today_outlined,
-                      label: 'Attendance',
-                      isSelected: selectedSubTab == 1,
+                    InkWell(
                       onTap: () => widget.onNavigateTab?.call(1),
-                    ),
-                    _SubNavTab(
-                      icon: Icons.receipt_long_outlined,
-                      label: 'Transactions',
-                      isSelected: selectedSubTab == 2,
-                      onTap: () => widget.onNavigateTab?.call(2),
-                    ),
-                    _SubNavTab(
-                      icon: Icons.bar_chart_rounded,
-                      label: 'Earnings',
-                      isSelected: selectedSubTab == 3,
-                      onTap: () => widget.onNavigateTab?.call(2),
-                    ),
-                    _SubNavTab(
-                      icon: Icons.card_giftcard_rounded,
-                      label: 'Gifts',
-                      isSelected: selectedSubTab == 4,
-                      onTap: () => setState(() => selectedSubTab = 4),
-                    ),
-                    _SubNavTab(
-                      icon: Icons.file_upload_outlined,
-                      label: 'UPI',
-                      isSelected: selectedSubTab == 5,
-                      onTap: () => widget.onNavigateTab?.call(2),
+                      child: const Text(
+                        'View All in Attendance ›',
+                        style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: primaryOrange),
+                      ),
                     ),
                   ],
                 ),
-              ),
-
-              const SizedBox(height: 12),
-
-              // ==========================================
-              // 7. CONVERSATIONS LIST OR ILLUSTRATED EMPTY STATE
-              // ==========================================
-              if (sessions.isEmpty)
-                // Illustrated Empty State matching the screenshot!
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: cardBg,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: borderWarm, width: 0.9),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFD6C7B8).withValues(alpha: 0.16),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      // Illustration of female listener working on laptop with headphones & speech bubbles
-                      const SizedBox(
-                        width: 120,
-                        height: 100,
-                        child: _ListenerAvatarWorkingIllustration(),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'No conversations recorded yet',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w900,
-                                color: textDark,
-                                letterSpacing: -0.2,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              'Keep your availability set to ONLINE. When callers connect for Audio, Video, or Chat, their anonymous profiles, exact timings, and your per-minute earnings will appear here.',
-                              style: TextStyle(fontSize: 10.5, color: textMuted, height: 1.3),
-                            ),
-                            const SizedBox(height: 8),
-                            InkWell(
-                              borderRadius: BorderRadius.circular(18),
-                              onTap: isOnline ? null : _toggle,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(18),
-                                  gradient: LinearGradient(
-                                    colors: isOnline
-                                        ? [emeraldOnline, const Color(0xFF059669)]
-                                        : [secondaryOrange, primaryOrange],
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: (isOnline ? emeraldOnline : primaryOrange).withValues(alpha: 0.35),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Container(
-                                      width: 6,
-                                      height: 6,
-                                      decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      isOnline ? 'You Are Online' : 'Go Online Now',
-                                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                // Real Live / Completed Sessions Feed
-                ...sessions.take(6).map((s) {
-                  final earned = s.effectiveListenerEarnings;
-                  final isLive = s.isLive;
+                const SizedBox(height: 8),
+                ...missed.take(3).map((s) {
+                  final callerNick = s.callerNickname.isNotEmpty ? s.callerNickname : 'Anonymous Caller';
+                  final isVideo = s.type.toUpperCase().contains('VIDEO');
+                  final isChat = s.type.toUpperCase().contains('CHAT');
                   return Container(
                     margin: const EdgeInsets.only(bottom: 8),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: cardBg,
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: borderWarm, width: 0.8),
+                      border: Border.all(color: borderWarm),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.02),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                     child: Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: softPeach,
-                            borderRadius: BorderRadius.circular(12),
+                          width: 36,
+                          height: 36,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFFFECE5),
+                            shape: BoxShape.circle,
                           ),
-                          child: Icon(
-                            s.type == 'CHAT'
-                                ? Icons.chat_bubble_rounded
-                                : s.type == 'VIDEO_CALL'
-                                    ? Icons.videocam_rounded
-                                    : Icons.call_rounded,
-                            color: primaryOrange,
-                            size: 18,
+                          child: Center(
+                            child: Icon(
+                              isChat ? Icons.chat_bubble_rounded : (isVideo ? Icons.videocam_rounded : Icons.call_missed_rounded),
+                              color: primaryOrange,
+                              size: 18,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -970,43 +760,171 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
-                                children: [
-                                  Text(s.callerNickname, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: textDark)),
-                                  if (isLive) ...[
-                                    const SizedBox(width: 6),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                      decoration: BoxDecoration(color: const Color(0xFFE8FDF3), borderRadius: BorderRadius.circular(4)),
-                                      child: const Text('LIVE', style: TextStyle(color: Color(0xFF047857), fontSize: 8.5, fontWeight: FontWeight.w900)),
-                                    ),
-                                  ],
-                                ],
+                              Text(
+                                callerNick,
+                                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: textDark),
                               ),
                               Text(
-                                '${s.type.replaceAll('_', ' ')} • ${_formatSessionTime(s)}${s.billableMinutes > 0 ? ' • ${s.billableMinutes} min' : ''}',
+                                '${s.type.replaceAll('_', ' ')} • ${_formatSessionTime(s)}',
                                 style: const TextStyle(fontSize: 11, color: textMuted),
                               ),
                             ],
                           ),
                         ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            if (earned > 0)
-                              Text('+₹${earned.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: emeraldOnline))
-                            else if (isLive)
-                              Text('₹${s.ratePerMinute.toStringAsFixed(0)}/m', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: primaryOrange))
-                            else
-                              const Text('₹0.00', style: TextStyle(fontSize: 12, color: textMuted)),
-                            if (s.giftEarnings > 0)
-                              Text('+₹${s.giftEarnings.toStringAsFixed(0)} 🎁', style: const TextStyle(fontSize: 10, color: Color(0xFFEC4899), fontWeight: FontWeight.bold)),
-                          ],
+                        // Quick Callback action
+                        InkWell(
+                          onTap: () => _callback(s),
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: primaryOrange,
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: primaryOrange.withValues(alpha: 0.25),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  isChat ? Icons.chat_bubble_rounded : (isVideo ? Icons.videocam_rounded : Icons.phone_callback_rounded),
+                                  size: 13,
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  isChat ? 'Chat' : (isVideo ? 'Video' : 'Call Back'),
+                                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Colors.white),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ],
                     ),
                   );
                 }),
+                const SizedBox(height: 6),
+              ] else ...[
+                // Peaceful All-Caught-Up State
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: borderWarm),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFE8FDF3),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF10B981), size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'All caught up!',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: textDark),
+                            ),
+                            Text(
+                              'No pending missed calls. Stay online to receive caller requests.',
+                              style: TextStyle(fontSize: 10.5, color: textMuted),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+
+              // ==========================================
+              // 6. QUICK NAVIGATION TILES
+              // ==========================================
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => widget.onNavigateTab?.call(1),
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF9F4),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFFDE8DF)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.calendar_month_rounded, color: primaryOrange, size: 20),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Attendance Log',
+                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: textDark),
+                                  ),
+                                  Text('30-day shift & sessions', style: TextStyle(fontSize: 9.5, color: textMuted)),
+                                ],
+                              ),
+                            ),
+                            Icon(Icons.chevron_right_rounded, size: 16, color: primaryOrange),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => widget.onNavigateTab?.call(4),
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: borderWarm),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.tune_rounded, color: Color(0xFF6366F1), size: 20),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Rates & Settings',
+                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: textDark),
+                                  ),
+                                  Text('In More menu', style: TextStyle(fontSize: 9.5, color: textMuted)),
+                                ],
+                              ),
+                            ),
+                            Icon(Icons.chevron_right_rounded, size: 16, color: Color(0xFF6366F1)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -1251,8 +1169,10 @@ class _MissedCallsCard extends StatelessWidget {
   }
 
   void _showMissedCallsSheet(BuildContext context) {
+    final navContext = getSafeNavigatorContext(context);
     showModalBottomSheet<void>(
-      context: context,
+      context: navContext,
+      useRootNavigator: true,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (ctx) => _MissedCallsSheet(
@@ -1267,8 +1187,8 @@ class _MissedCallsCard extends StatelessWidget {
     final count = missedList.length;
     final latest = count > 0 ? missedList.first : null;
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () => _showMissedCallsSheet(context),
       child: Container(
         padding: const EdgeInsets.all(12),
@@ -1291,40 +1211,44 @@ class _MissedCallsCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Header: Icon + Title + Badge
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(5),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFFFECE5),
-                    shape: BoxShape.circle,
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _showMissedCallsSheet(context),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFFECE5),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.phone_callback_rounded, size: 14, color: Color(0xFFF95B3D)),
                   ),
-                  child: const Icon(Icons.phone_callback_rounded, size: 14, color: Color(0xFFF95B3D)),
-                ),
-                const SizedBox(width: 6),
-                const Expanded(
-                  child: Text(
-                    'Missed Calls &\nCallback',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF111827), height: 1.15),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: count > 0 ? const Color(0xFFFEE2E2) : const Color(0xFFF3F4F6),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '$count Missed',
-                    style: TextStyle(
-                      fontSize: 8,
-                      fontWeight: FontWeight.w800,
-                      color: count > 0 ? const Color(0xFFEF4444) : const Color(0xFF6B7280),
+                  const SizedBox(width: 6),
+                  const Expanded(
+                    child: Text(
+                      'Missed Calls &\nCallback',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF111827), height: 1.15),
                     ),
                   ),
-                ),
-              ],
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: count > 0 ? const Color(0xFFFEE2E2) : const Color(0xFFF3F4F6),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '$count Missed',
+                      style: TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.w800,
+                        color: count > 0 ? const Color(0xFFEF4444) : const Color(0xFF6B7280),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
 
             const SizedBox(height: 8),
@@ -1356,6 +1280,39 @@ class _MissedCallsCard extends StatelessWidget {
                   'No missed calls right now.\nGreat job!',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 9, color: Color(0xFF6B7280), height: 1.2),
+                ),
+              ),
+              const SizedBox(height: 6),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _showMissedCallsSheet(context),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF9FAFB),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFE5E7EB), width: 0.8),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'View history',
+                        style: TextStyle(
+                          fontSize: 9,
+                          color: Color(0xFF6B7280),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(width: 3),
+                      Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 8,
+                        color: Color(0xFF9CA3AF),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ] else ...[
@@ -1402,8 +1359,8 @@ class _MissedCallsCard extends StatelessWidget {
               const SizedBox(height: 8),
 
               // Actionable Call Back Button
-              InkWell(
-                borderRadius: BorderRadius.circular(12),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
                 onTap: () => onCallback(latest),
                 child: Container(
                   width: double.infinity,
@@ -1434,11 +1391,37 @@ class _MissedCallsCard extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 5),
-              Center(
-                child: Text(
-                  count > 1 ? '+$count missed • View all ›' : 'Tap to view details ›',
-                  style: const TextStyle(fontSize: 8.5, color: Color(0xFF9CA3AF), fontWeight: FontWeight.w600),
+              const SizedBox(height: 6),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _showMissedCallsSheet(context),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF6F3),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFFFD5C8), width: 0.8),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        count > 1 ? '+$count missed • View all' : 'Tap to view details',
+                        style: const TextStyle(
+                          fontSize: 9.5,
+                          color: Color(0xFFF95B3D),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 9,
+                        color: Color(0xFFF95B3D),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -1459,15 +1442,392 @@ class _MissedCallsSheet extends StatelessWidget {
   });
 
   String _formatTime(String? timeStr) {
-    if (timeStr == null || timeStr.isEmpty) return 'Recent';
-    final d = DateTime.tryParse(timeStr)?.toLocal();
-    if (d == null) return 'Recent';
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final day = DateTime(d.year, d.month, d.day);
-    final timeFormatted = DateFormat('h:mm a').format(d);
-    if (day == today) return 'Today, $timeFormatted';
-    return '${DateFormat('dd MMM').format(d)}, $timeFormatted';
+    if (timeStr == null || timeStr.trim().isEmpty) return 'Recent';
+    try {
+      final d = DateTime.tryParse(timeStr)?.toLocal();
+      if (d == null) return 'Recent';
+      final now = DateTime.now();
+      final diff = now.difference(d);
+      if (diff.inMinutes < 1) return 'Just now';
+      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+      if (diff.inHours < 24) return '${diff.inHours}h ago';
+      final today = DateTime(now.year, now.month, now.day);
+      final day = DateTime(d.year, d.month, d.day);
+      final timeFormatted = DateFormat('h:mm a').format(d);
+      if (day == today) return 'Today, $timeFormatted';
+      return '${DateFormat('dd MMM').format(d)}, $timeFormatted';
+    } catch (_) {
+      return 'Recent';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final sheetHeight = missedList.isEmpty
+        ? 260.0
+        : (screenHeight * 0.78).clamp(360.0, 750.0);
+
+    return Container(
+      height: sheetHeight,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: Column(
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE5E7EB),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFFFECE5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.phone_callback_rounded, color: Color(0xFFF95B3D), size: 18),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Missed Calls (${missedList.length})',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF111827),
+                              ),
+                            ),
+                            const Text(
+                              'Call back callers who tried to reach you',
+                              style: TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Color(0xFF9CA3AF)),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Divider(height: 1, color: Color(0xFFF3F4F6)),
+                ],
+              ),
+            ),
+            if (missedList.isEmpty)
+              const Expanded(
+                child: Center(
+                  child: Text('No missed calls waiting.', style: TextStyle(color: Color(0xFF9CA3AF))),
+                ),
+              )
+            else
+              Expanded(
+                child: ListView.separated(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+                  itemCount: missedList.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (ctx, i) {
+                    try {
+                      final s = missedList[i];
+                      final isVideo = s.type.toUpperCase().contains('VIDEO');
+                      final name = s.callerNickname.trim().isNotEmpty ? s.callerNickname.trim() : 'Anonymous Caller';
+                      final initial = name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'C';
+
+                      return Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFAF5EE),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFF1E6D8)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFECE5),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: const Color(0xFFFCDFD5), width: 1),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  initial,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 16,
+                                    color: Color(0xFFF95B3D),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 13.5,
+                                      color: Color(0xFF111827),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                        decoration: BoxDecoration(
+                                          color: isVideo ? const Color(0xFFEDE9FE) : const Color(0xFFFFECE5),
+                                          borderRadius: BorderRadius.circular(5),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              isVideo ? Icons.videocam_rounded : Icons.phone_callback_rounded,
+                                              size: 10,
+                                              color: isVideo ? const Color(0xFF7C3AED) : const Color(0xFFF95B3D),
+                                            ),
+                                            const SizedBox(width: 3),
+                                            Text(
+                                              isVideo ? 'Video' : 'Voice',
+                                              style: TextStyle(
+                                                fontSize: 9.5,
+                                                fontWeight: FontWeight.w800,
+                                                color: isVideo ? const Color(0xFF7C3AED) : const Color(0xFFF95B3D),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          _formatTime(s.requestedAt ?? s.connectedAt),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(12),
+                                onTap: () {
+                                  Navigator.pop(ctx);
+                                  onCallback(s);
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [Color(0xFFFF7A45), Color(0xFFF95B3D)],
+                                    ),
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFFF95B3D).withValues(alpha: 0.35),
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 1.5),
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.phone_forwarded_rounded, color: Colors.white, size: 12),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Call Back',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w800,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    } catch (_) {
+                      return const SizedBox.shrink();
+                    }
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+void showConsultationRatesSheet({
+  required BuildContext context,
+  required double audioRate,
+  required double videoRate,
+  required double chatRate,
+  required int audioNet,
+  required int videoNet,
+  required int chatNet,
+  VoidCallback? onEditRates,
+}) {
+  final navContext = getSafeNavigatorContext(context);
+  showModalBottomSheet<void>(
+    context: navContext,
+    useRootNavigator: true,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (ctx) => ConsultationRatesSheet(
+      audioRate: audioRate,
+      videoRate: videoRate,
+      chatRate: chatRate,
+      audioNet: audioNet,
+      videoNet: videoNet,
+      chatNet: chatNet,
+      onEditRates: onEditRates ?? () => Navigator.of(ctx).pop(),
+    ),
+  );
+}
+
+class ConsultationRatesSheet extends StatelessWidget {
+  final double audioRate;
+  final double videoRate;
+  final double chatRate;
+  final int audioNet;
+  final int videoNet;
+  final int chatNet;
+  final VoidCallback onEditRates;
+
+  const ConsultationRatesSheet({
+    super.key,
+    required this.audioRate,
+    required this.videoRate,
+    required this.chatRate,
+    required this.audioNet,
+    required this.videoNet,
+    required this.chatNet,
+    required this.onEditRates,
+  });
+
+  Widget _rateItem({
+    required IconData icon,
+    required String title,
+    required String description,
+    required double grossRate,
+    required int netShare,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAF5EE),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF1E6D8)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+              border: Border.all(color: color.withValues(alpha: 0.25)),
+            ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  description,
+                  style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '₹${grossRate.toStringAsFixed(1)}/min',
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF111827),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8FDF3),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '₹$netShare net (50%)',
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF059669),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -1478,393 +1838,121 @@ class _MissedCallsSheet extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.75,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: const Color(0xFFE5E7EB),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(7),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFFFECE5),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.phone_callback_rounded, color: Color(0xFFF95B3D), size: 18),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Missed Calls (${missedList.length})',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF111827),
-                      ),
-                    ),
-                    const Text(
-                      'Call back callers who tried to reach you',
-                      style: TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.close_rounded, color: Color(0xFF9CA3AF)),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ],
-          ),
-          const Divider(height: 20, color: Color(0xFFF3F4F6)),
-          if (missedList.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 36),
-              child: Center(
-                child: Text('No missed calls waiting.', style: TextStyle(color: Color(0xFF9CA3AF))),
-              ),
-            )
-          else
-            Flexible(
-              child: ListView.separated(
-                shrinkWrap: true,
-                itemCount: missedList.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 10),
-                itemBuilder: (ctx, i) {
-                  final s = missedList[i];
-                  final isVideo = s.type.toUpperCase().contains('VIDEO');
-                  return Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFAF5EE),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFF1E6D8)),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFECE5),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: const Color(0xFFFCDFD5)),
-                          ),
-                          child: Center(
-                            child: Icon(
-                              isVideo ? Icons.videocam_rounded : Icons.phone_missed_rounded,
-                              color: const Color(0xFFF95B3D),
-                              size: 19,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                s.callerNickname.isNotEmpty ? s.callerNickname : 'Anonymous Caller',
-                                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color(0xFF111827)),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                '${isVideo ? "Video Call" : "Audio Call"} • ${_formatTime(s.requestedAt ?? s.connectedAt)}',
-                                style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
-                              ),
-                            ],
-                          ),
-                        ),
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFF95B3D),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            elevation: 0,
-                          ),
-                          icon: const Icon(Icons.phone_forwarded_rounded, size: 14),
-                          label: const Text('Call Back', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800)),
-                          onPressed: () {
-                            Navigator.pop(ctx);
-                            onCallback(s);
-                          },
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ConsultationRatesCard extends StatelessWidget {
-  final double audioRate;
-  final double videoRate;
-  final double chatRate;
-  final int audioNet;
-  final int videoNet;
-  final int chatNet;
-  final VoidCallback? onTap;
-
-  const _ConsultationRatesCard({
-    required this.audioRate,
-    required this.videoRate,
-    required this.chatRate,
-    required this.audioNet,
-    required this.videoNet,
-    required this.chatNet,
-    this.onTap,
-  });
-
-  Widget _rateRow(IconData icon, String label, double rate, int net, Color iconColor) {
-    return Row(
-      children: [
-        Container(
-          width: 22,
-          height: 22,
-          decoration: BoxDecoration(
-            color: iconColor.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Icon(icon, size: 13, color: iconColor),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF374151)),
-        ),
-        const Spacer(),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              '₹${rate.toStringAsFixed(1)}/m',
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF111827)),
-            ),
-            Text(
-              '₹$net net',
-              style: const TextStyle(fontSize: 8.5, color: Color(0xFF10B981), fontWeight: FontWeight.w700),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFF1E6D8), width: 0.9),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFD6C7B8).withValues(alpha: 0.16),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            Positioned(
-              right: 0,
-              bottom: 2,
-              child: _WaveformIllustration(),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(5),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFFECE5),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.price_change_outlined, size: 14, color: Color(0xFFF95B3D)),
-                    ),
-                    const SizedBox(width: 5),
-                    const Expanded(
-                      child: Text(
-                        'Call & Chat Rates',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF1F2937)),
-                      ),
-                    ),
-                    const Icon(Icons.chevron_right_rounded, size: 14, color: Color(0xFF9CA3AF)),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                _rateRow(Icons.call_rounded, 'Voice', audioRate, audioNet, const Color(0xFFF95B3D)),
-                const SizedBox(height: 5),
-                _rateRow(Icons.videocam_rounded, 'Video', videoRate, videoNet, const Color(0xFF8B5CF6)),
-                const SizedBox(height: 5),
-                _rateRow(Icons.chat_bubble_rounded, 'Chat', chatRate, chatNet, const Color(0xFF2563EB)),
-                const SizedBox(height: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFAF5EE),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.info_outline_rounded, size: 9, color: Color(0xFF6B7280)),
-                      SizedBox(width: 3),
-                      Expanded(
-                        child: Text(
-                          '50% net share to wallet',
-                          style: TextStyle(fontSize: 8, color: Color(0xFF6B7280), fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SessionsRatingCard extends StatelessWidget {
-  final int totalConsultations;
-  final int completedCount;
-  final String ratingDisplay;
-  final String ratingSub;
-  final VoidCallback? onTap;
-
-  const _SessionsRatingCard({
-    required this.totalConsultations,
-    required this.completedCount,
-    required this.ratingDisplay,
-    required this.ratingSub,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFF1E6D8), width: 0.9),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFD6C7B8).withValues(alpha: 0.16),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
+      child: SafeArea(
+        top: false,
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE5E7EB),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(5),
+                  padding: const EdgeInsets.all(8),
                   decoration: const BoxDecoration(
                     color: Color(0xFFFFECE5),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.star_rounded, size: 14, color: Color(0xFFF95B3D)),
+                  child: const Icon(Icons.price_change_outlined, color: Color(0xFFF95B3D), size: 20),
                 ),
-                const SizedBox(width: 5),
+                const SizedBox(width: 10),
                 const Expanded(
-                  child: Text(
-                    'Sessions & Rating',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF1F2937)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Call & Chat Rates',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF111827),
+                        ),
+                      ),
+                      Text(
+                        'Your consultation pricing and 50% net earnings share',
+                        style: TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+                      ),
+                    ],
                   ),
                 ),
-                const Icon(Icons.chevron_right_rounded, size: 14, color: Color(0xFF9CA3AF)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Text(
-                  '$totalConsultations ${totalConsultations == 1 ? "call" : "calls"}',
-                  style: const TextStyle(
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFFF95B3D),
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  ratingDisplay,
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFFF59E0B),
-                  ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, color: Color(0xFF9CA3AF)),
+                  onPressed: () => Navigator.pop(context),
                 ),
               ],
             ),
-            const SizedBox(height: 3),
-            Text(
-              ratingSub,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 9.5, color: Color(0xFF6B7280), height: 1.2),
+            const SizedBox(height: 14),
+            _rateItem(
+              icon: Icons.call_rounded,
+              title: 'Voice Call',
+              description: 'Standard anonymous audio consultation',
+              grossRate: audioRate,
+              netShare: audioNet,
+              color: const Color(0xFFF95B3D),
             ),
-            const Spacer(),
+            const SizedBox(height: 10),
+            _rateItem(
+              icon: Icons.videocam_rounded,
+              title: 'Video Call',
+              description: 'Face-to-face video consultation',
+              grossRate: videoRate,
+              netShare: videoNet,
+              color: const Color(0xFF8B5CF6),
+            ),
+            const SizedBox(height: 10),
+            _rateItem(
+              icon: Icons.chat_bubble_rounded,
+              title: 'Text Chat',
+              description: 'Real-time 1-on-1 private messaging',
+              grossRate: chatRate,
+              netShare: chatNet,
+              color: const Color(0xFF2563EB),
+            ),
+            const SizedBox(height: 14),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: const Color(0xFFFAF5EE),
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFF1E6D8)),
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.rate_review_outlined, size: 9, color: Color(0xFFF95B3D)),
-                  SizedBox(width: 4),
+                  Icon(Icons.shield_outlined, size: 16, color: Color(0xFFF95B3D)),
+                  SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'View all caller reviews ›',
-                      style: TextStyle(fontSize: 8, color: Color(0xFFF95B3D), fontWeight: FontWeight.w700),
+                      '50% of the gross caller fee is automatically credited directly to your Available Payout Balance upon session completion.',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF4B5563), height: 1.3),
                     ),
                   ),
                 ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: onEditRates,
+                icon: const Icon(Icons.tune_rounded, size: 18),
+                label: const Text('Edit Rates in Profile', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFF95B3D),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
               ),
             ),
           ],
@@ -2106,407 +2194,3 @@ class _ModalityToggleButton extends StatelessWidget {
   }
 }
 
-class _MetricCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String value;
-  final String? valueUnit;
-  final String? ratingValue;
-  final String? subtitle;
-  final String? actionLabel;
-  final IconData? actionIcon;
-  final VoidCallback? onActionTap;
-  final VoidCallback? onTap;
-  final Widget? illustration;
-
-  const _MetricCard({
-    required this.icon,
-    required this.title,
-    required this.value,
-    this.valueUnit,
-    this.ratingValue,
-    this.subtitle,
-    this.actionLabel,
-    this.actionIcon,
-    this.onActionTap,
-    this.onTap,
-    this.illustration,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFF1E6D8), width: 0.9),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFD6C7B8).withValues(alpha: 0.16),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            if (illustration != null)
-              Positioned(
-                right: 0,
-                bottom: 0,
-                child: illustration!,
-              ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(5),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFFECE5),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(icon, size: 14, color: const Color(0xFFF95B3D)),
-                    ),
-                    const SizedBox(width: 5),
-                    Expanded(
-                      child: Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF1F2937)),
-                      ),
-                    ),
-                    const Icon(Icons.chevron_right_rounded, size: 14, color: Color(0xFF9CA3AF)),
-                  ],
-                ),
-
-                const SizedBox(height: 8),
-
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Text(
-                      value,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFFF95B3D),
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                    if (valueUnit != null)
-                      Text(
-                        valueUnit!,
-                        style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280), fontWeight: FontWeight.w600),
-                      ),
-                    if (ratingValue != null) ...[
-                      const SizedBox(width: 6),
-                      Text(
-                        ratingValue!,
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFFF59E0B)),
-                      ),
-                    ],
-                  ],
-                ),
-
-                if (subtitle != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle!,
-                    style: const TextStyle(fontSize: 9.5, color: Color(0xFF6B7280), height: 1.2),
-                  ),
-                ],
-
-                if (actionLabel != null) ...[
-                  const SizedBox(height: 8),
-                  InkWell(
-                    borderRadius: BorderRadius.circular(14),
-                    onTap: onActionTap,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFFF7A45), Color(0xFFF95B3D)],
-                        ),
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFF95B3D).withValues(alpha: 0.3),
-                            blurRadius: 6,
-                            offset: const Offset(0, 1),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (actionIcon != null) ...[
-                            Icon(actionIcon!, size: 12, color: Colors.white),
-                            const SizedBox(width: 4),
-                          ],
-                          Text(
-                            actionLabel!,
-                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SubNavTab extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _SubNavTab({
-    required this.icon,
-    required this.label,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            border: isSelected
-                ? const Border(bottom: BorderSide(color: Color(0xFFF95B3D), width: 2))
-                : null,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 14, color: isSelected ? const Color(0xFFF95B3D) : const Color(0xFF6B7280)),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                  color: isSelected ? const Color(0xFFF95B3D) : const Color(0xFF6B7280),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// Vector/Canvas Graphic Illustrations
-class _RupeeCardIllustration extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Opacity(
-      opacity: 0.45,
-      child: Transform.rotate(
-        angle: 0.15,
-        child: Container(
-          width: 48,
-          height: 38,
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFECE5),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFFF95B3D).withValues(alpha: 0.3)),
-          ),
-          child: const Center(
-            child: Text('₹', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFFF95B3D))),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BarChartIllustration extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Opacity(
-      opacity: 0.4,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Container(width: 6, height: 14, color: const Color(0xFFF95B3D), margin: const EdgeInsets.only(right: 3)),
-          Container(width: 6, height: 22, color: const Color(0xFFF95B3D), margin: const EdgeInsets.only(right: 3)),
-          Container(width: 6, height: 32, color: const Color(0xFFF95B3D)),
-        ],
-      ),
-    );
-  }
-}
-
-class _WaveformIllustration extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Opacity(
-      opacity: 0.35,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Container(width: 3, height: 10, color: const Color(0xFFF95B3D), margin: const EdgeInsets.only(right: 2)),
-          Container(width: 3, height: 18, color: const Color(0xFFF95B3D), margin: const EdgeInsets.only(right: 2)),
-          Container(width: 3, height: 12, color: const Color(0xFFF95B3D), margin: const EdgeInsets.only(right: 2)),
-          Container(width: 3, height: 24, color: const Color(0xFFF95B3D)),
-        ],
-      ),
-    );
-  }
-}
-
-class _GiftBoxIllustration extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 50,
-      height: 44,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFECE5),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFF43F5E).withValues(alpha: 0.4)),
-            ),
-            child: const Center(
-              child: Icon(Icons.card_giftcard_rounded, color: Color(0xFFF43F5E), size: 20),
-            ),
-          ),
-          Positioned(
-            top: 0,
-            right: 4,
-            child: Text('❤️', style: TextStyle(fontSize: 10)),
-          ),
-          Positioned(
-            bottom: 2,
-            left: 2,
-            child: Text('✨', style: TextStyle(fontSize: 8)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ListenerAvatarWorkingIllustration extends StatelessWidget {
-  const _ListenerAvatarWorkingIllustration();
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        // Warm peach circular glow
-        Positioned(
-          left: 10,
-          bottom: 10,
-          child: Container(
-            width: 70,
-            height: 70,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFFFFECE5).withValues(alpha: 0.8),
-            ),
-          ),
-        ),
-        // Listener Avatar with headphones and laptop
-        Positioned(
-          left: 15,
-          bottom: 10,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Stack(
-                alignment: Alignment.topCenter,
-                children: [
-                  const CircleAvatar(
-                    radius: 20,
-                    backgroundColor: Color(0xFFFED7AA),
-                    child: Icon(Icons.face_3_rounded, size: 26, color: Color(0xFF9A3412)),
-                  ),
-                  Positioned(
-                    top: 0,
-                    child: Container(
-                      width: 44,
-                      height: 18,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: const Color(0xFF1F2937), width: 2),
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 2),
-              // Laptop
-              Container(
-                width: 46,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF4B5563),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Center(
-                  child: Icon(Icons.apple, size: 10, color: Colors.white70),
-                ),
-              ),
-            ],
-          ),
-        ),
-        // Speech Bubble
-        Positioned(
-          top: 8,
-          right: 12,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFF1E6D8)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 4,
-                ),
-              ],
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('💬', style: TextStyle(fontSize: 10)),
-                SizedBox(width: 2),
-                Text('•••', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Color(0xFFF95B3D))),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
