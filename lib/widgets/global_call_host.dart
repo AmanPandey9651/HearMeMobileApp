@@ -54,13 +54,13 @@ class _GlobalCallHostState extends State<GlobalCallHost> {
         final topPadding = mediaQuery.padding.top;
         final bottomPadding = mediaQuery.padding.bottom;
 
-        // Dynamic width that fits phone screens while allowing horizontal movement & sticky docking
-        final barWidth = screenWidth > 380 ? 340.0 : (screenWidth - 24.0);
+        // Perfectly centered floating bar width that adapts to phone screens
+        final barWidth = (screenWidth - 24.0).clamp(320.0, 440.0);
         const barHeight = 68.0;
 
         // Default resting position (just above the bottom navigation bar)
-        final defaultY = screenHeight - bottomPadding - 74.0 - barHeight;
-        final defaultX = 12.0;
+        final defaultX = (screenWidth - barWidth) / 2;
+        final defaultY = screenHeight - bottomPadding - 76.0 - barHeight;
 
         final currentX = _pipOffset?.dx ?? defaultX;
         final currentY = _pipOffset?.dy ?? defaultY;
@@ -75,18 +75,21 @@ class _GlobalCallHostState extends State<GlobalCallHost> {
               Positioned.fill(
                 child: Offstage(
                   offstage: _manager.isMinimized,
-                  child: TickerMode(
-                    enabled: !_manager.isMinimized,
-                    child: HeroControllerScope.none(
-                      child: Navigator(
-                        key: _callNavigatorKey,
-                        onGenerateRoute: (settings) => PageRouteBuilder(
-                          pageBuilder: (ctx, anim1, anim2) => Material(
-                            type: MaterialType.transparency,
-                            child: _activeSessionWidget!,
+                  child: ExcludeFocus(
+                    excluding: _manager.isMinimized,
+                    child: TickerMode(
+                      enabled: !_manager.isMinimized,
+                      child: HeroControllerScope.none(
+                        child: Navigator(
+                          key: _callNavigatorKey,
+                          onGenerateRoute: (settings) => PageRouteBuilder(
+                            pageBuilder: (ctx, anim1, anim2) => Material(
+                              type: MaterialType.transparency,
+                              child: _activeSessionWidget!,
+                            ),
+                            transitionDuration: Duration.zero,
+                            reverseTransitionDuration: Duration.zero,
                           ),
-                          transitionDuration: Duration.zero,
-                          reverseTransitionDuration: Duration.zero,
                         ),
                       ),
                     ),
@@ -94,20 +97,16 @@ class _GlobalCallHostState extends State<GlobalCallHost> {
                 ),
               ),
 
-            // Draggable & Sticky Minimized Call Widget (when minimized)
+            // Draggable, Centered & Touch-friendly Minimized Call Widget
             if (hasCall && _manager.isMinimized)
               AnimatedPositioned(
-                duration: _isDragging ? Duration.zero : const Duration(milliseconds: 280),
+                duration: _isDragging ? Duration.zero : const Duration(milliseconds: 260),
                 curve: Curves.easeOutCubic,
                 left: currentX,
                 top: currentY,
                 width: barWidth,
                 child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    HapticFeedback.lightImpact();
-                    _manager.maximize();
-                  },
+                  behavior: HitTestBehavior.translucent,
                   onPanStart: (details) {
                     setState(() {
                       _isDragging = true;
@@ -120,28 +119,23 @@ class _GlobalCallHostState extends State<GlobalCallHost> {
                         screenWidth - barWidth - 8.0,
                       );
                       final newY = (currentY + details.delta.dy).clamp(
-                        topPadding + 10.0,
-                        screenHeight - bottomPadding - barHeight - 12.0,
+                        topPadding + 8.0,
+                        screenHeight - bottomPadding - barHeight - 8.0,
                       );
                       _pipOffset = Offset(newX, newY);
                     });
                   },
                   onPanEnd: (details) {
                     HapticFeedback.lightImpact();
-                    final midPoint = (screenWidth - barWidth) / 2;
-                    final stickyLeft = 12.0;
-                    final stickyRight = screenWidth - barWidth - 12.0;
-
-                    // Sticky to both sides: snaps cleanly to nearest side edge
-                    final targetX = (currentX < midPoint) ? stickyLeft : stickyRight;
+                    final centerX = (screenWidth - barWidth) / 2;
                     final targetY = currentY.clamp(
-                      topPadding + 10.0,
-                      screenHeight - bottomPadding - barHeight - 12.0,
+                      topPadding + 8.0,
+                      screenHeight - bottomPadding - barHeight - 8.0,
                     );
 
                     setState(() {
                       _isDragging = false;
-                      _pipOffset = Offset(targetX, targetY);
+                      _pipOffset = Offset(centerX, targetY);
                     });
                   },
                   child: MinimizedCallBar(

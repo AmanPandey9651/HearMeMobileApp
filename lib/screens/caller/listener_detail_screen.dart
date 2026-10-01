@@ -307,32 +307,85 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
                     ? 'Busy in Video Call'
                     : 'Busy in Audio Call')
             : 'Offline';
-    final IconData statusIcon = isOnline
-        ? Icons.circle
-        : isBusy
-            ? (busyType.contains('CHAT')
-                ? Icons.chat
-                : busyType.contains('VIDEO')
-                    ? Icons.videocam
-                    : Icons.phone_in_talk)
-            : Icons.schedule;
 
     return Scaffold(
+      backgroundColor: const Color(0xFFFAF5EE),
       appBar: AppBar(
-        title: Text(displayName),
-        actions: [
-          IconButton(
-            tooltip: following ? 'Remove favourite' : 'Add favourite',
-            onPressed: blockedByListener ? null : _toggleFollow,
-            icon: Icon(following ? Icons.favorite : Icons.favorite_border, color: following ? Colors.redAccent : null),
+        backgroundColor: const Color(0xFFFAF5EE),
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 12),
+          child: Center(
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFF1EAE0)),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6, offset: const Offset(0, 2)),
+                ],
+              ),
+              child: IconButton(
+                padding: EdgeInsets.zero,
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 17, color: Color(0xFF1E293B)),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
           ),
-          PopupMenuButton<String>(
-            onSelected: _safety,
-            itemBuilder: (_) => [
-              const PopupMenuItem(value: 'report', child: Text('Report listener')),
-              if (!blockedByMe) const PopupMenuItem(value: 'block', child: Text('Block listener')),
-              if (blockedByMe) const PopupMenuItem(value: 'unblock', child: Text('Unblock listener')),
-            ],
+        ),
+        title: Text(
+          displayName,
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: Color(0xFF1E293B)),
+        ),
+        actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 8),
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFF1EAE0)),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6, offset: const Offset(0, 2)),
+              ],
+            ),
+            child: IconButton(
+              padding: EdgeInsets.zero,
+              tooltip: following ? 'Remove favourite' : 'Add favourite',
+              onPressed: blockedByListener ? null : _toggleFollow,
+              icon: Icon(
+                following ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                color: following ? const Color(0xFFE05D44) : const Color(0xFF64748B),
+                size: 20,
+              ),
+            ),
+          ),
+          Container(
+            margin: const EdgeInsets.only(right: 14),
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFF1EAE0)),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6, offset: const Offset(0, 2)),
+              ],
+            ),
+            child: PopupMenuButton<String>(
+              padding: EdgeInsets.zero,
+              icon: const Icon(Icons.more_vert_rounded, size: 20, color: Color(0xFF1E293B)),
+              onSelected: _safety,
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'report', child: Text('Report listener')),
+                if (!blockedByMe) const PopupMenuItem(value: 'block', child: Text('Block listener')),
+                if (blockedByMe) const PopupMenuItem(value: 'unblock', child: Text('Unblock listener')),
+              ],
+            ),
           ),
         ],
       ),
@@ -345,7 +398,7 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.person_off_outlined, size: 64),
+                        const Icon(Icons.person_off_outlined, size: 64, color: Color(0xFF94A3B8)),
                         const SizedBox(height: 16),
                         Text('Listener unavailable', style: Theme.of(context).textTheme.headlineSmall),
                         const SizedBox(height: 10),
@@ -357,139 +410,318 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
                   ),
                 )
               : ListView(
-                  padding: const EdgeInsets.all(18),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   children: [
                     if (blockedByMe)
-                      Card(
-                        color: Theme.of(context).colorScheme.errorContainer,
-                        child: ListTile(
-                          leading: const Icon(Icons.block),
-                          title: const Text('You blocked this listener'),
-                          subtitle: const Text('Unblock them anytime to restore normal interactions.'),
-                          trailing: TextButton(onPressed: _unblock, child: const Text('Unblock')),
-                        ),
-                      ),
-                    Center(child: RemoteAvatar(url: avatar, radius: 52, fallback: displayName)),
-                    const SizedBox(height: 12),
-                    Text(displayName, style: Theme.of(context).textTheme.headlineSmall, textAlign: TextAlign.center),
-                    Text(title, textAlign: TextAlign.center),
-                    const SizedBox(height: 8),
-                    Center(child: Text('✓ Verified listener  •  ⭐ ${rating.toStringAsFixed(1)} ($reviewCount reviews)')),
-                    Center(child: Text('$sessions conversations${experience != null ? ' • $experience yrs experience' : ''}')),
-                    const SizedBox(height: 8),
-                    Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 14),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: statusColor.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: statusColor.withValues(alpha: 0.4)),
+                          color: const Color(0xFFFEE2E2),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFFCA5A5)),
                         ),
                         child: Row(
-                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(statusIcon, size: 15, color: statusColor),
-                            const SizedBox(width: 6),
-                            Text(
-                              statusLabel.toUpperCase(),
-                              style: TextStyle(
-                                color: statusColor,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 12,
-                                letterSpacing: 0.5,
+                            const Icon(Icons.block_rounded, color: Color(0xFFDC2626)),
+                            const SizedBox(width: 10),
+                            const Expanded(
+                              child: Text(
+                                'You blocked this listener. Unblock anytime to interact.',
+                                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF991B1B)),
                               ),
+                            ),
+                            TextButton(
+                              onPressed: _unblock,
+                              child: const Text('Unblock', style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFFDC2626))),
                             ),
                           ],
                         ),
                       ),
-                    ),
-                    if (presence == 'OFFLINE' && nudgeNotified) ...[
-                      const SizedBox(height: 6),
-                      const Center(child: Chip(avatar: Icon(Icons.notifications_active, size: 18), label: Text('Listener notified'))),
-                    ],
-                    const SizedBox(height: 16),
-                    if (bio.isNotEmpty) ...[
-                      Text('About me', style: Theme.of(context).textTheme.titleLarge),
-                      const SizedBox(height: 6),
-                      Text(bio),
-                    ],
-                    if (categories.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 14), child: Text('Topics I support: ${categories.join(', ')}')),
-                    if (skills.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Skills: ${skills.join(', ')}')),
-                    if (languages.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Languages: ${languages.join(', ')}')),
-                    if ((gender?.isNotEmpty ?? false) || (hobbies?.isNotEmpty ?? false))
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text([
-                          if (gender?.isNotEmpty == true) 'Gender: $gender',
-                          if (hobbies?.isNotEmpty == true) 'Interests: $hobbies',
-                        ].join(' • ')),
-                      ),
-                    if (response != null && response > 0) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Typical response time: about $response minutes')),
-                    const SizedBox(height: 18),
 
-                    // Modality Availability Chips
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
-                      children: [
-                        _detailModalityChip('Voice Call', audioAvailable, Icons.call, const Color(0xFF34D399)),
-                        _detailModalityChip('Video Call', videoAvailable, Icons.videocam, const Color(0xFFC084FC)),
-                        _detailModalityChip('Private Chat', chatAvailable, Icons.chat_bubble_outline, const Color(0xFF60A5FA)),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-
-                    if (consultationType != 'VIDEO')
-                      FilledButton.icon(
-                        onPressed: (busy || !audioAvailable || isBusy) ? null : () => _start('AUDIO_CALL'),
-                        icon: const Icon(Icons.call),
-                        label: Text(!audioAvailable
-                            ? 'Audio call (Not accepting calls)'
-                            : isBusy
-                                ? 'Audio call (Currently busy)'
-                                : 'Audio call • ₹${audioRate.toStringAsFixed(0)}/min'),
+                    // 1. Hero Listener Card
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: const Color(0xFFF1EAE0)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF78350F).withValues(alpha: 0.05),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
                       ),
-                    if (consultationType != 'VIDEO') const SizedBox(height: 9),
-                    if (consultationType != 'AUDIO')
-                      FilledButton.tonalIcon(
-                        onPressed: (busy || !videoAvailable || isBusy) ? null : () => _start('VIDEO_CALL'),
-                        icon: const Icon(Icons.videocam),
-                        label: Text(!videoAvailable
-                            ? 'Video call (Not accepting calls)'
-                            : isBusy
-                                ? 'Video call (Currently busy)'
-                                : 'Video call • ₹${videoRate.toStringAsFixed(0)}/min'),
-                      ),
-                    if (consultationType != 'AUDIO') const SizedBox(height: 9),
-                    OutlinedButton.icon(
-                      onPressed: (busy || !chatAvailable || isBusy) ? null : () => _start('CHAT'),
-                      icon: const Icon(Icons.chat_bubble_outline),
-                      label: Text(!chatAvailable
-                          ? 'Private chat (Not accepting chats)'
-                          : isBusy
-                              ? 'Private chat (Currently busy)'
-                              : 'Private chat • ₹${chatRate.toStringAsFixed(0)}/min'),
-                    ),
-                    const SizedBox(height: 9),
-                    OutlinedButton.icon(
-                      onPressed: busy || blockedByMe
-                          ? null
-                          : () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => ScheduleConsultationScreen(
-                                    listener: widget.listener.copyWith(userId: expertUserId.isEmpty ? widget.listener.userId : expertUserId, presence: presence),
-                                    audioRate: audioRate,
-                                    videoRate: videoRate,
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        children: [
+                          Center(
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(3.5),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: LinearGradient(
+                                      colors: isOnline
+                                          ? [const Color(0xFF10B981), const Color(0xFF34D399)]
+                                          : [const Color(0xFFE2E8F0), const Color(0xFFCBD5E1)],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                    boxShadow: [
+                                      if (isOnline)
+                                        BoxShadow(
+                                          color: const Color(0xFF10B981).withValues(alpha: 0.3),
+                                          blurRadius: 14,
+                                          spreadRadius: 2,
+                                        ),
+                                    ],
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(60),
+                                    child: RemoteAvatar(url: avatar, radius: 48, fallback: displayName),
                                   ),
                                 ),
+                                if (isOnline)
+                                  Positioned(
+                                    bottom: 2,
+                                    right: 4,
+                                    child: Container(
+                                      width: 18,
+                                      height: 18,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF10B981),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: Colors.white, width: 3),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  displayName,
+                                  style: const TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF1E293B),
+                                    letterSpacing: -0.3,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                      icon: const Icon(Icons.calendar_month_outlined),
-                      label: const Text('Schedule a consultation'),
+                              const SizedBox(width: 6),
+                              const Icon(Icons.verified_rounded, size: 20, color: Color(0xFFE05D44)),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            title.isNotEmpty ? title : 'Empathy & Wellness Listener',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          // Live Status Badge
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: statusColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: statusColor,
+                                    shape: BoxShape.circle,
+                                    boxShadow: isOnline
+                                        ? [BoxShadow(color: statusColor.withValues(alpha: 0.6), blurRadius: 6, spreadRadius: 1)]
+                                        : null,
+                                  ),
+                                ),
+                                const SizedBox(width: 7),
+                                Text(
+                                  statusLabel.toUpperCase(),
+                                  style: TextStyle(
+                                    color: statusColor,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 11.5,
+                                    letterSpacing: 0.6,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          // 4 Modern Stat Badges
+                          Container(
+                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFAF7F2),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: const Color(0xFFF1EAE0)),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                _statBox('⭐ ${rating.toStringAsFixed(1)}', '$reviewCount reviews'),
+                                _statDivider(),
+                                _statBox('$sessions', 'Sessions'),
+                                _statDivider(),
+                                _statBox('${experience ?? 7}+ Yrs', 'Experience'),
+                                if (response != null && response > 0) ...[
+                                  _statDivider(),
+                                  _statBox('~${response}m', 'Response'),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
+
+                    const SizedBox(height: 20),
+
+                    // 2. Services & Live Rates Section
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Choose How to Connect',
+                            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Color(0xFF1E293B)),
+                          ),
+                          Text(
+                            'Per-minute billing',
+                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF94A3B8)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    if (consultationType != 'VIDEO')
+                      _buildServiceConnectCard(
+                        icon: Icons.phone_in_talk_rounded,
+                        iconBg: const Color(0xFFFFF1EE),
+                        iconColor: const Color(0xFFE05D44),
+                        title: 'Voice Call',
+                        subtitle: 'Instant private audio session',
+                        rateText: '₹${audioRate.toStringAsFixed(0)}/min',
+                        isAvailable: audioAvailable,
+                        isBusy: isBusy,
+                        isOnline: isOnline,
+                        onTap: () => _start('AUDIO_CALL'),
+                        isPrimary: true,
+                        primaryColor: const Color(0xFFE05D44),
+                        actionLabel: 'Call Now',
+                      ),
+
+                    if (consultationType != 'AUDIO')
+                      _buildServiceConnectCard(
+                        icon: Icons.videocam_rounded,
+                        iconBg: const Color(0xFFF5F3FF),
+                        iconColor: const Color(0xFF7C3AED),
+                        title: 'Video Call',
+                        subtitle: 'Private 1-on-1 video session',
+                        rateText: '₹${videoRate.toStringAsFixed(0)}/min',
+                        isAvailable: videoAvailable,
+                        isBusy: isBusy,
+                        isOnline: isOnline,
+                        onTap: () => _start('VIDEO_CALL'),
+                        isPrimary: false,
+                        primaryColor: const Color(0xFF7C3AED),
+                        actionLabel: 'Video Call',
+                      ),
+
+                    _buildServiceConnectCard(
+                      icon: Icons.chat_bubble_rounded,
+                      iconBg: const Color(0xFFEFF6FF),
+                      iconColor: const Color(0xFF2563EB),
+                      title: 'Private Chat',
+                      subtitle: 'Real-time encrypted text chat',
+                      rateText: '₹${chatRate.toStringAsFixed(0)}/min',
+                      isAvailable: chatAvailable,
+                      isBusy: isBusy,
+                      isOnline: isOnline,
+                      onTap: () => _start('CHAT'),
+                      isPrimary: false,
+                      primaryColor: const Color(0xFF2563EB),
+                      actionLabel: 'Start Chat',
+                    ),
+
+                    // Schedule future consultation
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: const Color(0xFFF1EAE0)),
+                        boxShadow: [
+                          BoxShadow(color: const Color(0xFF78350F).withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 3)),
+                        ],
+                      ),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        leading: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFFBEB),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFFFDE68A)),
+                          ),
+                          child: const Icon(Icons.calendar_month_rounded, color: Color(0xFFB45309), size: 22),
+                        ),
+                        title: const Text(
+                          'Schedule a Consultation',
+                          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5, color: Color(0xFF1E293B)),
+                        ),
+                        subtitle: const Text(
+                          'Reserve a slot in advance for a focused session',
+                          style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                        ),
+                        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF94A3B8)),
+                        onTap: busy || blockedByMe
+                            ? null
+                            : () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => ScheduleConsultationScreen(
+                                      listener: widget.listener.copyWith(
+                                        userId: expertUserId.isEmpty ? widget.listener.userId : expertUserId,
+                                        presence: presence,
+                                      ),
+                                      audioRate: audioRate,
+                                      videoRate: videoRate,
+                                    ),
+                                  ),
+                                ),
+                      ),
+                    ),
+
                     if (presence == 'OFFLINE') ...[
-                      const SizedBox(height: 14),
                       Container(
+                        margin: const EdgeInsets.only(bottom: 14),
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
@@ -497,7 +729,7 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(18),
                           border: Border.all(color: const Color(0xFFFDE68A)),
                           boxShadow: [
                             BoxShadow(
@@ -513,11 +745,11 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
                             Row(
                               children: [
                                 Container(
-                                  width: 36,
-                                  height: 36,
+                                  width: 38,
+                                  height: 38,
                                   decoration: BoxDecoration(
                                     color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
-                                    borderRadius: BorderRadius.circular(10),
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: const Icon(Icons.notifications_active_rounded, color: Color(0xFFD97706), size: 20),
                                 ),
@@ -536,7 +768,7 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        'Want to connect? Send a quick alert to request $displayName to come online.',
+                                        'Send a quick push notification to request $displayName to come online.',
                                         style: const TextStyle(
                                           fontSize: 12,
                                           color: Color(0xFF92400E),
@@ -565,7 +797,7 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
                                   size: 18,
                                 ),
                                 label: Text(
-                                  nudgeNotified ? 'Request Already Sent' : 'Message Listener to Come Online',
+                                  nudgeNotified ? 'Notification Already Sent' : 'Message Listener to Come Online',
                                   style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
                                 ),
                               ),
@@ -574,36 +806,536 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
                         ),
                       ),
                     ],
-                    const SizedBox(height: 10),
-                    const Card(
-                      child: Padding(
-                        padding: EdgeInsets.all(13),
-                        child: Row(
-                          children: [
-                            Icon(Icons.shield_outlined),
-                            SizedBox(width: 10),
-                            Expanded(child: Text('Your caller identity stays anonymous. Calls, chat and video are protected by the platform safety controls.')),
+
+                    // 3. About & Background Card
+                    Container(
+                      margin: const EdgeInsets.only(top: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFF1EAE0)),
+                        boxShadow: [
+                          BoxShadow(color: const Color(0xFF78350F).withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, 4)),
+                        ],
+                      ),
+                      padding: const EdgeInsets.all(18),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.person_pin_rounded, color: Color(0xFFE05D44), size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                'About $displayName',
+                                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Color(0xFF1E293B)),
+                              ),
+                            ],
+                          ),
+                          if (bio.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFAF7F2),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: const Color(0xFFF1EAE0)),
+                              ),
+                              child: Text(
+                                '“$bio”',
+                                style: const TextStyle(
+                                  fontSize: 13.5,
+                                  fontStyle: FontStyle.italic,
+                                  color: Color(0xFF334155),
+                                  height: 1.45,
+                                ),
+                              ),
+                            ),
                           ],
+                          if (categories.isNotEmpty) ...[
+                            const SizedBox(height: 16),
+                            const Text('Topics I Support', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF64748B))),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: categories.map((cat) => Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFF3EC),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: const Color(0xFFFFD8CC)),
+                                ),
+                                child: Text(
+                                  cat,
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFFC2410C)),
+                                ),
+                              )).toList(),
+                            ),
+                          ],
+                          if (skills.isNotEmpty) ...[
+                            const SizedBox(height: 16),
+                            const Text('Specialized Skills', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF64748B))),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: skills.map((skill) => Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF0FDF4),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: const Color(0xFFBBF7D0)),
+                                ),
+                                child: Text(
+                                  skill,
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF15803D)),
+                                ),
+                              )).toList(),
+                            ),
+                          ],
+                          if (languages.isNotEmpty) ...[
+                            const SizedBox(height: 16),
+                            const Text('Languages Spoken', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF64748B))),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: languages.map((lang) => Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF1F5F9),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.language_rounded, size: 13, color: Color(0xFF475569)),
+                                    const SizedBox(width: 5),
+                                    Text(lang, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
+                                  ],
+                                ),
+                              )).toList(),
+                            ),
+                          ],
+                          if ((gender?.isNotEmpty ?? false) || (hobbies?.isNotEmpty ?? false)) ...[
+                            const SizedBox(height: 16),
+                            const Text('Personal Interests & Profile', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF64748B))),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                if (gender?.isNotEmpty == true)
+                                  _infoPill(Icons.person_outline_rounded, 'Gender: $gender'),
+                                if (hobbies?.isNotEmpty == true)
+                                  ...hobbies!.split(RegExp(r'[,•]')).map((h) => h.trim()).where((h) => h.isNotEmpty).map((h) => _infoPill(Icons.favorite_outline_rounded, h)),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+
+                    // 4. Safety Assurance Card
+                    Container(
+                      margin: const EdgeInsets.only(top: 14),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: const Color(0xFFF1EAE0)),
+                        boxShadow: [
+                          BoxShadow(color: const Color(0xFF78350F).withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 3)),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFECFDF5),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: const Color(0xFFA7F3D0)),
+                            ),
+                            child: const Icon(Icons.shield_rounded, color: Color(0xFF059669), size: 24),
+                          ),
+                          const SizedBox(width: 14),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '100% Anonymous & Secure',
+                                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: Color(0xFF1E293B)),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  'Your identity, phone number, and location stay private. All sessions are encrypted and protected by platform safeguards.',
+                                  style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B), height: 1.35),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // 5. Caller Reviews Section
+                    Container(
+                      margin: const EdgeInsets.only(top: 14, bottom: 24),
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFF1EAE0)),
+                        boxShadow: [
+                          BoxShadow(color: const Color(0xFF78350F).withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, 4)),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Row(
+                                children: [
+                                  Icon(Icons.rate_review_rounded, color: Color(0xFFE05D44), size: 20),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Caller Reviews',
+                                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Color(0xFF1E293B)),
+                                  ),
+                                ],
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEF3C7),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFFFDE68A)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.star_rounded, size: 14, color: Color(0xFFD97706)),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${rating.toStringAsFixed(1)} ($reviewCount)',
+                                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: Color(0xFF92400E)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          if (reviews.isEmpty)
+                            const Center(
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(vertical: 20),
+                                child: Text('No reviews yet. Be the first to leave a review!', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
+                              ),
+                            )
+                          else
+                            ...reviews.take(10).map((r) {
+                              final m = Map<String, dynamic>.from(r);
+                              final reply = m['expertResponse'] ?? m['response'];
+                              final rScore = (m['rating'] as num?)?.toDouble() ?? 5.0;
+                              final rCustomer = '${m['customerName'] ?? 'Anonymous Caller'}';
+                              final rComment = '${m['comment'] ?? ''}';
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFAF7F2),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: const Color(0xFFF1EAE0)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          width: 28,
+                                          height: 28,
+                                          decoration: const BoxDecoration(
+                                            color: Color(0xFFFFECE5),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Center(
+                                            child: Text(
+                                              rCustomer.isNotEmpty ? rCustomer[0].toUpperCase() : 'A',
+                                              style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFFE05D44), fontSize: 12),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            rCustomer,
+                                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF1E293B)),
+                                          ),
+                                        ),
+                                        Row(
+                                          children: List.generate(
+                                            5,
+                                            (idx) => Icon(
+                                              idx < rScore.round() ? Icons.star_rounded : Icons.star_outline_rounded,
+                                              size: 14,
+                                              color: const Color(0xFFF59E0B),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    if (rComment.isNotEmpty) ...[
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        rComment,
+                                        style: const TextStyle(fontSize: 12.5, color: Color(0xFF475569), height: 1.35),
+                                      ),
+                                    ],
+                                    if (reply != null && '$reply'.isNotEmpty) ...[
+                                      const SizedBox(height: 8),
+                                      Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                                        ),
+                                        child: Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Icon(Icons.reply_rounded, size: 14, color: Color(0xFF64748B)),
+                                            const SizedBox(width: 6),
+                                            Expanded(
+                                              child: Text(
+                                                'Listener response: $reply',
+                                                style: const TextStyle(fontSize: 11.5, fontStyle: FontStyle.italic, color: Color(0xFF334155)),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              );
+                            }),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+    );
+  }
+
+  Widget _statBox(String value, String sub) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5, color: Color(0xFF1E293B)),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          sub,
+          style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w500, color: Color(0xFF64748B)),
+        ),
+      ],
+    );
+  }
+
+  Widget _statDivider() {
+    return Container(
+      height: 26,
+      width: 1,
+      color: const Color(0xFFE2E8F0),
+    );
+  }
+
+  Widget _infoPill(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: const Color(0xFF64748B)),
+          const SizedBox(width: 5),
+          Text(
+            text,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildServiceConnectCard({
+    required IconData icon,
+    required Color iconBg,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required String rateText,
+    required bool isAvailable,
+    required bool isBusy,
+    required bool isOnline,
+    required VoidCallback onTap,
+    required bool isPrimary,
+    required Color primaryColor,
+    required String actionLabel,
+  }) {
+    final bool canConnect = isAvailable && isOnline && !isBusy && !busy;
+    final bool canNudge = isAvailable && !isOnline && !isBusy && !nudgeNotified && !busy;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isPrimary && canConnect ? primaryColor.withValues(alpha: 0.35) : const Color(0xFFF1EAE0),
+          width: isPrimary && canConnect ? 1.5 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isPrimary && canConnect
+                ? primaryColor.withValues(alpha: 0.08)
+                : const Color(0xFF78350F).withValues(alpha: 0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: isAvailable ? iconBg : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: isAvailable ? iconColor : const Color(0xFF94A3B8), size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5, color: Color(0xFF1E293B)),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: !isAvailable
+                            ? const Color(0xFFF1F5F9)
+                            : isBusy
+                                ? const Color(0xFFFEF3C7)
+                                : isOnline
+                                    ? const Color(0xFFECFDF5)
+                                    : const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        !isAvailable
+                            ? 'Paused'
+                            : isBusy
+                                ? 'In Call'
+                                : isOnline
+                                    ? 'Online'
+                                    : 'Offline',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: !isAvailable
+                              ? const Color(0xFF94A3B8)
+                              : isBusy
+                                  ? const Color(0xFFD97706)
+                                  : isOnline
+                                      ? const Color(0xFF059669)
+                                      : const Color(0xFF64748B),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 18),
-                    Text('Caller reviews', style: Theme.of(context).textTheme.titleLarge),
-                    if (reviews.isEmpty)
-                      const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Text('No reviews yet.'))
-                    else
-                      ...reviews.take(20).map((r) {
-                        final m = Map<String, dynamic>.from(r);
-                        final reply = m['expertResponse'] ?? m['response'];
-                        return Card(
-                          child: ListTile(
-                            title: Text('⭐ ${m['rating'] ?? ''} • ${m['customerName'] ?? 'Anonymous'}'),
-                            subtitle: Text('${m['comment'] ?? ''}${reply != null && '$reply'.isNotEmpty ? '\nListener response: $reply' : ''}'),
-                          ),
-                        );
-                      }),
                   ],
                 ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  rateText,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                    color: isAvailable ? primaryColor : const Color(0xFF94A3B8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 86,
+            height: 38,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                minimumSize: Size.zero,
+                elevation: canConnect ? 2 : 0,
+                backgroundColor: canConnect
+                    ? primaryColor
+                    : canNudge
+                        ? const Color(0xFFF59E0B)
+                        : const Color(0xFFF1F5F9),
+                foregroundColor: canConnect || canNudge ? Colors.white : const Color(0xFF94A3B8),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: canConnect
+                  ? onTap
+                  : canNudge
+                      ? _handleDirectNudge
+                      : null,
+              child: Text(
+                !isAvailable
+                    ? 'Off'
+                    : isBusy
+                        ? 'Busy'
+                        : !isOnline
+                            ? (nudgeNotified ? 'Notified' : 'Nudge')
+                            : actionLabel,
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                  color: canConnect || canNudge ? Colors.white : const Color(0xFF94A3B8),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -650,34 +1382,5 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
     } catch (e) {
       if (mounted) showError(context, e);
     }
-  }
-
-  Widget _detailModalityChip(String label, bool isAvailable, IconData icon, Color activeColor) {
-    final color = isAvailable ? activeColor : const Color(0xFF64748B);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
-      decoration: BoxDecoration(
-        color: isAvailable ? activeColor.withValues(alpha: 0.12) : Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isAvailable ? activeColor.withValues(alpha: 0.35) : Colors.white.withValues(alpha: 0.08),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: color),
-          const SizedBox(width: 5),
-          Text(
-            '$label ${isAvailable ? '✓' : '✕'}',
-            style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w700,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

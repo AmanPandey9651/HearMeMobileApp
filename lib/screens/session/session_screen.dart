@@ -653,6 +653,7 @@ class _SessionScreenState extends State<SessionScreen>
   String _time(int value) => '${(value ~/ 60).toString().padLeft(2, '0')}:${(value % 60).toString().padLeft(2, '0')}';
 
   void _minimizeCall() {
+    FocusManager.instance.primaryFocus?.unfocus();
     if (widget.isHostedInGlobalManager) {
       ActiveCallManager.instance.minimize();
     } else {
