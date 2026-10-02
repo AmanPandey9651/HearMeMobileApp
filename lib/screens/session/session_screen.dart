@@ -60,6 +60,7 @@ class _SessionScreenState extends State<SessionScreen>
   String activeVideoFilter = VideoPrivacyFilter.none;
   String peerVideoFilter = VideoPrivacyFilter.none;
   bool _recordingStarted = false;
+  late final ApiService _api;
 
   bool get isChat => session.type == 'CHAT';
   bool get isVideo => session.type == 'VIDEO_CALL';
@@ -69,9 +70,11 @@ class _SessionScreenState extends State<SessionScreen>
     if (_recordingStarted || ending || session.ended || isChat) return;
 
     try {
-      final app = context.read<AppController>();
-      await app.refreshGovernance();
-      final gov = app.recordingGovernance;
+      final app = mounted ? context.read<AppController>() : null;
+      if (app != null) {
+        await app.refreshGovernance();
+      }
+      final gov = app?.recordingGovernance;
 
       final audioAllowed = gov?.audioRecordingEnabled ?? true;
       final videoAllowed = gov?.videoRecordingEnabled ?? true;
@@ -113,7 +116,7 @@ class _SessionScreenState extends State<SessionScreen>
       final recordedFile = await CallRecordingService.stopAndCollectRecording();
       if (recordedFile != null && await recordedFile.exists() && await recordedFile.length() > 1000) {
         debugPrint('[Recording] Uploading call recording (${await recordedFile.length()} bytes) for session ${session.id}...');
-        await context.read<AppController>().api.uploadRecording(session.id, recordedFile);
+        await _api.uploadRecording(session.id, recordedFile);
         debugPrint('[Recording] Call recording successfully uploaded to backend for session ${session.id}!');
       }
     } catch (e) {
@@ -124,6 +127,7 @@ class _SessionScreenState extends State<SessionScreen>
   @override
   void initState() {
     super.initState();
+    _api = context.read<AppController>().api;
     WidgetsBinding.instance.addObserver(this);
     everLive = isLive;
     ringRemaining = _initRingRemaining();

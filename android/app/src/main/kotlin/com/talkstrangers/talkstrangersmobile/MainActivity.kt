@@ -222,42 +222,47 @@ private class CallAudioRecorder(private val context: android.content.Context) {
     private var currentFilePath: String? = null
 
     fun start(filePath: String): Boolean {
-        return try {
-            stop()
-            val file = java.io.File(filePath)
-            file.parentFile?.mkdirs()
+        stop()
+        val file = java.io.File(filePath)
+        file.parentFile?.mkdirs()
 
-            val mr = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                android.media.MediaRecorder(context)
-            } else {
-                @Suppress("DEPRECATION")
-                android.media.MediaRecorder()
-            }
-            try {
-                mr.setAudioSource(android.media.MediaRecorder.AudioSource.VOICE_COMMUNICATION)
-            } catch (_: Exception) {
-                mr.setAudioSource(android.media.MediaRecorder.AudioSource.MIC)
-            }
-            mr.setOutputFormat(android.media.MediaRecorder.OutputFormat.MPEG_4)
-            mr.setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AAC)
-            mr.setAudioEncodingBitRate(64000)
-            mr.setAudioSamplingRate(44100)
-            mr.setOutputFile(file.absolutePath)
-            mr.prepare()
-            mr.start()
+        val audioSources = listOf(
+            android.media.MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+            android.media.MediaRecorder.AudioSource.MIC,
+            android.media.MediaRecorder.AudioSource.DEFAULT
+        )
 
-            recorder = mr
-            currentFilePath = file.absolutePath
-            true
-        } catch (e: Exception) {
-            android.util.Log.e("CallAudioRecorder", "Failed to start audio recording: ${e.message}")
+        for (source in audioSources) {
+            var mr: android.media.MediaRecorder? = null
             try {
-                recorder?.release()
-            } catch (_: Exception) {}
-            recorder = null
-            currentFilePath = null
-            false
+                mr = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    android.media.MediaRecorder(context)
+                } else {
+                    @Suppress("DEPRECATION")
+                    android.media.MediaRecorder()
+                }
+                mr.setAudioSource(source)
+                mr.setOutputFormat(android.media.MediaRecorder.OutputFormat.MPEG_4)
+                mr.setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AAC)
+                mr.setAudioEncodingBitRate(64000)
+                mr.setAudioSamplingRate(44100)
+                mr.setOutputFile(file.absolutePath)
+                mr.prepare()
+                mr.start()
+
+                recorder = mr
+                currentFilePath = file.absolutePath
+                android.util.Log.i("CallAudioRecorder", "Successfully started audio recording using source $source")
+                return true
+            } catch (e: Exception) {
+                android.util.Log.w("CallAudioRecorder", "Audio source $source failed: ${e.message}, trying next fallback...")
+                try { mr?.release() } catch (_: Exception) {}
+            }
         }
+        android.util.Log.e("CallAudioRecorder", "All audio sources failed to start recording.")
+        currentFilePath = null
+        recorder = null
+        return false
     }
 
     fun stop(): String? {

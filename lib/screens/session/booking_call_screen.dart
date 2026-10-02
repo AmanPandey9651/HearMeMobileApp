@@ -53,6 +53,7 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
   String activeVideoFilter = VideoPrivacyFilter.none;
   String peerVideoFilter = VideoPrivacyFilter.none;
   bool _recordingStarted = false;
+  late final ApiService _api;
 
   bool get isVideo => widget.booking.consultationType == 'VIDEO';
   String get peerName => widget.callerSide ? widget.booking.expertName : (widget.booking.customerName.isEmpty ? 'Caller' : widget.booking.customerName);
@@ -61,9 +62,11 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
     if (_recordingStarted || ending) return;
 
     try {
-      final app = context.read<AppController>();
-      await app.refreshGovernance();
-      final gov = app.recordingGovernance;
+      final app = mounted ? context.read<AppController>() : null;
+      if (app != null) {
+        await app.refreshGovernance();
+      }
+      final gov = app?.recordingGovernance;
 
       final audioAllowed = gov?.audioRecordingEnabled ?? true;
       final videoAllowed = gov?.videoRecordingEnabled ?? true;
@@ -105,7 +108,7 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
       final recordedFile = await CallRecordingService.stopAndCollectRecording();
       if (recordedFile != null && await recordedFile.exists() && await recordedFile.length() > 1000) {
         debugPrint('[Recording] Uploading booking call recording (${await recordedFile.length()} bytes) for ${widget.booking.id}...');
-        await context.read<AppController>().api.uploadRecording(widget.booking.id, recordedFile);
+        await _api.uploadRecording(widget.booking.id, recordedFile);
         debugPrint('[Recording] Booking call recording successfully uploaded to backend!');
       }
     } catch (e) {
@@ -116,6 +119,7 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
   @override
   void initState() {
     super.initState();
+    _api = context.read<AppController>().api;
     WidgetsBinding.instance.addObserver(this);
     localRenderer.initialize();
     remoteRenderer.initialize();
