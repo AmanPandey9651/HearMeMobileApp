@@ -76,8 +76,8 @@ class AppController extends ChangeNotifier {
           googleLoginEnabled = parsed['googleLoginEnabled'] != false;
         } catch (_) {}
       }
-      await Future.wait([_refreshGovernance(), refreshAuthGovernance(), refreshInactivityGovernance()]);
-      _governanceTimer ??= Timer.periodic(const Duration(seconds: 10), (_) => _refreshGovernance());
+      await Future.wait([refreshGovernance(), refreshAuthGovernance(), refreshInactivityGovernance()]);
+      _governanceTimer ??= Timer.periodic(const Duration(seconds: 10), (_) => refreshGovernance());
       final token = await _storage.read(key: _tokenKey);
       final savedUser = await _storage.read(key: _userKey);
       final savedExpert = await _storage.read(key: _expertProfileKey);
@@ -237,7 +237,7 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  Future<void> _refreshGovernance() async {
+  Future<void> refreshGovernance() async {
     try {
       final settings = await api.recordingGovernance();
       recordingGovernance = settings;

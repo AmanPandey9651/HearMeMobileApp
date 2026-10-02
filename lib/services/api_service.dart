@@ -390,5 +390,8 @@ class ApiService {
 
   Future<void> auditTranscript(String sessionId, String transcript) async => client.post('/safety/audit-transcript', body: {'sessionId': sessionId, 'transcript': transcript});
   Future<void> securityAlert(String sessionId, String type, [String? details]) async => client.post('/safety/security-alert', body: {'sessionId': sessionId, 'alertType': type, if (details != null) 'details': details});
+
+  Future<Map<String, dynamic>> uploadRecording(String sessionId, File file) async =>
+      client.multipart('/sessions/$sessionId/recording', file: file);
 }
 

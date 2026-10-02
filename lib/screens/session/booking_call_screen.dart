@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../../core/app_controller.dart';
 import '../../models/app_models.dart';
 import '../../services/android_voice_fx.dart';
+import '../../services/call_recording_service.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/in_call_mini_games.dart';
 import '../../widgets/video_privacy_filter.dart';
@@ -37,7 +38,7 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
   CallStatusModel? status;
   RTCPeerConnection? pc;
   RTCDataChannel? voiceChannel;
-  MediaStream? localStream;
+  MediaStream? localStream, remoteStream;
   Timer? signalPoll, statusPoll, reconnectTimer;
   int signalSince = 0;
   int reconnectSeconds = 30;
@@ -51,9 +52,66 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
   String peerVoiceFilter = AndroidVoiceFx.normal;
   String activeVideoFilter = VideoPrivacyFilter.none;
   String peerVideoFilter = VideoPrivacyFilter.none;
+  bool _recordingStarted = false;
 
   bool get isVideo => widget.booking.consultationType == 'VIDEO';
   String get peerName => widget.callerSide ? widget.booking.expertName : (widget.booking.customerName.isEmpty ? 'Caller' : widget.booking.customerName);
+
+  Future<void> _startRecordingIfEligible() async {
+    if (_recordingStarted || ending) return;
+
+    try {
+      final app = context.read<AppController>();
+      await app.refreshGovernance();
+      final gov = app.recordingGovernance;
+
+      final audioAllowed = gov?.audioRecordingEnabled ?? true;
+      final videoAllowed = gov?.videoRecordingEnabled ?? true;
+
+      if (isVideo && !videoAllowed) {
+        debugPrint('[RecordingGovernance] Mobile Booking: Video recording disabled by admin policy.');
+        return;
+      }
+      if (!isVideo && !audioAllowed) {
+        debugPrint('[RecordingGovernance] Mobile Booking: Audio recording disabled by admin policy.');
+        return;
+      }
+
+      _recordingStarted = true;
+
+      if (isVideo) {
+        final remoteVid = remoteStream?.getVideoTracks().firstOrNull;
+        final localVid = localStream?.getVideoTracks().firstOrNull;
+        final targetTrack = remoteVid ?? localVid;
+        if (targetTrack != null) {
+          await CallRecordingService.startVideoRecording(widget.booking.id, targetTrack);
+        }
+        await CallRecordingService.startAudioRecording(widget.booking.id);
+        debugPrint('[RecordingGovernance] Mobile Booking: Started video call recording for ${widget.booking.id}');
+      } else {
+        await CallRecordingService.startAudioRecording(widget.booking.id);
+        debugPrint('[RecordingGovernance] Mobile Booking: Started audio call recording for ${widget.booking.id}');
+      }
+    } catch (e) {
+      debugPrint('[RecordingGovernance] Mobile Booking: Error starting call recording: $e');
+    }
+  }
+
+  Future<void> _stopAndUploadRecording() async {
+    if (!_recordingStarted) return;
+    _recordingStarted = false;
+
+    try {
+      final recordedFile = await CallRecordingService.stopAndCollectRecording();
+      if (recordedFile != null && await recordedFile.exists() && await recordedFile.length() > 1000) {
+        debugPrint('[Recording] Uploading booking call recording (${await recordedFile.length()} bytes) for ${widget.booking.id}...');
+        await context.read<AppController>().api.uploadRecording(widget.booking.id, recordedFile);
+        debugPrint('[Recording] Booking call recording successfully uploaded to backend!');
+      }
+    } catch (e) {
+      debugPrint('[Recording] Failed to upload booking recording: $e');
+    }
+  }
 
   @override
   void initState() {
@@ -111,11 +169,20 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
     final ice = await api.iceServers();
     pc = await createPeerConnection({'iceServers': ice});
 
-    pc!.onTrack = (event) {
+    pc!.onTrack = (event) async {
       if (event.streams.isNotEmpty) {
-        remoteRenderer.srcObject = event.streams.first;
-        if (mounted) setState(() {});
+        remoteStream = event.streams.first;
+      } else {
+        remoteStream ??= await createLocalMediaStream('booking_remote_stream');
+        if (!remoteStream!.getTracks().any((t) => t.id == event.track.id)) {
+          remoteStream!.addTrack(event.track);
+        }
       }
+      if (remoteRenderer.srcObject != remoteStream) {
+        remoteRenderer.srcObject = remoteStream;
+      }
+      _startRecordingIfEligible();
+      if (mounted) setState(() {});
     };
     pc!.onIceCandidate = (candidate) {
       if (candidate.candidate == null) return;
@@ -132,6 +199,7 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
     pc!.onConnectionState = (state) {
       if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
         _finishReconnect();
+        _startRecordingIfEligible();
         if (!connectedRecorded) {
           connectedRecorded = true;
           api.recordCallConnected(widget.booking.id).catchError((_) {});
@@ -357,6 +425,7 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
   }
 
   Future<void> _cleanup() async {
+    await _stopAndUploadRecording();
     signalPoll?.cancel();
     statusPoll?.cancel();
     reconnectTimer?.cancel();
@@ -371,6 +440,11 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
     }
     await localStream?.dispose();
     localStream = null;
+    for (final track in remoteStream?.getTracks() ?? <MediaStreamTrack>[]) {
+      track.stop();
+    }
+    await remoteStream?.dispose();
+    remoteStream = null;
     await pc?.close();
     pc = null;
     localRenderer.srcObject = null;

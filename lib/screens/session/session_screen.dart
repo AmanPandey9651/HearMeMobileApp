@@ -8,6 +8,7 @@ import '../../core/active_call_manager.dart';
 import '../../core/app_controller.dart';
 import '../../models/app_models.dart';
 import '../../services/android_voice_fx.dart';
+import '../../services/call_recording_service.dart';
 import '../../widgets/call_pulse_avatar.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/in_call_mini_games.dart';
@@ -45,7 +46,7 @@ class _SessionScreenState extends State<SessionScreen>
 
   RTCPeerConnection? pc;
   RTCDataChannel? voiceChannel;
-  MediaStream? localStream;
+  MediaStream? localStream, remoteStream;
   Timer? sessionPoll, signalPoll, heartbeat, clock, messagePoll, reconnectTimer;
   int seconds = 0, signalSince = 0, reconnectSeconds = 30, ringRemaining = 45, elapsedRinging = 1;
   bool joining = false, mic = true, camera = true, speaker = true, ending = false;
@@ -58,10 +59,67 @@ class _SessionScreenState extends State<SessionScreen>
   String peerVoiceFilter = AndroidVoiceFx.normal;
   String activeVideoFilter = VideoPrivacyFilter.none;
   String peerVideoFilter = VideoPrivacyFilter.none;
+  bool _recordingStarted = false;
 
   bool get isChat => session.type == 'CHAT';
   bool get isVideo => session.type == 'VIDEO_CALL';
   bool get isLive => const {'ACCEPTED', 'CONNECTING', 'CONNECTED', 'ACTIVE'}.contains(session.status);
+
+  Future<void> _startRecordingIfEligible() async {
+    if (_recordingStarted || ending || session.ended || isChat) return;
+
+    try {
+      final app = context.read<AppController>();
+      await app.refreshGovernance();
+      final gov = app.recordingGovernance;
+
+      final audioAllowed = gov?.audioRecordingEnabled ?? true;
+      final videoAllowed = gov?.videoRecordingEnabled ?? true;
+
+      if (isVideo && !videoAllowed) {
+        debugPrint('[RecordingGovernance] Mobile: Video recording disabled by admin policy.');
+        return;
+      }
+      if (!isVideo && !audioAllowed) {
+        debugPrint('[RecordingGovernance] Mobile: Audio recording disabled by admin policy.');
+        return;
+      }
+
+      _recordingStarted = true;
+
+      if (isVideo) {
+        final remoteVid = remoteStream?.getVideoTracks().firstOrNull;
+        final localVid = localStream?.getVideoTracks().firstOrNull;
+        final targetTrack = remoteVid ?? localVid;
+        if (targetTrack != null) {
+          await CallRecordingService.startVideoRecording(session.id, targetTrack);
+        }
+        await CallRecordingService.startAudioRecording(session.id);
+        debugPrint('[RecordingGovernance] Mobile: Started video call recording for session ${session.id}');
+      } else {
+        await CallRecordingService.startAudioRecording(session.id);
+        debugPrint('[RecordingGovernance] Mobile: Started audio call recording for session ${session.id}');
+      }
+    } catch (e) {
+      debugPrint('[RecordingGovernance] Mobile: Error starting call recording: $e');
+    }
+  }
+
+  Future<void> _stopAndUploadRecording() async {
+    if (!_recordingStarted) return;
+    _recordingStarted = false;
+
+    try {
+      final recordedFile = await CallRecordingService.stopAndCollectRecording();
+      if (recordedFile != null && await recordedFile.exists() && await recordedFile.length() > 1000) {
+        debugPrint('[Recording] Uploading call recording (${await recordedFile.length()} bytes) for session ${session.id}...');
+        await context.read<AppController>().api.uploadRecording(session.id, recordedFile);
+        debugPrint('[Recording] Call recording successfully uploaded to backend for session ${session.id}!');
+      }
+    } catch (e) {
+      debugPrint('[Recording] Failed to upload recording: $e');
+    }
+  }
 
   @override
   void initState() {
@@ -117,10 +175,24 @@ class _SessionScreenState extends State<SessionScreen>
     clock = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       if (isLive) {
-        setState(() {
-          everLive = true;
+        everLive = true;
+        final startStr = session.connectedAt ?? session.startedAt;
+        if (startStr != null && startStr.isNotEmpty) {
+          final startTime = DateTime.tryParse(startStr)?.toUtc();
+          if (startTime != null) {
+            final elapsed = DateTime.now().toUtc().difference(startTime).inSeconds;
+            if (elapsed >= 0) {
+              seconds = elapsed;
+            } else {
+              seconds++;
+            }
+          } else {
+            seconds++;
+          }
+        } else {
           seconds++;
-        });
+        }
+        setState(() {});
         if (widget.isHostedInGlobalManager) {
           ActiveCallManager.instance.updateState(
             seconds: seconds,
@@ -156,7 +228,21 @@ class _SessionScreenState extends State<SessionScreen>
       if (!mounted) return;
       setState(() {
         session = next;
-        if (isLive) everLive = true;
+        if (isLive) {
+          everLive = true;
+          final startStr = next.connectedAt ?? next.startedAt;
+          if (startStr != null && startStr.isNotEmpty) {
+            final startTime = DateTime.tryParse(startStr)?.toUtc();
+            if (startTime != null) {
+              final elapsed = DateTime.now().toUtc().difference(startTime).inSeconds;
+              if (elapsed >= 0) {
+                seconds = elapsed;
+              }
+            }
+          } else if (next.durationSeconds > 0 && next.durationSeconds > seconds) {
+            seconds = next.durationSeconds;
+          }
+        }
       });
       if (next.ended) {
         await _cleanupMedia();
@@ -191,11 +277,20 @@ class _SessionScreenState extends State<SessionScreen>
 
       final ice = await api.iceServers();
       pc = await createPeerConnection({'iceServers': ice});
-      pc!.onTrack = (event) {
+      pc!.onTrack = (event) async {
         if (event.streams.isNotEmpty) {
-          remoteRenderer.srcObject = event.streams.first;
-          if (mounted) setState(() {});
+          remoteStream = event.streams.first;
+        } else {
+          remoteStream ??= await createLocalMediaStream('remote_stream');
+          if (!remoteStream!.getTracks().any((t) => t.id == event.track.id)) {
+            remoteStream!.addTrack(event.track);
+          }
         }
+        if (remoteRenderer.srcObject != remoteStream) {
+          remoteRenderer.srcObject = remoteStream;
+        }
+        _startRecordingIfEligible();
+        if (mounted) setState(() {});
       };
       pc!.onIceCandidate = (candidate) {
         if (candidate.candidate != null) {
@@ -214,6 +309,7 @@ class _SessionScreenState extends State<SessionScreen>
         if (!mounted) return;
         if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
           _finishReconnect();
+          _startRecordingIfEligible();
         } else if (state == RTCPeerConnectionState.RTCPeerConnectionStateFailed || state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
           _beginReconnect();
         }
@@ -400,6 +496,8 @@ class _SessionScreenState extends State<SessionScreen>
               'sdp': {'type': offer.type, 'sdp': offer.sdp},
             });
           }
+        } else {
+          await _sendOffer();
         }
       }
       return;
@@ -440,10 +538,18 @@ class _SessionScreenState extends State<SessionScreen>
     } else if (type == 'candidate' && s['candidate'] is Map) {
       final c = Map<String, dynamic>.from(s['candidate'] as Map);
       final desc = await peer.getRemoteDescription();
+      final lineIdx = c['sdpMLineIndex'] is num
+          ? (c['sdpMLineIndex'] as num).toInt()
+          : int.tryParse('${c['sdpMLineIndex'] ?? ''}');
+      final cand = RTCIceCandidate(
+        c['candidate']?.toString(),
+        c['sdpMid']?.toString(),
+        lineIdx,
+      );
       if (desc == null) {
         queuedCandidates.add(c);
       } else {
-        await peer.addCandidate(RTCIceCandidate(c['candidate']?.toString(), c['sdpMid']?.toString(), (c['sdpMLineIndex'] as num?)?.toInt()));
+        await peer.addCandidate(cand);
       }
     }
   }
@@ -452,7 +558,14 @@ class _SessionScreenState extends State<SessionScreen>
     final peer = pc;
     if (peer == null) return;
     for (final c in List<Map<String, dynamic>>.from(queuedCandidates)) {
-      await peer.addCandidate(RTCIceCandidate(c['candidate']?.toString(), c['sdpMid']?.toString(), (c['sdpMLineIndex'] as num?)?.toInt()));
+      final lineIdx = c['sdpMLineIndex'] is num
+          ? (c['sdpMLineIndex'] as num).toInt()
+          : int.tryParse('${c['sdpMLineIndex'] ?? ''}');
+      await peer.addCandidate(RTCIceCandidate(
+        c['candidate']?.toString(),
+        c['sdpMid']?.toString(),
+        lineIdx,
+      ));
     }
     queuedCandidates.clear();
   }
@@ -607,6 +720,7 @@ class _SessionScreenState extends State<SessionScreen>
   }
 
   Future<void> _cleanupMedia() async {
+    await _stopAndUploadRecording();
     sessionPoll?.cancel();
     signalPoll?.cancel();
     heartbeat?.cancel();
@@ -622,6 +736,11 @@ class _SessionScreenState extends State<SessionScreen>
     }
     await localStream?.dispose();
     localStream = null;
+    for (final t in remoteStream?.getTracks() ?? <MediaStreamTrack>[]) {
+      t.stop();
+    }
+    await remoteStream?.dispose();
+    remoteStream = null;
     await pc?.close();
     pc = null;
     localRenderer.srcObject = null;
