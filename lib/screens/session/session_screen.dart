@@ -668,6 +668,67 @@ class _SessionScreenState extends State<SessionScreen>
     final isCallback = session.reference.startsWith('CB-') || (!widget.callerSide && session.status == 'REQUESTED');
     final peerAvatar = widget.callerSide ? session.listenerAvatarUrl : session.callerAvatarUrl;
 
+    final isChat = session.type == 'CHAT';
+    final isVideo = session.type == 'VIDEO_CALL';
+
+    final Color serviceAccent;
+    final Color serviceBg;
+    final IconData serviceIcon;
+    final String serviceShortTag;
+    final String servicePillText;
+    final String serviceSubtitle;
+    final String serviceNoticeText;
+    final String serviceCancelText;
+    final IconData serviceCancelIcon;
+    final String servicePrivacyText;
+
+    if (isVideo) {
+      serviceAccent = const Color(0xFF7C3AED); // Royal Violet
+      serviceBg = const Color(0xFFF3E8FF);     // Soft Lavender
+      serviceIcon = Icons.videocam_rounded;
+      serviceShortTag = 'VIDEO CALL';
+      servicePillText = isCallback ? 'REQUESTED VIDEO' : 'OUTGOING VIDEO CALL';
+      serviceSubtitle = isCallback ? 'Ringing for video callback…' : 'Starting video call…';
+      serviceNoticeText = isCallback
+          ? 'Waiting for caller to accept your video callback.'
+          : 'Connecting video call to the listener.';
+      serviceCancelText = isCallback ? 'Cancel callback' : 'Cancel video call';
+      serviceCancelIcon = Icons.videocam_off_outlined;
+      servicePrivacyText = isCallback
+          ? "Camera connects when they accept."
+          : "Your video call stays private and encrypted.";
+    } else if (isChat) {
+      serviceAccent = const Color(0xFF059669); // Emerald Teal
+      serviceBg = const Color(0xFFECFDF5);     // Soft Mint
+      serviceIcon = Icons.chat_bubble_rounded;
+      serviceShortTag = 'CHAT';
+      servicePillText = isCallback ? 'REQUESTED CHAT' : 'OUTGOING CHAT REQUEST';
+      serviceSubtitle = isCallback ? 'Waiting for chat callback…' : 'Connecting to chat…';
+      serviceNoticeText = isCallback
+          ? 'Waiting for caller to accept your chat callback.'
+          : 'Connecting private chat with the listener.';
+      serviceCancelText = isCallback ? 'Cancel callback' : 'Cancel chat';
+      serviceCancelIcon = Icons.chat_bubble_outline_rounded;
+      servicePrivacyText = isCallback
+          ? "Chat opens when they accept."
+          : "Your chat messages stay private and encrypted.";
+    } else {
+      serviceAccent = const Color(0xFFF95B3D); // Coral Orange
+      serviceBg = const Color(0xFFFFECE5);     // Soft Peach
+      serviceIcon = Icons.phone_rounded;
+      serviceShortTag = 'VOICE CALL';
+      servicePillText = isCallback ? 'REQUESTED AUDIO' : 'OUTGOING';
+      serviceSubtitle = isCallback ? 'Ringing for callback…' : 'Calling…';
+      serviceNoticeText = isCallback
+          ? 'Waiting for caller to accept your callback.'
+          : 'Connecting you to the listener.';
+      serviceCancelText = isCallback ? 'Cancel callback' : 'Cancel call';
+      serviceCancelIcon = Icons.cancel_outlined;
+      servicePrivacyText = isCallback
+          ? "You'll be connected when they accept."
+          : "Your call stays private and secure.";
+    }
+
     final isMinimized = widget.isHostedInGlobalManager && ActiveCallManager.instance.isMinimized;
     return PopScope(
       canPop: isMinimized || session.ended,
@@ -678,9 +739,10 @@ class _SessionScreenState extends State<SessionScreen>
           if (isLive && !session.ended) {
             _minimizeCall();
           } else if (!isLive && !session.ended) {
+            final serviceName = isVideo ? 'video call' : (isChat ? 'chat' : 'call');
             final shouldCancel = await confirm(
               context,
-              widget.callerSide ? 'Cancel call request?' : 'Cancel callback?',
+              widget.callerSide ? 'Cancel $serviceName request?' : 'Cancel callback?',
               'Do you want to cancel and go back?',
             );
             if (shouldCancel && mounted) {
@@ -708,7 +770,8 @@ class _SessionScreenState extends State<SessionScreen>
                 leading: IconButton(
                   icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A), size: 22),
                   onPressed: () async {
-                    if (await confirm(context, widget.callerSide ? 'Cancel call request?' : 'Cancel callback?', 'Do you want to cancel and go back?')) {
+                    final serviceName = isVideo ? 'video call' : (isChat ? 'chat' : 'call');
+                    if (await confirm(context, widget.callerSide ? 'Cancel $serviceName request?' : 'Cancel callback?', 'Do you want to cancel and go back?')) {
                       await _cancel();
                     }
                   },
@@ -717,39 +780,61 @@ class _SessionScreenState extends State<SessionScreen>
                 title: Row(
                   children: [
                     Container(
-                      width: 32,
-                      height: 32,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFFECE5),
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: serviceBg,
                         shape: BoxShape.circle,
+                        border: Border.all(color: serviceAccent.withValues(alpha: 0.3), width: 1),
                       ),
                       child: ClipOval(
                         child: peerAvatar != null && peerAvatar.isNotEmpty
                             ? RemoteAvatar(
                                 url: peerAvatar,
-                                radius: 16,
+                                radius: 17,
                                 fallback: peerName,
                               )
-                            : const Center(
+                            : Center(
                                 child: Icon(
                                   Icons.person_rounded,
                                   size: 20,
-                                  color: Color(0xFFF95B3D),
+                                  color: serviceAccent,
                                 ),
                               ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        peerName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF0F172A),
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            peerName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              Icon(serviceIcon, size: 10, color: serviceAccent),
+                              const SizedBox(width: 3),
+                              Text(
+                                serviceShortTag,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: serviceAccent,
+                                  letterSpacing: 0.4,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -766,43 +851,50 @@ class _SessionScreenState extends State<SessionScreen>
                   children: [
                     const Spacer(flex: 2),
 
-                    // Animated Centerpiece with Concentric Waves
+                    // Animated Centerpiece with Service-Themed Waves & Badge
                     Center(
                       child: CallPulseAvatar(
                         name: peerName,
                         avatarUrl: peerAvatar,
                         size: 200,
+                        serviceType: session.type,
                       ),
                     ),
 
                     const SizedBox(height: 18),
 
-                    // Status Pill: ● REQUESTED (Image 2) or ● OUTGOING (Image 4)
+                    // Status Pill: Service-specific (● OUTGOING VIDEO CALL / ● OUTGOING CHAT / ● OUTGOING)
                     Center(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFFECE5),
+                          color: serviceBg,
                           borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: serviceAccent.withValues(alpha: 0.3),
+                            width: 0.8,
+                          ),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            Icon(serviceIcon, size: 12, color: serviceAccent),
+                            const SizedBox(width: 6),
                             Container(
-                              width: 6,
-                              height: 6,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFF95B3D),
+                              width: 5,
+                              height: 5,
+                              decoration: BoxDecoration(
+                                color: serviceAccent,
                                 shape: BoxShape.circle,
                               ),
                             ),
-                            const SizedBox(width: 6),
+                            const SizedBox(width: 5),
                             Text(
-                              isCallback ? 'REQUESTED' : 'OUTGOING',
-                              style: const TextStyle(
+                              servicePillText,
+                              style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w800,
-                                color: Color(0xFFF95B3D),
+                                color: serviceAccent,
                                 letterSpacing: 0.8,
                               ),
                             ),
@@ -832,9 +924,9 @@ class _SessionScreenState extends State<SessionScreen>
 
                     const SizedBox(height: 4),
 
-                    // Subtitle
+                    // Subtitle (Service-specific)
                     Text(
-                      isCallback ? 'Ringing for callback…' : 'Calling…',
+                      serviceSubtitle,
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -847,10 +939,10 @@ class _SessionScreenState extends State<SessionScreen>
                     // Big Timer: 45s remaining countdown
                     Text(
                       '${ringRemaining}s',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 38,
                         fontWeight: FontWeight.w900,
-                        color: Color(0xFFF95B3D),
+                        color: serviceAccent,
                         letterSpacing: -0.5,
                       ),
                     ),
@@ -866,20 +958,18 @@ class _SessionScreenState extends State<SessionScreen>
 
                     const SizedBox(height: 24),
 
-                    // Info Notice Row
+                    // Info Notice Row (Service-specific)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(
-                          Icons.phone_rounded,
+                        Icon(
+                          serviceIcon,
                           size: 15,
-                          color: Color(0xFFF95B3D),
+                          color: serviceAccent,
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          isCallback
-                              ? 'Waiting for caller to accept your callback.'
-                              : 'Connecting you to the listener.',
+                          serviceNoticeText,
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
@@ -891,36 +981,43 @@ class _SessionScreenState extends State<SessionScreen>
 
                     const SizedBox(height: 24),
 
-                    // Outlined Pill Action Button: Cancel callback or Cancel call
+                    // Outlined Pill Action Button: Cancel callback or Cancel service
                     InkWell(
                       onTap: _cancel,
                       borderRadius: BorderRadius.circular(26),
                       child: Container(
-                        width: 210,
+                        width: 220,
                         height: 48,
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(26),
                           border: Border.all(
-                            color: const Color(0xFFF95B3D),
+                            color: serviceAccent,
                             width: 1.2,
                           ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: serviceAccent.withValues(alpha: 0.1),
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(
-                              Icons.cancel_outlined,
+                            Icon(
+                              serviceCancelIcon,
                               size: 18,
-                              color: Color(0xFFF95B3D),
+                              color: serviceAccent,
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              isCallback ? 'Cancel callback' : 'Cancel call',
-                              style: const TextStyle(
+                              serviceCancelText,
+                              style: TextStyle(
                                 fontSize: 14.5,
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFFF95B3D),
+                                color: serviceAccent,
                               ),
                             ),
                           ],
@@ -930,16 +1027,16 @@ class _SessionScreenState extends State<SessionScreen>
 
                     const Spacer(flex: 3),
 
-                    // Bottom Privacy Card
+                    // Bottom Privacy Card (Service-specific)
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFFECE5).withValues(alpha: 0.4),
+                          color: serviceBg.withValues(alpha: 0.6),
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
-                            color: const Color(0xFFFFD4C4).withValues(alpha: 0.6),
+                            color: serviceAccent.withValues(alpha: 0.25),
                             width: 0.8,
                           ),
                         ),
@@ -948,26 +1045,26 @@ class _SessionScreenState extends State<SessionScreen>
                             Container(
                               padding: const EdgeInsets.all(4),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFFFECE5),
+                                color: serviceBg,
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: const Icon(
-                                Icons.verified_user_rounded,
+                              child: Icon(
+                                isVideo
+                                    ? Icons.videocam_rounded
+                                    : (isChat ? Icons.lock_rounded : Icons.verified_user_rounded),
                                 size: 16,
-                                color: Color(0xFFF95B3D),
+                                color: serviceAccent,
                               ),
                             ),
                             Container(
                               width: 1,
                               height: 18,
-                              color: const Color(0xFFFFC5B2),
+                              color: serviceAccent.withValues(alpha: 0.3),
                               margin: const EdgeInsets.symmetric(horizontal: 10),
                             ),
                             Expanded(
                               child: Text(
-                                isCallback
-                                    ? "You'll be connected when they accept."
-                                    : "Your call stays private and secure.",
+                                servicePrivacyText,
                                 style: const TextStyle(
                                   fontSize: 11.5,
                                   fontWeight: FontWeight.w600,
@@ -1424,101 +1521,561 @@ class _SessionScreenState extends State<SessionScreen>
     final bottomPadding = mediaQuery.padding.bottom;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
-      body: Stack(
-        children: [
-          // 1. Fullscreen Remote Video or Fallback
-          Positioned.fill(
-            child: remoteRenderer.srcObject != null
-                ? FilteredVideoView(
-                    filter: peerVideoFilter,
-                    child: RTCVideoView(
-                      remoteRenderer,
-                      objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-                    ),
-                  )
-                : Container(
-                    color: const Color(0xFF0F172A),
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _buildPickedUpAvatarOrb(peerName, peerAvatar),
-                          const SizedBox(height: 18),
-                          Text(
-                            peerName,
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          const Text(
-                            'Connecting video feed…',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Color(0xFF94A3B8),
-                            ),
-                          ),
-                        ],
+      backgroundColor: const Color(0xFF0B0F19),
+      resizeToAvoidBottomInset: false,
+      body: SizedBox.expand(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // 1. Fullscreen Remote Video or Connecting Fallback
+            Positioned.fill(
+              child: remoteRenderer.srcObject != null
+                  ? FilteredVideoView(
+                      filter: peerVideoFilter,
+                      child: RTCVideoView(
+                        remoteRenderer,
+                        objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
                       ),
+                    )
+                  : _buildVideoConnectingFallback(peerName, peerAvatar),
+            ),
+
+            // 2. Subtle Cinematic Vignette Overlays
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 160,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.black.withValues(alpha: 0.75),
+                        Colors.transparent,
+                      ],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
                     ),
                   ),
-          ),
-
-          // 2. Subtle Vignette Overlays
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 140,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.black.withValues(alpha: 0.65),
-                    Colors.transparent,
-                  ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
                 ),
               ),
             ),
-          ),
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: 180,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withValues(alpha: 0.75),
-                  ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: 200,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.85),
+                      ],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
 
-          // 3. Floating PiP Local Video (top right)
-          Positioned(
-            right: 16,
-            top: topPadding + 56,
-            width: 112,
-            height: 158,
-            child: GestureDetector(
-              onTap: _switchCamera,
+            // 3. Floating PiP Local Video (top right)
+            Positioned(
+              right: 16,
+              top: topPadding + 62,
+              width: 108,
+              height: 154,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  _switchCamera();
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.45),
+                      width: 2.0,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.55),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        camera
+                            ? FilteredVideoView(
+                                filter: activeVideoFilter,
+                                showBadge: false,
+                                child: RTCVideoView(
+                                  localRenderer,
+                                  mirror: true,
+                                  objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                                ),
+                              )
+                            : Container(
+                                color: const Color(0xFF1E2433),
+                                child: Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withValues(alpha: 0.08),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(
+                                          Icons.videocam_off_rounded,
+                                          size: 22,
+                                          color: Color(0xFFEF4444),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      const Text(
+                                        'Camera Off',
+                                        style: TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                        // Tap-to-flip camera icon badge at bottom-right corner of PiP
+                        if (camera)
+                          Positioned(
+                            right: 6,
+                            bottom: 6,
+                            child: Container(
+                              padding: const EdgeInsets.all(5),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.black.withValues(alpha: 0.55),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.3),
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.flip_camera_ios_rounded,
+                                size: 13,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // 4. Floating Top Bar (Strictly positioned at the top)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      // Minimize Call Button
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          _minimizeCall();
+                        },
+                        child: Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.black.withValues(alpha: 0.45),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.22),
+                              width: 1.0,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.2),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.keyboard_arrow_down_rounded,
+                            color: Colors.white,
+                            size: 26,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+
+                      // Peer Name & Live Duration Timer Pill
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.45),
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.18),
+                            width: 1.0,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.2),
+                              blurRadius: 10,
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF10B981),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 130),
+                              child: Text(
+                                peerName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              _time(seconds),
+                              style: const TextStyle(
+                                color: Color(0xFF38BDF8),
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                                fontFamily: 'monospace',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const Spacer(),
+
+                      // Tools / Sparkle Button
+                      GestureDetector(
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          _showTools();
+                        },
+                        child: Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.black.withValues(alpha: 0.45),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.22),
+                              width: 1.0,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.2),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.auto_awesome,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Top Banner if active
+            if (banner != null)
+              Positioned(
+                top: topPadding + 62,
+                left: 16,
+                right: 136,
+                child: _buildTopBanner(),
+              ),
+
+            // 5. Floating Bottom Controls Dock (Firmly positioned at the bottom)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: bottomPadding + 18,
               child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
+                  color: const Color(0xFF111520).withValues(alpha: 0.92),
+                  borderRadius: BorderRadius.circular(38),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.4),
-                    width: 2,
+                    color: Colors.white.withValues(alpha: 0.16),
+                    width: 1.2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.55),
+                      blurRadius: 30,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    // Mic
+                    _buildVideoGlassButton(
+                      icon: mic ? Icons.mic_rounded : Icons.mic_off_rounded,
+                      isActive: mic,
+                      tooltip: mic ? 'Mute' : 'Unmute',
+                      onTap: _toggleMic,
+                    ),
+                    // Video Camera
+                    _buildVideoGlassButton(
+                      icon: camera ? Icons.videocam_rounded : Icons.videocam_off_rounded,
+                      isActive: camera,
+                      tooltip: camera ? 'Turn off camera' : 'Turn on camera',
+                      onTap: _toggleCamera,
+                    ),
+                    // Camera Switch
+                    _buildVideoGlassButton(
+                      icon: Icons.flip_camera_ios_rounded,
+                      isActive: true,
+                      tooltip: 'Switch camera',
+                      onTap: _switchCamera,
+                    ),
+                    // Video Privacy Filter
+                    _buildVideoGlassButton(
+                      icon: Icons.face_retouching_natural_rounded,
+                      isActive: activeVideoFilter != VideoPrivacyFilter.none,
+                      isFilter: true,
+                      tooltip: 'Video filters',
+                      onTap: _videoFilters,
+                    ),
+                    // Speaker
+                    _buildVideoGlassButton(
+                      icon: speaker ? Icons.volume_up_rounded : Icons.volume_down_rounded,
+                      isActive: speaker,
+                      tooltip: speaker ? 'Speaker' : 'Earpiece',
+                      onTap: _toggleSpeaker,
+                    ),
+                    // End Call Button
+                    GestureDetector(
+                      onTap: () {
+                        HapticFeedback.heavyImpact();
+                        _end();
+                      },
+                      child: Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFFF5252), Color(0xFFDC2626)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFDC2626).withValues(alpha: 0.5),
+                              blurRadius: 16,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.call_end_rounded,
+                          color: Colors.white,
+                          size: 26,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Modern full-screen connecting fallback for video call
+  Widget _buildVideoConnectingFallback(String peerName, String? peerAvatar) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment(0, -0.15),
+          radius: 1.2,
+          colors: [
+            Color(0xFF1E1B4B), // Deep indigo
+            Color(0xFF0F172A), // Slate navy
+            Color(0xFF060913), // Deep obsidian
+          ],
+          stops: [0.0, 0.55, 1.0],
+        ),
+      ),
+      child: Center(
+        child: SingleChildScrollView(
+          physics: const NeverScrollableScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildVideoConnectingAvatarOrb(peerName, peerAvatar),
+                const SizedBox(height: 22),
+                Text(
+                  peerName,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF7C3AED).withValues(alpha: 0.22),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: const Color(0xFFA78BFA).withValues(alpha: 0.45),
+                      width: 1.0,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 7,
+                        height: 7,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF22C55E),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Connecting video feed…',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFFE2E8F0),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'End-to-end encrypted private video',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Glowing neon-accented avatar orb for video screen connecting state
+  Widget _buildVideoConnectingAvatarOrb(String peerName, String? peerAvatar) {
+    return AnimatedBuilder(
+      animation: _pulseController,
+      builder: (context, _) {
+        final pulse = _pulseController.value;
+        final scale = 1.0 + 0.05 * pulse;
+
+        return SizedBox(
+          width: 170,
+          height: 170,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Outermost soft glowing violet halo
+              Container(
+                width: 165 * scale,
+                height: 165 * scale,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF7C3AED).withValues(alpha: 0.22 * (1.0 - pulse * 0.3)),
+                ),
+              ),
+
+              // Middle neon accent ring
+              Container(
+                width: 142,
+                height: 142,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: const Color(0xFFA78BFA).withValues(alpha: 0.45 + 0.35 * pulse),
+                    width: 1.8,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF8B5CF6).withValues(alpha: 0.35),
+                      blurRadius: 20,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+              ),
+
+              // Inner avatar circle
+              Container(
+                width: 124,
+                height: 124,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    width: 2.2,
                   ),
                   boxShadow: [
                     BoxShadow(
@@ -1528,225 +2085,27 @@ class _SessionScreenState extends State<SessionScreen>
                     ),
                   ],
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      FilteredVideoView(
-                        filter: activeVideoFilter,
-                        showBadge: false,
-                        child: RTCVideoView(
-                          localRenderer,
-                          mirror: true,
-                          objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-                        ),
-                      ),
-                      Positioned(
-                        right: 6,
-                        bottom: 6,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.black.withValues(alpha: 0.5),
-                          ),
+                child: ClipOval(
+                  child: peerAvatar != null && peerAvatar.isNotEmpty
+                      ? RemoteAvatar(
+                          url: peerAvatar,
+                          radius: 62,
+                          fallback: peerName,
+                        )
+                      : Container(
+                          color: const Color(0xFF1E293B),
                           child: const Icon(
-                            Icons.flip_camera_ios_rounded,
-                            size: 13,
-                            color: Colors.white,
+                            Icons.person_rounded,
+                            size: 58,
+                            color: Color(0xFFA78BFA),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
                 ),
               ),
-            ),
+            ],
           ),
-
-          // 4. Floating Top Bar
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      _minimizeCall();
-                    },
-                    child: Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.black.withValues(alpha: 0.4),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-                      ),
-                      child: const Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        color: Colors.white,
-                        size: 26,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.4),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF22C55E),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 7),
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 130),
-                          child: Text(
-                            peerName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _time(seconds),
-                          style: const TextStyle(
-                            color: Color(0xFFE2E8F0),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const Spacer(),
-
-                  GestureDetector(
-                    onTap: _showTools,
-                    child: Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.black.withValues(alpha: 0.4),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-                      ),
-                      child: const Icon(
-                        Icons.auto_awesome,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          if (banner != null)
-            Positioned(
-              top: topPadding + 60,
-              left: 16,
-              right: 140,
-              child: _buildTopBanner(),
-            ),
-
-          // 5. Floating Bottom Controls Capsule
-          Positioned(
-            left: 20,
-            right: 20,
-            bottom: bottomPadding + 20,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E212B).withValues(alpha: 0.88),
-                borderRadius: BorderRadius.circular(36),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.4),
-                    blurRadius: 24,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildVideoGlassButton(
-                    icon: mic ? Icons.mic_rounded : Icons.mic_off_rounded,
-                    isActive: mic,
-                    onTap: _toggleMic,
-                  ),
-                  _buildVideoGlassButton(
-                    icon: camera ? Icons.videocam_rounded : Icons.videocam_off_rounded,
-                    isActive: camera,
-                    onTap: _toggleCamera,
-                  ),
-                  _buildVideoGlassButton(
-                    icon: Icons.face_retouching_natural_rounded,
-                    isActive: activeVideoFilter != VideoPrivacyFilter.none,
-                    onTap: _videoFilters,
-                  ),
-                  _buildVideoGlassButton(
-                    icon: speaker ? Icons.volume_up_rounded : Icons.volume_down_rounded,
-                    isActive: speaker,
-                    onTap: _toggleSpeaker,
-                  ),
-                  GestureDetector(
-                    onTap: () {
-                      HapticFeedback.heavyImpact();
-                      _end();
-                    },
-                    child: Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFFF5E5E), Color(0xFFE53935)],
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFFF4B4B).withValues(alpha: 0.45),
-                            blurRadius: 14,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.call_end_rounded,
-                        color: Colors.white,
-                        size: 26,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -1754,23 +2113,56 @@ class _SessionScreenState extends State<SessionScreen>
     required IconData icon,
     required bool isActive,
     required VoidCallback onTap,
+    bool isFilter = false,
+    String? tooltip,
   }) {
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.lightImpact();
-        onTap();
-      },
-      child: Container(
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: isActive ? Colors.white.withValues(alpha: 0.15) : const Color(0xFFEF4444).withValues(alpha: 0.8),
-        ),
-        child: Icon(
-          icon,
-          color: Colors.white,
-          size: 22,
+    final Color bgColor;
+    final Color iconColor;
+    if (isFilter) {
+      bgColor = isActive
+          ? const Color(0xFF7C3AED).withValues(alpha: 0.85)
+          : Colors.white.withValues(alpha: 0.12);
+      iconColor = isActive ? Colors.white : Colors.white.withValues(alpha: 0.9);
+    } else {
+      bgColor = isActive
+          ? Colors.white.withValues(alpha: 0.14)
+          : const Color(0xFFEF4444).withValues(alpha: 0.88);
+      iconColor = Colors.white;
+    }
+
+    return Tooltip(
+      message: tooltip ?? '',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          HapticFeedback.lightImpact();
+          onTap();
+        },
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: bgColor,
+            border: Border.all(
+              color: Colors.white.withValues(alpha: isActive ? 0.2 : 0.4),
+              width: 0.8,
+            ),
+            boxShadow: isActive
+                ? null
+                : [
+                    BoxShadow(
+                      color: const Color(0xFFEF4444).withValues(alpha: 0.35),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+          ),
+          child: Icon(
+            icon,
+            color: iconColor,
+            size: 21,
+          ),
         ),
       ),
     );
