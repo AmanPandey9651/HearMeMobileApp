@@ -431,27 +431,33 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
   Future<void> _peerEnded() async {
     if (ending) return;
     ending = true;
-    await _cleanup();
-    if (!mounted) return;
-    await _summary(peerEnded: true);
+    signalPoll?.cancel();
+    statusPoll?.cancel();
+    reconnectTimer?.cancel();
+    _privacyAlerts.stop();
+    try { localRenderer.srcObject = null; } catch (_) {}
+    try { remoteRenderer.srcObject = null; } catch (_) {}
+    unawaited(_cleanup());
     if (mounted) Navigator.pop(context);
   }
 
   Future<void> _end() async {
     if (ending) return;
     ending = true;
+    signalPoll?.cancel();
+    statusPoll?.cancel();
+    reconnectTimer?.cancel();
+    _privacyAlerts.stop();
+    try { localRenderer.srcObject = null; } catch (_) {}
+    try { remoteRenderer.srcObject = null; } catch (_) {}
+
     try {
-      await context.read<AppController>().api.sendSignal(widget.booking.id, {'type': 'call_ended', 'reason': 'USER_ENDED'});
+      final api = context.read<AppController>().api;
+      api.sendSignal(widget.booking.id, {'type': 'call_ended', 'reason': 'USER_ENDED'}).catchError((_) {});
+      api.endBookingCall(widget.booking.id).catchError((_) {});
     } catch (_) {}
-    try {
-      await context.read<AppController>().api.endBookingCall(widget.booking.id);
-    } catch (_) {}
-    try {
-      status = await context.read<AppController>().api.callStatus(widget.booking.id);
-    } catch (_) {}
-    await _cleanup();
-    if (!mounted) return;
-    await _summary();
+
+    unawaited(_cleanup());
     if (mounted) Navigator.pop(context);
   }
 
@@ -464,26 +470,34 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
     reconnectTimer = null;
     _privacyAlerts.stop();
 
-    await _stopAndUploadRecording();
-    await voiceFx.stop();
-    try {
-      await voiceChannel?.close();
-    } catch (_) {}
-    voiceChannel = null;
-    for (final track in localStream?.getTracks() ?? <MediaStreamTrack>[]) {
-      track.stop();
-    }
-    await localStream?.dispose();
-    localStream = null;
-    for (final track in remoteStream?.getTracks() ?? <MediaStreamTrack>[]) {
-      track.stop();
-    }
-    await remoteStream?.dispose();
-    remoteStream = null;
-    await pc?.close();
-    pc = null;
     try { localRenderer.srcObject = null; } catch (_) {}
     try { remoteRenderer.srcObject = null; } catch (_) {}
+
+    _stopAndUploadRecording();
+    try { await voiceFx.stop().timeout(const Duration(milliseconds: 250), onTimeout: () {}); } catch (_) {}
+    try { await voiceChannel?.close(); } catch (_) {}
+    voiceChannel = null;
+
+    final oldLocal = localStream;
+    final oldRemote = remoteStream;
+    final oldPc = pc;
+    localStream = null;
+    remoteStream = null;
+    pc = null;
+
+    try {
+      for (final track in oldLocal?.getTracks() ?? <MediaStreamTrack>[]) {
+        try { track.stop(); } catch (_) {}
+      }
+      for (final track in oldRemote?.getTracks() ?? <MediaStreamTrack>[]) {
+        try { track.stop(); } catch (_) {}
+      }
+      await Future.wait([
+        if (oldLocal != null) oldLocal.dispose().timeout(const Duration(milliseconds: 300), onTimeout: () {}),
+        if (oldRemote != null) oldRemote.dispose().timeout(const Duration(milliseconds: 300), onTimeout: () {}),
+        if (oldPc != null) oldPc.close().timeout(const Duration(milliseconds: 300), onTimeout: () {}),
+      ]).timeout(const Duration(milliseconds: 500), onTimeout: () => []);
+    } catch (_) {}
   }
 
   @override
@@ -850,45 +864,4 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
     }
   }
 
-  Future<void> _summary({bool peerEnded = false}) async {
-    if (!mounted) return;
-    final rating = ValueNotifier<int>(5);
-    final comment = TextEditingController();
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: Text(peerEnded ? 'Call ended' : 'Consultation complete'),
-        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Duration: ${status?.billableMinutes ?? 0} billable min'),
-          if (widget.callerSide) Text('Charged: ₹${(status?.currentCost ?? widget.booking.capturedAmount).toStringAsFixed(2)}'),
-          if (widget.callerSide) ...[
-            const SizedBox(height: 14),
-            const Text('Rate this consultation', style: TextStyle(fontWeight: FontWeight.bold)),
-            ValueListenableBuilder<int>(
-              valueListenable: rating,
-              builder: (_, v, __) => Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(5, (i) => IconButton(onPressed: () => rating.value = i + 1, icon: Icon(i < v ? Icons.star : Icons.star_border)))),
-            ),
-            TextField(controller: comment, decoration: const InputDecoration(labelText: 'Optional comment')),
-          ],
-        ]),
-        actions: [
-          if (widget.callerSide) TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Skip')),
-          FilledButton(
-            onPressed: () async {
-              if (widget.callerSide) {
-                try {
-                  await context.read<AppController>().api.createReview(bookingId: widget.booking.id, rating: rating.value, comment: comment.text.trim());
-                } catch (_) {}
-              }
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: Text(widget.callerSide ? 'Submit' : 'Done'),
-          ),
-        ],
-      ),
-    );
-    rating.dispose();
-    comment.dispose();
-  }
 }

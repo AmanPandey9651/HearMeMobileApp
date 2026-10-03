@@ -282,18 +282,22 @@ class _SessionScreenState extends State<SessionScreen>
         }
       });
       if (next.ended) {
-        await _cleanupMedia();
-        if (!mounted) return;
-        if (everLive || next.status == 'COMPLETED') {
-          await _showEndSummary(next, peerEnded: true);
-        } else {
-          await _showRequestEnded(next);
+        if (!ending) {
+          ending = true;
+          clock?.cancel();
+          sessionPoll?.cancel();
+          signalPoll?.cancel();
+          heartbeat?.cancel();
+          try { localRenderer.srcObject = null; } catch (_) {}
+          try { remoteRenderer.srcObject = null; } catch (_) {}
+          unawaited(_cleanupMedia());
+          if (widget.isHostedInGlobalManager) {
+            ActiveCallManager.instance.clearCall();
+          } else if (mounted) {
+            Navigator.pop(context);
+          }
         }
-        if (widget.isHostedInGlobalManager) {
-          ActiveCallManager.instance.clearCall();
-        } else if (mounted) {
-          Navigator.pop(context);
-        }
+        return;
       } else if (isLive && !isChat && pc == null && !joining) {
         await _joinMedia();
       }
@@ -364,7 +368,14 @@ class _SessionScreenState extends State<SessionScreen>
       // local user selects a non-natural effect.
       localStream = await navigator.mediaDevices.getUserMedia({
         'audio': true,
-        'video': isVideo ? {'facingMode': 'user'} : false,
+        'video': isVideo
+            ? {
+                'facingMode': 'user',
+                'width': {'ideal': 640},
+                'height': {'ideal': 480},
+                'frameRate': {'ideal': 30},
+              }
+            : false,
       });
 
       if (localStream != null) {
@@ -417,6 +428,38 @@ class _SessionScreenState extends State<SessionScreen>
     };
   }
 
+  static String _preferVP8(String sdp) {
+    if (!sdp.contains('m=video')) return sdp;
+    final lines = sdp.split('\r\n');
+    int? mVideoIndex;
+    String? vp8Payload;
+
+    for (int i = 0; i < lines.length; i++) {
+      final line = lines[i];
+      if (line.startsWith('m=video ')) {
+        mVideoIndex = i;
+      } else if (line.startsWith('a=rtpmap:') && line.contains('VP8/90000')) {
+        final match = RegExp(r'a=rtpmap:(\d+)\s+VP8/90000').firstMatch(line);
+        if (match != null) {
+          vp8Payload = match.group(1);
+        }
+      }
+    }
+
+    if (mVideoIndex != null && vp8Payload != null) {
+      final parts = lines[mVideoIndex].split(' ');
+      if (parts.length > 3) {
+        final header = parts.sublist(0, 3);
+        final payloads = parts.sublist(3);
+        payloads.remove(vp8Payload);
+        payloads.insert(0, vp8Payload);
+        lines[mVideoIndex] = (header + payloads).join(' ');
+      }
+    }
+
+    return lines.join('\r\n');
+  }
+
   Future<void> _sendOffer({bool restart = false}) async {
     final peer = pc;
     if (peer == null) return;
@@ -428,11 +471,13 @@ class _SessionScreenState extends State<SessionScreen>
       'offerToReceiveVideo': isVideo,
       if (restart) 'iceRestart': true,
     });
-    await peer.setLocalDescription(offer);
+    final sdp = _preferVP8(offer.sdp ?? '');
+    final finalOffer = RTCSessionDescription(sdp, offer.type);
+    await peer.setLocalDescription(finalOffer);
     await context.read<AppController>().api.sendSignal(session.id, {
       'type': 'offer',
       'restart': restart,
-      'sdp': {'type': offer.type, 'sdp': offer.sdp},
+      'sdp': {'type': finalOffer.type, 'sdp': finalOffer.sdp},
     });
 
     if (widget.callerSide && !isChat) {
@@ -635,18 +680,21 @@ class _SessionScreenState extends State<SessionScreen>
     if (peer == null) return;
     if (type == 'offer' && !widget.callerSide) {
       final d = Map<String, dynamic>.from(s['sdp'] as Map);
-      await peer.setRemoteDescription(RTCSessionDescription(d['sdp']?.toString(), d['type']?.toString()));
+      final rawSdp = d['sdp']?.toString() ?? '';
+      await peer.setRemoteDescription(RTCSessionDescription(_preferVP8(rawSdp), d['type']?.toString()));
       await _flushCandidates();
       final answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
+      final finalAnswer = RTCSessionDescription(_preferVP8(answer.sdp ?? ''), answer.type);
+      await peer.setLocalDescription(finalAnswer);
       await context.read<AppController>().api.sendSignal(session.id, {
         'type': 'answer',
         'restart': s['restart'] == true,
-        'sdp': {'type': answer.type, 'sdp': answer.sdp},
+        'sdp': {'type': finalAnswer.type, 'sdp': finalAnswer.sdp},
       });
     } else if (type == 'answer' && widget.callerSide) {
       final d = Map<String, dynamic>.from(s['sdp'] as Map);
-      await peer.setRemoteDescription(RTCSessionDescription(d['sdp']?.toString(), d['type']?.toString()));
+      final rawSdp = d['sdp']?.toString() ?? '';
+      await peer.setRemoteDescription(RTCSessionDescription(_preferVP8(rawSdp), d['type']?.toString()));
       await _flushCandidates();
     } else if (type == 'candidate' && s['candidate'] is Map) {
       final c = Map<String, dynamic>.from(s['candidate'] as Map);
@@ -768,35 +816,12 @@ class _SessionScreenState extends State<SessionScreen>
     }
   }
 
-  Future<void> _showRequestEnded(InstantSessionModel ended) async {
-    if (!mounted) return;
-    final message = switch (ended.status) {
-      'REJECTED' => widget.callerSide
-          ? 'Listener is currently unavailable. No money was deducted.'
-          : 'Caller declined your callback.',
-      'EXPIRED' => widget.callerSide
-          ? 'Listener did not answer within the ringing window. No money was deducted.'
-          : 'Caller did not answer your callback.',
-      'CANCELLED' => widget.callerSide
-          ? 'Connection request was cancelled. No money was deducted.'
-          : 'Callback was cancelled.',
-      _ => 'The connection request ended before the session started.',
-    };
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Session not connected'),
-        content: Text(message),
-        actions: [FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
-      ),
-    );
-  }
 
   Future<void> _finishFromPeer() async {
     if (ending) return;
     ending = true;
 
-    // Immediately stop timer and pollers so duration freezes with 0ms drift
+    // Immediately stop timer and pollers
     clock?.cancel();
     clock = null;
     sessionPoll?.cancel();
@@ -811,23 +836,15 @@ class _SessionScreenState extends State<SessionScreen>
     _offerWatchdogTimer = null;
     _privacyAlerts.stop();
 
-    // Immediately shut down camera and mic
+    // Immediately detach renderers and stop local hardware tracks
+    try { localRenderer.srcObject = null; } catch (_) {}
+    try { remoteRenderer.srcObject = null; } catch (_) {}
     for (final t in localStream?.getTracks() ?? <MediaStreamTrack>[]) {
       try { t.stop(); } catch (_) {}
     }
 
-    await _cleanupMedia();
-    InstantSessionModel ended = session;
-    try {
-      ended = await context.read<AppController>().api.session(session.id).timeout(const Duration(seconds: 4), onTimeout: () => session);
-    } catch (_) {}
-    if (!mounted) return;
-    setState(() => session = ended);
-    if (everLive || ended.status == 'COMPLETED') {
-      await _showEndSummary(ended, peerEnded: true);
-    } else {
-      await _showRequestEnded(ended);
-    }
+    unawaited(_cleanupMedia());
+
     if (widget.isHostedInGlobalManager) {
       ActiveCallManager.instance.clearCall();
     } else if (mounted) {
@@ -854,33 +871,24 @@ class _SessionScreenState extends State<SessionScreen>
     _offerWatchdogTimer = null;
     _privacyAlerts.stop();
 
-    // 2. Immediately stop microphone & camera hardware tracks
+    // 2. Immediately detach renderers and stop microphone & camera hardware tracks
+    try { localRenderer.srcObject = null; } catch (_) {}
+    try { remoteRenderer.srcObject = null; } catch (_) {}
     for (final t in localStream?.getTracks() ?? <MediaStreamTrack>[]) {
       try { t.stop(); } catch (_) {}
     }
 
-    if (mounted) setState(() {});
-
-    InstantSessionModel ended = session;
+    // 3. Dispatch end signals to backend in background
     try {
       final api = context.read<AppController>().api;
-      final signalFuture = api
-          .sendSignal(session.id, {'type': 'call_ended', 'reason': 'USER_ENDED'})
-          .timeout(const Duration(seconds: 4), onTimeout: () {});
-      final endFuture = api
-          .endSession(session.id)
-          .timeout(const Duration(seconds: 5), onTimeout: () => session);
-      final dynamic endRes = await endFuture;
-      if (endRes is InstantSessionModel) {
-        ended = endRes;
-      }
-      await signalFuture;
+      api.sendSignal(session.id, {'type': 'call_ended', 'reason': 'USER_ENDED'}).catchError((_) {});
+      api.endSession(session.id).catchError((_) => session);
     } catch (_) {}
 
-    await _cleanupMedia();
-    if (!mounted) return;
-    setState(() => session = ended);
-    await _showEndSummary(ended);
+    // 4. Cleanup native media in background without blocking UI
+    unawaited(_cleanupMedia());
+
+    // 5. Instantly dismiss call UI
     if (widget.isHostedInGlobalManager) {
       ActiveCallManager.instance.clearCall();
     } else if (mounted) {
@@ -901,17 +909,23 @@ class _SessionScreenState extends State<SessionScreen>
     _offerWatchdogTimer?.cancel();
     _offerWatchdogTimer = null;
 
+    try { localRenderer.srcObject = null; } catch (_) {}
+    try { remoteRenderer.srcObject = null; } catch (_) {}
+    for (final t in localStream?.getTracks() ?? <MediaStreamTrack>[]) {
+      try { t.stop(); } catch (_) {}
+    }
+
     try {
       final api = context.read<AppController>().api;
-      await Future.wait([
-        api.sendSignal(session.id, {
-          'type': 'call_ended',
-          'reason': 'CALL_CANCELLED',
-        }).timeout(const Duration(seconds: 3), onTimeout: () {}),
-        api.cancelSession(session.id).timeout(const Duration(seconds: 4), onTimeout: () => session),
-      ]);
+      api.sendSignal(session.id, {
+        'type': 'call_ended',
+        'reason': 'CALL_CANCELLED',
+      }).catchError((_) {});
+      api.cancelSession(session.id).catchError((_) => session);
     } catch (_) {}
-    await _cleanupMedia();
+
+    unawaited(_cleanupMedia());
+
     if (widget.isHostedInGlobalManager) {
       ActiveCallManager.instance.clearCall();
     } else if (mounted) {
@@ -936,24 +950,35 @@ class _SessionScreenState extends State<SessionScreen>
     _offerWatchdogTimer = null;
     _privacyAlerts.stop();
 
-    _stopAndUploadRecording();
-    await voiceFx.stop();
-    try { await voiceChannel?.close(); } catch (_) {}
-    voiceChannel = null;
-    for (final t in localStream?.getTracks() ?? <MediaStreamTrack>[]) {
-      try { t.stop(); } catch (_) {}
-    }
-    await localStream?.dispose();
-    localStream = null;
-    for (final t in remoteStream?.getTracks() ?? <MediaStreamTrack>[]) {
-      try { t.stop(); } catch (_) {}
-    }
-    await remoteStream?.dispose();
-    remoteStream = null;
-    await pc?.close();
-    pc = null;
+    // 1. Detach renderers FIRST before destroying native media objects
     try { localRenderer.srcObject = null; } catch (_) {}
     try { remoteRenderer.srcObject = null; } catch (_) {}
+
+    _stopAndUploadRecording();
+    try { await voiceFx.stop().timeout(const Duration(milliseconds: 250), onTimeout: () {}); } catch (_) {}
+    try { await voiceChannel?.close(); } catch (_) {}
+    voiceChannel = null;
+
+    final oldLocal = localStream;
+    final oldRemote = remoteStream;
+    final oldPc = pc;
+    localStream = null;
+    remoteStream = null;
+    pc = null;
+
+    try {
+      for (final t in oldLocal?.getTracks() ?? <MediaStreamTrack>[]) {
+        try { t.stop(); } catch (_) {}
+      }
+      for (final t in oldRemote?.getTracks() ?? <MediaStreamTrack>[]) {
+        try { t.stop(); } catch (_) {}
+      }
+      await Future.wait([
+        if (oldLocal != null) oldLocal.dispose().timeout(const Duration(milliseconds: 300), onTimeout: () {}),
+        if (oldRemote != null) oldRemote.dispose().timeout(const Duration(milliseconds: 300), onTimeout: () {}),
+        if (oldPc != null) oldPc.close().timeout(const Duration(milliseconds: 300), onTimeout: () {}),
+      ]).timeout(const Duration(milliseconds: 500), onTimeout: () => []);
+    } catch (_) {}
   }
 
   @override
@@ -3126,50 +3151,6 @@ class _SessionScreenState extends State<SessionScreen>
     }
   }
 
-  Future<void> _showEndSummary(InstantSessionModel ended, {bool peerEnded = false}) async {
-    if (!mounted) return;
-    final rating = ValueNotifier<int>(5);
-    final comment = TextEditingController();
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: Text(peerEnded ? 'Session ended' : 'Session complete'),
-        content: SingleChildScrollView(
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Duration: ${ended.billableMinutes} billable min'),
-            Text(widget.callerSide ? 'Charged: ₹${ended.grossAmount.toStringAsFixed(2)}' : 'Earned: ₹${ended.netListenerEarnings.toStringAsFixed(2)}'),
-            if (widget.callerSide) ...[
-              const SizedBox(height: 16),
-              const Text('How was the conversation?', style: TextStyle(fontWeight: FontWeight.bold)),
-              ValueListenableBuilder<int>(
-                valueListenable: rating,
-                builder: (_, v, __) => Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(5, (i) => IconButton(onPressed: () => rating.value = i + 1, icon: Icon(i < v ? Icons.star : Icons.star_border)))),
-              ),
-              TextField(controller: comment, decoration: const InputDecoration(labelText: 'Optional comment')),
-            ],
-          ]),
-        ),
-        actions: [
-          if (widget.callerSide)
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Skip')),
-          FilledButton(
-            onPressed: () async {
-              if (widget.callerSide) {
-                try {
-                  await context.read<AppController>().api.createReview(sessionId: ended.id, rating: rating.value, comment: comment.text.trim());
-                } catch (_) {}
-              }
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: Text(widget.callerSide ? 'Submit' : 'Done'),
-          ),
-        ],
-      ),
-    );
-    rating.dispose();
-    comment.dispose();
-  }
 }
 
 /// Animated multi-bar soundwave equalizer for live call
