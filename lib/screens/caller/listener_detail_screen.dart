@@ -6,7 +6,6 @@ import '../../core/app_controller.dart';
 import '../../models/app_models.dart';
 import '../../widgets/common_widgets.dart';
 import '../auth/login_screen.dart';
-import 'schedule_consultation_screen.dart';
 
 class ListenerDetailScreen extends StatefulWidget {
   final ListenerCardModel listener;
@@ -669,56 +668,6 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
                       isPrimary: false,
                       primaryColor: const Color(0xFF2563EB),
                       actionLabel: 'Start Chat',
-                    ),
-
-                    // Schedule future consultation
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: const Color(0xFFF1EAE0)),
-                        boxShadow: [
-                          BoxShadow(color: const Color(0xFF78350F).withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 3)),
-                        ],
-                      ),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        leading: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFFBEB),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: const Color(0xFFFDE68A)),
-                          ),
-                          child: const Icon(Icons.calendar_month_rounded, color: Color(0xFFB45309), size: 22),
-                        ),
-                        title: const Text(
-                          'Schedule a Consultation',
-                          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5, color: Color(0xFF1E293B)),
-                        ),
-                        subtitle: const Text(
-                          'Reserve a slot in advance for a focused session',
-                          style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
-                        ),
-                        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF94A3B8)),
-                        onTap: busy || blockedByMe
-                            ? null
-                            : () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => ScheduleConsultationScreen(
-                                      listener: widget.listener.copyWith(
-                                        userId: expertUserId.isEmpty ? widget.listener.userId : expertUserId,
-                                        presence: presence,
-                                      ),
-                                      audioRate: audioRate,
-                                      videoRate: videoRate,
-                                    ),
-                                  ),
-                                ),
-                      ),
                     ),
 
                     if (presence == 'OFFLINE') ...[
