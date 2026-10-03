@@ -240,7 +240,10 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
 
     if (localStream != null) {
       localRenderer.srcObject = localStream;
-      for (final track in localStream!.getTracks()) {
+      for (final track in localStream!.getAudioTracks()) {
+        await pc!.addTrack(track, localStream!);
+      }
+      for (final track in localStream!.getVideoTracks()) {
         await pc!.addTrack(track, localStream!);
       }
     }

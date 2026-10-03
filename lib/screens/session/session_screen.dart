@@ -370,7 +370,11 @@ class _SessionScreenState extends State<SessionScreen>
       if (localStream != null) {
         localRenderer.srcObject = null;
         localRenderer.srcObject = localStream;
-        for (final track in localStream!.getTracks()) {
+        // Strictly add audio first, then video, so m-line order is deterministically: mid 0 = audio, mid 1 = video
+        for (final track in localStream!.getAudioTracks()) {
+          await pc!.addTrack(track, localStream!);
+        }
+        for (final track in localStream!.getVideoTracks()) {
           await pc!.addTrack(track, localStream!);
         }
         if (mounted) setState(() {});
@@ -584,6 +588,10 @@ class _SessionScreenState extends State<SessionScreen>
     if (type == 'peer_ready' && widget.callerSide && !isChat) {
       final peer = pc;
       if (peer != null) {
+        final connState = await peer.getConnectionState();
+        if (connState == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
+          return;
+        }
         final state = await peer.getSignalingState();
         if (state == RTCSignalingState.RTCSignalingStateHaveLocalOffer) {
           final offer = await peer.getLocalDescription();
@@ -593,8 +601,16 @@ class _SessionScreenState extends State<SessionScreen>
               'sdp': {'type': offer.type, 'sdp': offer.sdp},
             });
           }
-        } else {
-          await _sendOffer();
+        } else if (state == RTCSignalingState.RTCSignalingStateStable) {
+          final localDesc = await peer.getLocalDescription();
+          if (localDesc != null) {
+            await context.read<AppController>().api.sendSignal(session.id, {
+              'type': 'offer',
+              'sdp': {'type': localDesc.type, 'sdp': localDesc.sdp},
+            });
+          } else {
+            await _sendOffer();
+          }
         }
       }
       return;
