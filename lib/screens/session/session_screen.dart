@@ -48,7 +48,7 @@ class _SessionScreenState extends State<SessionScreen>
   RTCPeerConnection? pc;
   RTCDataChannel? voiceChannel;
   MediaStream? localStream, remoteStream;
-  Timer? sessionPoll, signalPoll, heartbeat, clock, messagePoll, reconnectTimer;
+  Timer? sessionPoll, signalPoll, heartbeat, clock, messagePoll, reconnectTimer, _offerWatchdogTimer;
   int seconds = 0, signalSince = 0, reconnectSeconds = 30, ringRemaining = 45, elapsedRinging = 1;
   bool joining = false, mic = true, camera = true, speaker = true, ending = false;
   bool reconnecting = false, gameSheetOpen = false, registeredActiveSession = false, everLive = false;
@@ -62,6 +62,13 @@ class _SessionScreenState extends State<SessionScreen>
   String peerVideoFilter = VideoPrivacyFilter.none;
   bool _recordingStarted = false;
   late final ApiService _api;
+  bool _isDisposed = false;
+
+  @override
+  void setState(VoidCallback fn) {
+    if (!mounted || _isDisposed) return;
+    super.setState(fn);
+  }
 
   bool get isChat => session.type == 'CHAT';
   bool get isVideo => session.type == 'VIDEO_CALL';
@@ -173,12 +180,25 @@ class _SessionScreenState extends State<SessionScreen>
   }
 
   void _startPolling() {
-    sessionPoll = Timer.periodic(const Duration(milliseconds: 800), (_) => _refreshSession());
-    heartbeat = Timer.periodic(const Duration(seconds: 12), (_) {
-      if (isLive) context.read<AppController>().api.sessionHeartbeat(session.id).catchError((_) {});
+    sessionPoll = Timer.periodic(const Duration(milliseconds: 800), (timer) {
+      if (!mounted || _isDisposed) {
+        timer.cancel();
+        return;
+      }
+      _refreshSession();
     });
-    clock = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
+    heartbeat = Timer.periodic(const Duration(seconds: 12), (timer) {
+      if (!mounted || _isDisposed) {
+        timer.cancel();
+        return;
+      }
+      if (isLive) _api.sessionHeartbeat(session.id).catchError((_) {});
+    });
+    clock = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted || _isDisposed) {
+        timer.cancel();
+        return;
+      }
       if (isLive) {
         everLive = true;
         final startStr = session.connectedAt ?? session.startedAt;
@@ -197,6 +217,7 @@ class _SessionScreenState extends State<SessionScreen>
         } else {
           seconds++;
         }
+        if (!mounted || _isDisposed) return;
         setState(() {});
         if (widget.isHostedInGlobalManager) {
           ActiveCallManager.instance.updateState(
@@ -207,6 +228,7 @@ class _SessionScreenState extends State<SessionScreen>
           );
         }
       } else if (!session.ended) {
+        if (!mounted || _isDisposed) return;
         setState(() {
           elapsedRinging++;
           if (ringRemaining > 0) {
@@ -218,19 +240,27 @@ class _SessionScreenState extends State<SessionScreen>
         }
       }
     });
-    messagePoll = Timer.periodic(const Duration(milliseconds: 1100), (_) {
+    messagePoll = Timer.periodic(const Duration(milliseconds: 1100), (timer) {
+      if (!mounted || _isDisposed) {
+        timer.cancel();
+        return;
+      }
       if (isLive) _refreshMessages();
     });
-    if (isChat) {
-      signalPoll = Timer.periodic(const Duration(milliseconds: 650), (_) => _pollSignals());
-    }
+    signalPoll = Timer.periodic(const Duration(milliseconds: 650), (timer) {
+      if (!mounted || _isDisposed) {
+        timer.cancel();
+        return;
+      }
+      _pollSignals();
+    });
   }
 
   Future<void> _refreshSession() async {
-    if (session.ended || ending) return;
+    if (session.ended || ending || _isDisposed) return;
     try {
-      final next = await context.read<AppController>().api.session(session.id);
-      if (!mounted) return;
+      final next = await _api.session(session.id);
+      if (!mounted || _isDisposed) return;
       setState(() {
         session = next;
         if (isLive) {
@@ -390,6 +420,37 @@ class _SessionScreenState extends State<SessionScreen>
       'restart': restart,
       'sdp': {'type': offer.type, 'sdp': offer.sdp},
     });
+
+    if (widget.callerSide && !isChat) {
+      _offerWatchdogTimer?.cancel();
+      _offerWatchdogTimer = Timer.periodic(const Duration(milliseconds: 2000), (timer) async {
+        if (!mounted || _isDisposed || ending || session.ended) {
+          timer.cancel();
+          return;
+        }
+        final currentPc = pc;
+        if (currentPc == null) {
+          timer.cancel();
+          return;
+        }
+        final state = await currentPc.getSignalingState();
+        final connState = await currentPc.getConnectionState();
+        if (connState == RTCPeerConnectionState.RTCPeerConnectionStateConnected ||
+            state == RTCSignalingState.RTCSignalingStateStable) {
+          timer.cancel();
+          return;
+        }
+        if (state == RTCSignalingState.RTCSignalingStateHaveLocalOffer) {
+          final localDesc = await currentPc.getLocalDescription();
+          if (localDesc != null) {
+            await context.read<AppController>().api.sendSignal(session.id, {
+              'type': 'offer',
+              'sdp': {'type': localDesc.type, 'sdp': localDesc.sdp},
+            }).catchError((_) {});
+          }
+        }
+      });
+    }
   }
 
   void _beginReconnect() {
@@ -400,7 +461,7 @@ class _SessionScreenState extends State<SessionScreen>
     if (widget.callerSide) _sendOffer(restart: true).catchError((_) {});
     reconnectTimer?.cancel();
     reconnectTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted || !reconnecting) {
+      if (!mounted || _isDisposed || !reconnecting) {
         t.cancel();
         return;
       }
@@ -427,8 +488,9 @@ class _SessionScreenState extends State<SessionScreen>
   }
 
   Future<void> _pollSignals() async {
+    if (_isDisposed) return;
     try {
-      final list = await context.read<AppController>().api.signals(session.id, signalSince);
+      final list = await _api.signals(session.id, signalSince);
       for (final raw in list) {
         final s = Map<String, dynamic>.from(raw);
         final ts = (s['timestamp'] as num?)?.toInt() ?? signalSince;
@@ -576,9 +638,10 @@ class _SessionScreenState extends State<SessionScreen>
   }
 
   Future<void> _refreshMessages() async {
+    if (_isDisposed) return;
     try {
-      final v = await context.read<AppController>().api.messages(session.id);
-      if (mounted) setState(() => messages = v);
+      final v = await _api.messages(session.id);
+      if (mounted && !_isDisposed) setState(() => messages = v);
     } catch (_) {}
   }
 
@@ -623,6 +686,10 @@ class _SessionScreenState extends State<SessionScreen>
     if (ending || session.ended) return;
     ending = true;
     try {
+      await context.read<AppController>().api.sendSignal(session.id, {
+        'type': 'call_ended',
+        'reason': 'RING_TIMEOUT',
+      });
       await context.read<AppController>().api.cancelSession(session.id);
     } catch (_) {}
     await _cleanupMedia();
@@ -715,7 +782,13 @@ class _SessionScreenState extends State<SessionScreen>
 
   Future<void> _cancel() async {
     ending = true;
-    try { await context.read<AppController>().api.cancelSession(session.id); } catch (_) {}
+    try {
+      await context.read<AppController>().api.sendSignal(session.id, {
+        'type': 'call_ended',
+        'reason': 'CALL_CANCELLED',
+      });
+      await context.read<AppController>().api.cancelSession(session.id);
+    } catch (_) {}
     await _cleanupMedia();
     if (widget.isHostedInGlobalManager) {
       ActiveCallManager.instance.clearCall();
@@ -725,14 +798,23 @@ class _SessionScreenState extends State<SessionScreen>
   }
 
   Future<void> _cleanupMedia() async {
-    await _stopAndUploadRecording();
     sessionPoll?.cancel();
+    sessionPoll = null;
     signalPoll?.cancel();
+    signalPoll = null;
     heartbeat?.cancel();
+    heartbeat = null;
     messagePoll?.cancel();
+    messagePoll = null;
     clock?.cancel();
+    clock = null;
     reconnectTimer?.cancel();
+    reconnectTimer = null;
+    _offerWatchdogTimer?.cancel();
+    _offerWatchdogTimer = null;
     _privacyAlerts.stop();
+
+    await _stopAndUploadRecording();
     await voiceFx.stop();
     try { await voiceChannel?.close(); } catch (_) {}
     voiceChannel = null;
@@ -748,25 +830,41 @@ class _SessionScreenState extends State<SessionScreen>
     remoteStream = null;
     await pc?.close();
     pc = null;
-    localRenderer.srcObject = null;
-    remoteRenderer.srcObject = null;
+    try { localRenderer.srcObject = null; } catch (_) {}
+    try { remoteRenderer.srcObject = null; } catch (_) {}
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.detached && !session.ended && !ending) {
-      context.read<AppController>().api.endSession(session.id).catchError((_) => session);
+      _api.endSession(session.id).catchError((_) => session);
     }
   }
 
   @override
   void dispose() {
+    _isDisposed = true;
+    sessionPoll?.cancel();
+    sessionPoll = null;
+    signalPoll?.cancel();
+    signalPoll = null;
+    heartbeat?.cancel();
+    heartbeat = null;
+    messagePoll?.cancel();
+    messagePoll = null;
+    clock?.cancel();
+    clock = null;
+    reconnectTimer?.cancel();
+    reconnectTimer = null;
+    _privacyAlerts.stop();
     WidgetsBinding.instance.removeObserver(this);
     _pulseController.dispose();
     _cleanupMedia();
     if (registeredActiveSession) {
       try { context.read<AppController>().exitActiveSession(); } catch (_) {}
     }
+    try { localRenderer.srcObject = null; } catch (_) {}
+    try { remoteRenderer.srcObject = null; } catch (_) {}
     localRenderer.dispose();
     remoteRenderer.dispose();
     messageController.dispose();

@@ -270,7 +270,7 @@ class InstantSessionModel {
 
   bool get isChat => type == 'CHAT';
   bool get isVideo => type == 'VIDEO_CALL';
-  bool get ended => const {'COMPLETED', 'CANCELLED', 'REJECTED', 'EXPIRED'}.contains(status);
+  bool get ended => const {'COMPLETED', 'CANCELLED', 'REJECTED', 'EXPIRED', 'TERMINATED'}.contains(status) || (endedAt != null && endedAt!.isNotEmpty);
   bool get isLive => const {'ACCEPTED', 'CONNECTING', 'CONNECTED', 'ACTIVE'}.contains(status);
   bool get isCompleted => status == 'COMPLETED';
   bool get isMissed => const {'CANCELLED', 'EXPIRED', 'REJECTED'}.contains(status);

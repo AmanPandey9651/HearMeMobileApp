@@ -55,6 +55,13 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
   String peerVideoFilter = VideoPrivacyFilter.none;
   bool _recordingStarted = false;
   late final ApiService _api;
+  bool _isDisposed = false;
+
+  @override
+  void setState(VoidCallback fn) {
+    if (!mounted || _isDisposed) return;
+    super.setState(fn);
+  }
 
   bool get isVideo => widget.booking.consultationType == 'VIDEO';
   String get peerName => widget.callerSide ? widget.booking.expertName : (widget.booking.customerName.isEmpty ? 'Caller' : widget.booking.customerName);
@@ -142,9 +149,21 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
       token = await api.callToken(widget.booking.id);
       status = await api.callStatus(widget.booking.id);
       await _joinMedia();
-      signalPoll = Timer.periodic(const Duration(milliseconds: 650), (_) => _pollSignals());
-      statusPoll = Timer.periodic(const Duration(seconds: 1), (_) => _pollStatus());
-      if (mounted) setState(() => loading = false);
+      signalPoll = Timer.periodic(const Duration(milliseconds: 650), (timer) {
+        if (!mounted || _isDisposed) {
+          timer.cancel();
+          return;
+        }
+        _pollSignals();
+      });
+      statusPoll = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted || _isDisposed) {
+          timer.cancel();
+          return;
+        }
+        _pollStatus();
+      });
+      if (mounted && !_isDisposed) setState(() => loading = false);
       _privacyAlerts.start(_onPrivacyAlert);
     } catch (e) {
       if (mounted) {
@@ -268,9 +287,9 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
   }
 
   Future<void> _pollSignals() async {
-    if (ending) return;
+    if (ending || _isDisposed) return;
     try {
-      final signals = await context.read<AppController>().api.signals(widget.booking.id, signalSince);
+      final signals = await _api.signals(widget.booking.id, signalSince);
       for (final raw in signals) {
         final s = Map<String, dynamic>.from(raw as Map);
         final ts = (s['timestamp'] as num?)?.toInt() ?? signalSince;
@@ -309,15 +328,19 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
       return;
     }
     if (type == 'VOICE_FX_CAPABILITY') {
-      if (mounted) setState(() => peerVoiceFxCapable = s['supported'] == true);
+      if (mounted) {
+        setState(() => peerVoiceFxCapable = s['supported'] == true);
+      }
       return;
     }
     if (type == 'VOICE_FILTER_CHANGED') {
       final filter = '${s['filter'] ?? AndroidVoiceFx.normal}';
-      if (mounted) setState(() {
-        peerVoiceFilter = filter;
-        banner = filter == AndroidVoiceFx.normal ? 'Peer returned to natural voice.' : 'Peer enabled a voice privacy effect.';
-      });
+      if (mounted) {
+        setState(() {
+          peerVoiceFilter = filter;
+          banner = filter == AndroidVoiceFx.normal ? 'Peer returned to natural voice.' : 'Peer enabled a voice privacy effect.';
+        });
+      }
       return;
     }
 
@@ -359,10 +382,10 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
   }
 
   Future<void> _pollStatus() async {
-    if (ending) return;
+    if (ending || _isDisposed) return;
     try {
-      final next = await context.read<AppController>().api.callStatus(widget.booking.id);
-      if (!mounted) return;
+      final next = await _api.callStatus(widget.booking.id);
+      if (!mounted || _isDisposed) return;
       setState(() => status = next);
       if (const {'COMPLETED', 'CANCELLED', 'TERMINATED'}.contains(next.status) || next.endedAt != null) {
         await _peerEnded();
@@ -371,14 +394,14 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
   }
 
   void _beginReconnect() {
-    if (reconnecting || ending) return;
+    if (reconnecting || ending || _isDisposed) return;
     reconnecting = true;
     reconnectSeconds = 30;
-    if (mounted) setState(() => banner = 'Connection interrupted. Reconnecting… 30s');
+    if (mounted && !_isDisposed) setState(() => banner = 'Connection interrupted. Reconnecting… 30s');
     if (widget.callerSide) _sendOffer(restart: true).catchError((_) {});
     reconnectTimer?.cancel();
     reconnectTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted || !reconnecting) {
+      if (!mounted || _isDisposed || !reconnecting) {
         timer.cancel();
         return;
       }
@@ -386,11 +409,11 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
       if (reconnectSeconds <= 0) {
         timer.cancel();
         reconnecting = false;
-        setState(() => banner = 'Could not restore the call. You can end it safely.');
+        if (mounted && !_isDisposed) setState(() => banner = 'Could not restore the call. You can end it safely.');
         return;
       }
       if (widget.callerSide && reconnectSeconds % 5 == 0) _sendOffer(restart: true).catchError((_) {});
-      setState(() => banner = 'Connection interrupted. Reconnecting… ${reconnectSeconds}s');
+      if (mounted && !_isDisposed) setState(() => banner = 'Connection interrupted. Reconnecting… ${reconnectSeconds}s');
     });
   }
 
@@ -430,11 +453,15 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
   }
 
   Future<void> _cleanup() async {
-    await _stopAndUploadRecording();
     signalPoll?.cancel();
+    signalPoll = null;
     statusPoll?.cancel();
+    statusPoll = null;
     reconnectTimer?.cancel();
+    reconnectTimer = null;
     _privacyAlerts.stop();
+
+    await _stopAndUploadRecording();
     await voiceFx.stop();
     try {
       await voiceChannel?.close();
@@ -452,19 +479,27 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
     remoteStream = null;
     await pc?.close();
     pc = null;
-    localRenderer.srcObject = null;
-    remoteRenderer.srcObject = null;
+    try { localRenderer.srcObject = null; } catch (_) {}
+    try { remoteRenderer.srcObject = null; } catch (_) {}
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.detached && !ending) {
-      context.read<AppController>().api.endBookingCall(widget.booking.id).catchError((_) {});
+      _api.endBookingCall(widget.booking.id).catchError((_) {});
     }
   }
 
   @override
   void dispose() {
+    _isDisposed = true;
+    signalPoll?.cancel();
+    signalPoll = null;
+    statusPoll?.cancel();
+    statusPoll = null;
+    reconnectTimer?.cancel();
+    reconnectTimer = null;
+    _privacyAlerts.stop();
     WidgetsBinding.instance.removeObserver(this);
     _cleanup();
     if (registeredActiveSession) {
@@ -472,6 +507,8 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
         context.read<AppController>().exitActiveSession();
       } catch (_) {}
     }
+    try { localRenderer.srcObject = null; } catch (_) {}
+    try { remoteRenderer.srcObject = null; } catch (_) {}
     localRenderer.dispose();
     remoteRenderer.dispose();
     gameSignal.dispose();

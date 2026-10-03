@@ -27,6 +27,7 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
   List<dynamic> reviews = [];
   Map<String, dynamic> expert = <String, dynamic>{};
   Timer? refreshTimer;
+  bool _initialSessionTriggered = false;
 
   String get expertUserId => '${expert['userId'] ?? widget.listener.userId ?? ''}';
   String get presence => '${expert['presence'] ?? widget.listener.presence}';
@@ -74,7 +75,8 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
         blockedByListener = blockedByThem;
         loading = false;
       });
-      if (widget.initialSessionType != null) {
+      if (widget.initialSessionType != null && !_initialSessionTriggered) {
+        _initialSessionTriggered = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _start(widget.initialSessionType!);
         });
@@ -177,7 +179,7 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
       final session = await app.api.requestSession(widget.listener.id, type, categorySlug: _categorySlug());
       if (!mounted) return;
       ActiveCallManager.instance.startCall(session, callerSide: true);
-      await _load();
+      _refreshPresence();
     } catch (e) {
       if (mounted) showError(context, e);
     }
