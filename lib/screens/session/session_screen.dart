@@ -313,7 +313,10 @@ class _SessionScreenState extends State<SessionScreen>
       }
 
       final ice = await api.iceServers();
-      pc = await createPeerConnection({'iceServers': ice});
+      pc = await createPeerConnection({
+        'iceServers': ice,
+        'sdpSemantics': 'unified-plan',
+      });
       pc!.onTrack = (event) async {
         debugPrint('[WebRTC] Mobile onTrack: kind=${event.track.kind}, id=${event.track.id}, streams=${event.streams.length}');
         if (event.streams.isNotEmpty) {
@@ -324,13 +327,16 @@ class _SessionScreenState extends State<SessionScreen>
             remoteStream!.addTrack(event.track);
           }
         }
-        // Always bind to remoteRenderer and trigger setState so video view updates
+        // Force rebind to remoteRenderer by clearing first so Flutter WebRTC's setter doesn't skip
+        if (event.track.kind == 'video' || remoteStream!.getVideoTracks().isNotEmpty) {
+          remoteRenderer.srcObject = null;
+        }
         remoteRenderer.srcObject = remoteStream;
         _startRecordingIfEligible();
         if (mounted) setState(() {});
       };
       pc!.onIceCandidate = (candidate) {
-        if (candidate.candidate != null) {
+        if (candidate.candidate != null && candidate.candidate!.trim().isNotEmpty) {
           api.sendSignal(session.id, {
             'type': 'candidate',
             'candidate': {
@@ -362,21 +368,12 @@ class _SessionScreenState extends State<SessionScreen>
       });
 
       if (localStream != null) {
+        localRenderer.srcObject = null;
         localRenderer.srcObject = localStream;
         for (final track in localStream!.getTracks()) {
           await pc!.addTrack(track, localStream!);
         }
         if (mounted) setState(() {});
-      }
-
-      // In WebRTC Unified Plan, explicitly register video transceiver to guarantee 2-way video negotiation
-      if (isVideo) {
-        try {
-          await pc!.addTransceiver(
-            kind: RTCRtpMediaType.RTCRtpMediaTypeVideo,
-            init: RTCRtpTransceiverInit(direction: TransceiverDirection.SendRecv),
-          );
-        } catch (_) {}
       }
 
       if (widget.callerSide) {
@@ -637,12 +634,14 @@ class _SessionScreenState extends State<SessionScreen>
       await _flushCandidates();
     } else if (type == 'candidate' && s['candidate'] is Map) {
       final c = Map<String, dynamic>.from(s['candidate'] as Map);
+      final rawCand = c['candidate']?.toString() ?? '';
+      if (rawCand.trim().isEmpty) return;
       final desc = await peer.getRemoteDescription();
       final lineIdx = c['sdpMLineIndex'] is num
           ? (c['sdpMLineIndex'] as num).toInt()
           : int.tryParse('${c['sdpMLineIndex'] ?? ''}');
       final cand = RTCIceCandidate(
-        c['candidate']?.toString(),
+        rawCand,
         c['sdpMid']?.toString(),
         lineIdx,
       );
@@ -658,11 +657,13 @@ class _SessionScreenState extends State<SessionScreen>
     final peer = pc;
     if (peer == null) return;
     for (final c in List<Map<String, dynamic>>.from(queuedCandidates)) {
+      final rawCand = c['candidate']?.toString() ?? '';
+      if (rawCand.trim().isEmpty) continue;
       final lineIdx = c['sdpMLineIndex'] is num
           ? (c['sdpMLineIndex'] as num).toInt()
           : int.tryParse('${c['sdpMLineIndex'] ?? ''}');
       await peer.addCandidate(RTCIceCandidate(
-        c['candidate']?.toString(),
+        rawCand,
         c['sdpMid']?.toString(),
         lineIdx,
       ));
@@ -1856,7 +1857,9 @@ class _SessionScreenState extends State<SessionScreen>
           children: [
             // 1. Fullscreen Remote Video or Connecting Fallback
             Positioned.fill(
-              child: remoteRenderer.srcObject != null
+              child: (remoteRenderer.srcObject != null &&
+                      remoteStream != null &&
+                      remoteStream!.getVideoTracks().isNotEmpty)
                   ? FilteredVideoView(
                       filter: peerVideoFilter,
                       child: RTCVideoView(
