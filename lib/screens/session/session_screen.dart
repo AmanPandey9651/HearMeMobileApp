@@ -123,12 +123,14 @@ class _SessionScreenState extends State<SessionScreen>
     try {
       final recordedFile = await CallRecordingService.stopAndCollectRecording();
       if (recordedFile != null && await recordedFile.exists() && await recordedFile.length() > 1000) {
-        debugPrint('[Recording] Uploading call recording (${await recordedFile.length()} bytes) for session ${session.id}...');
-        await _api.uploadRecording(session.id, recordedFile);
-        debugPrint('[Recording] Call recording successfully uploaded to backend for session ${session.id}!');
+        debugPrint('[Recording] Uploading call recording (${await recordedFile.length()} bytes) for session ${session.id} in background...');
+        _api.uploadRecording(session.id, recordedFile).catchError((e) {
+          debugPrint('[Recording] Background recording upload error: $e');
+          return <String, dynamic>{};
+        });
       }
     } catch (e) {
-      debugPrint('[Recording] Failed to upload recording: $e');
+      debugPrint('[Recording] Failed to stop recording: $e');
     }
   }
 
@@ -313,6 +315,7 @@ class _SessionScreenState extends State<SessionScreen>
       final ice = await api.iceServers();
       pc = await createPeerConnection({'iceServers': ice});
       pc!.onTrack = (event) async {
+        debugPrint('[WebRTC] Mobile onTrack: kind=${event.track.kind}, id=${event.track.id}, streams=${event.streams.length}');
         if (event.streams.isNotEmpty) {
           remoteStream = event.streams.first;
         } else {
@@ -321,9 +324,8 @@ class _SessionScreenState extends State<SessionScreen>
             remoteStream!.addTrack(event.track);
           }
         }
-        if (remoteRenderer.srcObject != remoteStream) {
-          remoteRenderer.srcObject = remoteStream;
-        }
+        // Always bind to remoteRenderer and trigger setState so video view updates
+        remoteRenderer.srcObject = remoteStream;
         _startRecordingIfEligible();
         if (mounted) setState(() {});
       };
@@ -364,6 +366,17 @@ class _SessionScreenState extends State<SessionScreen>
         for (final track in localStream!.getTracks()) {
           await pc!.addTrack(track, localStream!);
         }
+        if (mounted) setState(() {});
+      }
+
+      // In WebRTC Unified Plan, explicitly register video transceiver to guarantee 2-way video negotiation
+      if (isVideo) {
+        try {
+          await pc!.addTransceiver(
+            kind: RTCRtpMediaType.RTCRtpMediaTypeVideo,
+            init: RTCRtpTransceiverInit(direction: TransceiverDirection.SendRecv),
+          );
+        } catch (_) {}
       }
 
       if (widget.callerSide) {
@@ -453,26 +466,46 @@ class _SessionScreenState extends State<SessionScreen>
     }
   }
 
-  void _beginReconnect() {
+  void _beginReconnect() async {
     if (reconnecting || ending || session.ended) return;
+    try {
+      final s = await _api.session(session.id);
+      if (s.ended) {
+        _finishFromPeer();
+        return;
+      }
+    } catch (_) {}
+
     reconnecting = true;
-    reconnectSeconds = 30;
-    if (mounted) setState(() => banner = 'Connection interrupted. Reconnecting… 30s');
+    reconnectSeconds = 10;
+    if (mounted) setState(() => banner = 'Connection interrupted. Reconnecting… 10s');
     if (widget.callerSide) _sendOffer(restart: true).catchError((_) {});
     reconnectTimer?.cancel();
-    reconnectTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+    reconnectTimer = Timer.periodic(const Duration(seconds: 1), (t) async {
       if (!mounted || _isDisposed || !reconnecting) {
         t.cancel();
         return;
       }
       reconnectSeconds--;
+      if (reconnectSeconds % 2 == 0) {
+        try {
+          final s = await _api.session(session.id);
+          if (s.ended) {
+            t.cancel();
+            _finishFromPeer();
+            return;
+          }
+        } catch (_) {}
+      }
       if (reconnectSeconds <= 0) {
         t.cancel();
         reconnecting = false;
-        setState(() => banner = 'Could not restore the connection. You can end the session safely.');
+        if (!ending && !session.ended) {
+          _end();
+        }
         return;
       }
-      if (widget.callerSide && reconnectSeconds % 5 == 0) {
+      if (widget.callerSide && reconnectSeconds % 3 == 0) {
         _sendOffer(restart: true).catchError((_) {});
       }
       setState(() => banner = 'Connection interrupted. Reconnecting… ${reconnectSeconds}s');
@@ -743,10 +776,34 @@ class _SessionScreenState extends State<SessionScreen>
   }
 
   Future<void> _finishFromPeer() async {
+    if (ending) return;
     ending = true;
+
+    // Immediately stop timer and pollers so duration freezes with 0ms drift
+    clock?.cancel();
+    clock = null;
+    sessionPoll?.cancel();
+    sessionPoll = null;
+    signalPoll?.cancel();
+    signalPoll = null;
+    heartbeat?.cancel();
+    heartbeat = null;
+    reconnectTimer?.cancel();
+    reconnectTimer = null;
+    _offerWatchdogTimer?.cancel();
+    _offerWatchdogTimer = null;
+    _privacyAlerts.stop();
+
+    // Immediately shut down camera and mic
+    for (final t in localStream?.getTracks() ?? <MediaStreamTrack>[]) {
+      try { t.stop(); } catch (_) {}
+    }
+
     await _cleanupMedia();
     InstantSessionModel ended = session;
-    try { ended = await context.read<AppController>().api.session(session.id); } catch (_) {}
+    try {
+      ended = await context.read<AppController>().api.session(session.id).timeout(const Duration(seconds: 4), onTimeout: () => session);
+    } catch (_) {}
     if (!mounted) return;
     setState(() => session = ended);
     if (everLive || ended.status == 'COMPLETED') {
@@ -764,11 +821,45 @@ class _SessionScreenState extends State<SessionScreen>
   Future<void> _end() async {
     if (ending) return;
     ending = true;
+
+    // 1. Immediately freeze duration timer and cancel all polling
+    clock?.cancel();
+    clock = null;
+    sessionPoll?.cancel();
+    sessionPoll = null;
+    signalPoll?.cancel();
+    signalPoll = null;
+    heartbeat?.cancel();
+    heartbeat = null;
+    reconnectTimer?.cancel();
+    reconnectTimer = null;
+    _offerWatchdogTimer?.cancel();
+    _offerWatchdogTimer = null;
+    _privacyAlerts.stop();
+
+    // 2. Immediately stop microphone & camera hardware tracks
+    for (final t in localStream?.getTracks() ?? <MediaStreamTrack>[]) {
+      try { t.stop(); } catch (_) {}
+    }
+
+    if (mounted) setState(() {});
+
     InstantSessionModel ended = session;
     try {
-      await context.read<AppController>().api.sendSignal(session.id, {'type': 'call_ended', 'reason': 'USER_ENDED'});
-      ended = await context.read<AppController>().api.endSession(session.id);
+      final api = context.read<AppController>().api;
+      final signalFuture = api
+          .sendSignal(session.id, {'type': 'call_ended', 'reason': 'USER_ENDED'})
+          .timeout(const Duration(seconds: 4), onTimeout: () {});
+      final endFuture = api
+          .endSession(session.id)
+          .timeout(const Duration(seconds: 5), onTimeout: () => session);
+      final dynamic endRes = await endFuture;
+      if (endRes is InstantSessionModel) {
+        ended = endRes;
+      }
+      await signalFuture;
     } catch (_) {}
+
     await _cleanupMedia();
     if (!mounted) return;
     setState(() => session = ended);
@@ -782,12 +873,26 @@ class _SessionScreenState extends State<SessionScreen>
 
   Future<void> _cancel() async {
     ending = true;
+    clock?.cancel();
+    clock = null;
+    sessionPoll?.cancel();
+    sessionPoll = null;
+    heartbeat?.cancel();
+    heartbeat = null;
+    reconnectTimer?.cancel();
+    reconnectTimer = null;
+    _offerWatchdogTimer?.cancel();
+    _offerWatchdogTimer = null;
+
     try {
-      await context.read<AppController>().api.sendSignal(session.id, {
-        'type': 'call_ended',
-        'reason': 'CALL_CANCELLED',
-      });
-      await context.read<AppController>().api.cancelSession(session.id);
+      final api = context.read<AppController>().api;
+      await Future.wait([
+        api.sendSignal(session.id, {
+          'type': 'call_ended',
+          'reason': 'CALL_CANCELLED',
+        }).timeout(const Duration(seconds: 3), onTimeout: () {}),
+        api.cancelSession(session.id).timeout(const Duration(seconds: 4), onTimeout: () => session),
+      ]);
     } catch (_) {}
     await _cleanupMedia();
     if (widget.isHostedInGlobalManager) {
@@ -814,17 +919,17 @@ class _SessionScreenState extends State<SessionScreen>
     _offerWatchdogTimer = null;
     _privacyAlerts.stop();
 
-    await _stopAndUploadRecording();
+    _stopAndUploadRecording();
     await voiceFx.stop();
     try { await voiceChannel?.close(); } catch (_) {}
     voiceChannel = null;
     for (final t in localStream?.getTracks() ?? <MediaStreamTrack>[]) {
-      t.stop();
+      try { t.stop(); } catch (_) {}
     }
     await localStream?.dispose();
     localStream = null;
     for (final t in remoteStream?.getTracks() ?? <MediaStreamTrack>[]) {
-      t.stop();
+      try { t.stop(); } catch (_) {}
     }
     await remoteStream?.dispose();
     remoteStream = null;
