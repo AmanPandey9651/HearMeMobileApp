@@ -1991,48 +1991,53 @@ class _SessionScreenState extends State<SessionScreen>
                     borderRadius: BorderRadius.circular(16),
                     child: Stack(
                       fit: StackFit.expand,
-                      children: [
-                        camera
-                            ? FilteredVideoView(
-                                filter: activeVideoFilter,
-                                showBadge: false,
-                                child: RTCVideoView(
-                                  localRenderer,
-                                  mirror: true,
-                                  objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-                                ),
-                              )
-                            : Container(
-                                color: const Color(0xFF1E2433),
-                                child: Center(
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withValues(alpha: 0.08),
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: const Icon(
-                                          Icons.videocam_off_rounded,
-                                          size: 22,
-                                          color: Color(0xFFEF4444),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      const Text(
-                                        'Camera Off',
-                                        style: TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
+                       children: [
+                         // Local camera view — ValueKey forces widget recreation when filter changes
+                         // This ensures the ColorFilter is fully removed from the render tree on reset
+                         if (camera)
+                           FilteredVideoView(
+                             key: ValueKey(activeVideoFilter),
+                             filter: activeVideoFilter,
+                             showBadge: false,
+                             child: RTCVideoView(
+                               localRenderer,
+                               key: ValueKey('local_$activeVideoFilter'),
+                               mirror: true,
+                               objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                             ),
+                           )
+                         else
+                           Container(
+                             color: const Color(0xFF1E2433),
+                             child: Center(
+                               child: Column(
+                                 mainAxisSize: MainAxisSize.min,
+                                 children: [
+                                   Container(
+                                     padding: const EdgeInsets.all(8),
+                                     decoration: BoxDecoration(
+                                       color: Colors.white.withValues(alpha: 0.08),
+                                       shape: BoxShape.circle,
+                                     ),
+                                     child: const Icon(
+                                       Icons.videocam_off_rounded,
+                                       size: 22,
+                                       color: Color(0xFFEF4444),
+                                     ),
+                                   ),
+                                   const SizedBox(height: 6),
+                                   const Text(
+                                     'Camera Off',
+                                     style: TextStyle(
+                                       color: Colors.white70,
+                                       fontSize: 11,
+                                       fontWeight: FontWeight.w600,
+                                     ),
+                                   ),
+                                 ],
+                               ),
+                             ),
+                           ),
 
                         // Filter-active badge at top-left of PiP — warns user their filter is on
                         if (camera && activeVideoFilter != VideoPrivacyFilter.none)
@@ -3038,6 +3043,14 @@ class _SessionScreenState extends State<SessionScreen>
     if (selected == null || selected == activeVideoFilter) return;
     activeVideoFilter = selected;
     await context.read<AppController>().api.sendSignal(session.id, {'type': 'VIDEO_FILTER_CHANGED', 'filter': selected});
+    if (!mounted) return;
+    // Force renderer srcObject rebind so the new (or removed) ColorFilter takes effect immediately
+    // Without this, Flutter reuses the cached platform texture and the old filter stays visible.
+    if (isVideo && localStream != null) {
+      localRenderer.srcObject = null;
+      await Future.delayed(const Duration(milliseconds: 60));
+      if (mounted) localRenderer.srcObject = localStream;
+    }
     if (mounted) setState(() {});
   }
 
