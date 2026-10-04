@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -378,10 +378,13 @@ class _SessionScreenState extends State<SessionScreen>
             : false,
       });
 
+
       if (localStream != null) {
+        // Clear renderer first to force Flutter WebRTC texture refresh (fixes local video not showing)
         localRenderer.srcObject = null;
+        await Future.delayed(const Duration(milliseconds: 80));
         localRenderer.srcObject = localStream;
-        // Strictly add audio first, then video, so m-line order is deterministically: mid 0 = audio, mid 1 = video
+        // Strictly add audio first, then video so m-line order is: mid 0 = audio, mid 1 = video
         for (final track in localStream!.getAudioTracks()) {
           await pc!.addTrack(track, localStream!);
         }
@@ -389,6 +392,10 @@ class _SessionScreenState extends State<SessionScreen>
           await pc!.addTrack(track, localStream!);
         }
         if (mounted) setState(() {});
+        // Secondary setState to ensure platform video texture is fully mounted and rendered
+        Future.delayed(const Duration(milliseconds: 400), () {
+          if (mounted && !_isDisposed) setState(() {});
+        });
       }
 
       if (widget.callerSide) {
