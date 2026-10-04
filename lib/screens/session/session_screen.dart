@@ -2034,6 +2034,34 @@ class _SessionScreenState extends State<SessionScreen>
                                 ),
                               ),
 
+                        // Filter-active badge at top-left of PiP — warns user their filter is on
+                        if (camera && activeVideoFilter != VideoPrivacyFilter.none)
+                          Positioned(
+                            top: 4,
+                            left: 4,
+                            child: GestureDetector(
+                              onTap: () async {
+                                // Quick-reset: tap badge to remove filter
+                                activeVideoFilter = VideoPrivacyFilter.none;
+                                await context.read<AppController>().api.sendSignal(session.id, {
+                                  'type': 'VIDEO_FILTER_CHANGED',
+                                  'filter': VideoPrivacyFilter.none,
+                                });
+                                if (mounted) setState(() {});
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEF4444).withValues(alpha: 0.88),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  '🎨 Filter ON',
+                                  style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                          ),
                         // Tap-to-flip camera icon badge at bottom-right corner of PiP
                         if (camera)
                           Positioned(
@@ -2981,13 +3009,30 @@ class _SessionScreenState extends State<SessionScreen>
       context: context,
       builder: (ctx) => SimpleDialog(
         title: const Text('Video privacy filters'),
-        children: VideoPrivacyFilter.options.map((o) => RadioListTile<String>(
-          value: o['id']!,
-          groupValue: activeVideoFilter,
-          title: Text('${o['emoji']} ${o['label']}'),
-          subtitle: Text(o['description']!),
-          onChanged: (v) => Navigator.pop(ctx, v),
-        )).toList(),
+        children: [
+          // Prominent "Show Real Camera" shortcut when filter is active
+          if (activeVideoFilter != VideoPrivacyFilter.none)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: const Icon(Icons.videocam_rounded, size: 18),
+                label: const Text('📷 Show Real Camera (Remove Filter)'),
+                onPressed: () => Navigator.pop(ctx, VideoPrivacyFilter.none),
+              ),
+            ),
+          ...VideoPrivacyFilter.options.map((o) => RadioListTile<String>(
+            value: o['id']!,
+            groupValue: activeVideoFilter,
+            title: Text('${o['emoji']} ${o['label']}'),
+            subtitle: Text(o['description']!),
+            onChanged: (v) => Navigator.pop(ctx, v),
+          )),
+        ],
       ),
     );
     if (selected == null || selected == activeVideoFilter) return;
