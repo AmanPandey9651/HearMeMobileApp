@@ -185,38 +185,65 @@ late final Future<void> _renderersReady;
   }
 
   @override
-  void initState() {
-    super.initState();
-    _api = context.read<AppController>().api;
-    WidgetsBinding.instance.addObserver(this);
-    everLive = isLive;
-    ringRemaining = _initRingRemaining();
-    localRenderer.initialize();
-    remoteRenderer.initialize();
-    voiceFx.onFrame = (frame) {
-      final dc = voiceChannel;
-      if (dc == null || !mic) return;
-      dc.send(RTCDataChannelMessage.fromBinary(frame)).catchError((_) {});
-    };
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      context.read<AppController>().enterActiveSession();
-      registeredActiveSession = true;
-      if (widget.isHostedInGlobalManager) {
-        ActiveCallManager.instance.bindCallControls(
-          toggleMute: _toggleMic,
-          endCall: () {
-            if (!ending && !session.ended) _end();
-          },
-          maximizeCall: () {
-            if (mounted) setState(() {});
-          },
-        );
-      }
-    });
-    _startPolling();
-    _privacyAlerts.start(_onPrivacyAlert);
-  }
+void initState() {
+  super.initState();
+
+  _api = context.read<AppController>().api;
+
+  WidgetsBinding.instance.addObserver(this);
+
+  everLive = isLive;
+  ringRemaining = _initRingRemaining();
+
+  /*
+   * Initialize RTC renderers ONCE.
+   *
+   * Previously initialize() was called here without await and then again
+   * inside _joinMedia(). That can cause unnecessary Android texture/surface
+   * recreation.
+   */
+  _renderersReady = Future.wait([
+    localRenderer.initialize(),
+    remoteRenderer.initialize(),
+  ]).then((_) {});
+
+  voiceFx.onFrame = (frame) {
+    final dc = voiceChannel;
+
+    if (dc == null || !mic) return;
+
+    dc.send(
+      RTCDataChannelMessage.fromBinary(frame),
+    ).catchError((_) {});
+  };
+
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!mounted) return;
+
+    context.read<AppController>().enterActiveSession();
+
+    registeredActiveSession = true;
+
+    if (widget.isHostedInGlobalManager) {
+      ActiveCallManager.instance.bindCallControls(
+        toggleMute: _toggleMic,
+        endCall: () {
+          if (!ending && !session.ended) {
+            _end();
+          }
+        },
+        maximizeCall: () {
+          if (mounted) {
+            setState(() {});
+          }
+        },
+      );
+    }
+  });
+
+  _startPolling();
+  _privacyAlerts.start(_onPrivacyAlert);
+}
 
   /// Called by PrivacyAlertService whenever native Android detects a
   /// screenshot or screen-recording attempt during an active session.
