@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -316,6 +316,10 @@ class _SessionScreenState extends State<SessionScreen>
         throw Exception('Microphone${isVideo ? ' and camera' : ''} permission is required.');
       }
 
+      // Ensure native video renderers are fully initialized before stream binding
+      try { await localRenderer.initialize(); } catch (_) {}
+      try { await remoteRenderer.initialize(); } catch (_) {}
+
       final ice = await api.iceServers();
       pc = await createPeerConnection({
         'iceServers': ice,
@@ -331,7 +335,6 @@ class _SessionScreenState extends State<SessionScreen>
             remoteStream!.addTrack(event.track);
           }
         }
-        // Force rebind to remoteRenderer by clearing first so Flutter WebRTC's setter doesn't skip
         if (event.track.kind == 'video' || remoteStream!.getVideoTracks().isNotEmpty) {
           remoteRenderer.srcObject = null;
         }
@@ -357,32 +360,33 @@ class _SessionScreenState extends State<SessionScreen>
         if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
           _finishReconnect();
           _startRecordingIfEligible();
-        } else if (state == RTCPeerConnectionState.RTCPeerConnectionStateFailed || state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
+        } else if (state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
           _beginReconnect();
         }
       };
 
-      // Always establish a standards-based WebRTC audio track first. This keeps
-      // Android <-> web/iOS calls interoperable. The native PCM bridge is only
-      // activated when BOTH peers advertise mobile voice-FX capability and the
-      // local user selects a non-natural effect.
-      localStream = await navigator.mediaDevices.getUserMedia({
-        'audio': true,
-        'video': isVideo
-            ? {
-                'facingMode': 'user',
-                'width': {'ideal': 640},
-                'height': {'ideal': 480},
-                'frameRate': {'ideal': 30},
-              }
-            : false,
-      });
-
+      // Always establish audio track, with camera stream if video call
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({
+          'audio': true,
+          'video': isVideo
+              ? {
+                  'facingMode': 'user',
+                  'width': {'ideal': 640},
+                  'height': {'ideal': 480},
+                  'frameRate': {'ideal': 30},
+                }
+              : false,
+        });
+      } catch (camErr) {
+        debugPrint('[WebRTC] getUserMedia with constraints failed ($camErr), trying unconstrained:');
+        localStream = await navigator.mediaDevices.getUserMedia({
+          'audio': true,
+          'video': isVideo ? true : false,
+        });
+      }
 
       if (localStream != null) {
-        // Clear renderer first to force Flutter WebRTC texture refresh (fixes local video not showing)
-        localRenderer.srcObject = null;
-        await Future.delayed(const Duration(milliseconds: 80));
         localRenderer.srcObject = localStream;
         // Strictly add audio first, then video so m-line order is: mid 0 = audio, mid 1 = video
         for (final track in localStream!.getAudioTracks()) {
@@ -392,8 +396,7 @@ class _SessionScreenState extends State<SessionScreen>
           await pc!.addTrack(track, localStream!);
         }
         if (mounted) setState(() {});
-        // Secondary setState to ensure platform video texture is fully mounted and rendered
-        Future.delayed(const Duration(milliseconds: 400), () {
+        Future.delayed(const Duration(milliseconds: 300), () {
           if (mounted && !_isDisposed) setState(() {});
         });
       }
@@ -570,7 +573,14 @@ class _SessionScreenState extends State<SessionScreen>
     if (!reconnecting) return;
     reconnecting = false;
     reconnectSeconds = 30;
-    if (mounted) setState(() => banner = 'Connection restored.');
+    if (mounted) {
+      setState(() => banner = 'Connection restored.');
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted && banner == 'Connection restored.') {
+          setState(() => banner = null);
+        }
+      });
+    }
   }
 
   Future<void> _pollSignals() async {
@@ -2039,53 +2049,31 @@ class _SessionScreenState extends State<SessionScreen>
                              ),
                            ),
 
-                        // Filter-active badge at top-left of PiP — warns user their filter is on
-                        if (camera && activeVideoFilter != VideoPrivacyFilter.none)
-                          Positioned(
-                            top: 4,
-                            left: 4,
-                            child: GestureDetector(
-                              onTap: () async {
-                                // Quick-reset: tap badge to remove filter
-                                activeVideoFilter = VideoPrivacyFilter.none;
-                                await context.read<AppController>().api.sendSignal(session.id, {
-                                  'type': 'VIDEO_FILTER_CHANGED',
-                                  'filter': VideoPrivacyFilter.none,
-                                });
-                                if (mounted) setState(() {});
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFEF4444).withValues(alpha: 0.88),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: const Text(
-                                  '🎨 Filter ON',
-                                  style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ),
-                          ),
                         // Tap-to-flip camera icon badge at bottom-right corner of PiP
                         if (camera)
                           Positioned(
                             right: 6,
                             bottom: 6,
-                            child: Container(
-                              padding: const EdgeInsets.all(5),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.black.withValues(alpha: 0.55),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.3),
-                                  width: 0.8,
+                            child: GestureDetector(
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                _switchCamera();
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(5),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.black.withValues(alpha: 0.55),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.3),
+                                    width: 0.8,
+                                  ),
                                 ),
-                              ),
-                              child: const Icon(
-                                Icons.flip_camera_ios_rounded,
-                                size: 13,
-                                color: Colors.white,
+                                child: const Icon(
+                                  Icons.flip_camera_ios_rounded,
+                                  size: 13,
+                                  color: Colors.white,
+                                ),
                               ),
                             ),
                           ),
