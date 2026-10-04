@@ -29,7 +29,9 @@ class BookingCallScreen extends StatefulWidget {
 
 class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindingObserver {
   final localRenderer = RTCVideoRenderer();
-  final remoteRenderer = RTCVideoRenderer();
+final remoteRenderer = RTCVideoRenderer();
+
+late final Future<void> _renderersReady;
   final voiceFx = AndroidVoiceFx();
   final _privacyAlerts = PrivacyAlertService();
   final gameSignal = ValueNotifier<Map<String, dynamic>?>(null);
@@ -67,46 +69,102 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
   String get peerName => widget.callerSide ? widget.booking.expertName : (widget.booking.customerName.isEmpty ? 'Caller' : widget.booking.customerName);
 
   Future<void> _startRecordingIfEligible() async {
-    if (_recordingStarted || ending) return;
+  if (_recordingStarted || ending) return;
 
-    try {
-      final app = mounted ? context.read<AppController>() : null;
-      if (app != null) {
-        await app.refreshGovernance();
-      }
-      final gov = app?.recordingGovernance;
+  try {
+    final app = mounted
+        ? context.read<AppController>()
+        : null;
 
-      final audioAllowed = gov?.audioRecordingEnabled ?? true;
-      final videoAllowed = gov?.videoRecordingEnabled ?? true;
+    if (app != null) {
+      await app.refreshGovernance();
+    }
 
-      if (isVideo && !videoAllowed) {
-        debugPrint('[RecordingGovernance] Mobile Booking: Video recording disabled by admin policy.');
-        return;
-      }
-      if (!isVideo && !audioAllowed) {
-        debugPrint('[RecordingGovernance] Mobile Booking: Audio recording disabled by admin policy.');
+    final gov = app?.recordingGovernance;
+
+    final audioAllowed =
+        gov?.audioRecordingEnabled ?? true;
+
+    final videoAllowed =
+        gov?.videoRecordingEnabled ?? true;
+
+    if (isVideo && !videoAllowed) {
+      debugPrint(
+        '[RecordingGovernance] Mobile Booking: '
+        'Video recording disabled by admin policy.',
+      );
+
+      return;
+    }
+
+    if (!isVideo && !audioAllowed) {
+      debugPrint(
+        '[RecordingGovernance] Mobile Booking: '
+        'Audio recording disabled by admin policy.',
+      );
+
+      return;
+    }
+
+    /*
+     * Never attach Android's MediaRecorder to the local camera track.
+     * Wait until the peer's remote video track exists.
+     */
+    if (isVideo) {
+      final remoteVideoTracks =
+          remoteStream?.getVideoTracks() ??
+              <MediaStreamTrack>[];
+
+      if (remoteVideoTracks.isEmpty) {
+        debugPrint(
+          '[Recording] Booking call waiting '
+          'for remote video track.',
+        );
+
         return;
       }
 
       _recordingStarted = true;
 
-      if (isVideo) {
-        final remoteVid = remoteStream?.getVideoTracks().firstOrNull;
-        final localVid = localStream?.getVideoTracks().firstOrNull;
-        final targetTrack = remoteVid ?? localVid;
-        if (targetTrack != null) {
-          await CallRecordingService.startVideoRecording(widget.booking.id, targetTrack);
-        }
-        await CallRecordingService.startAudioRecording(widget.booking.id);
-        debugPrint('[RecordingGovernance] Mobile Booking: Started video call recording for ${widget.booking.id}');
-      } else {
-        await CallRecordingService.startAudioRecording(widget.booking.id);
-        debugPrint('[RecordingGovernance] Mobile Booking: Started audio call recording for ${widget.booking.id}');
+      await CallRecordingService.startVideoRecording(
+        widget.booking.id,
+        remoteVideoTracks.first,
+      );
+
+      if (audioAllowed) {
+        await CallRecordingService.startAudioRecording(
+          widget.booking.id,
+        );
       }
-    } catch (e) {
-      debugPrint('[RecordingGovernance] Mobile Booking: Error starting call recording: $e');
+
+      debugPrint(
+        '[RecordingGovernance] Mobile Booking: '
+        'Started recording remote video for '
+        '${widget.booking.id}',
+      );
+
+      return;
     }
+
+    _recordingStarted = true;
+
+    await CallRecordingService.startAudioRecording(
+      widget.booking.id,
+    );
+
+    debugPrint(
+      '[RecordingGovernance] Mobile Booking: '
+      'Started audio recording for ${widget.booking.id}',
+    );
+  } catch (e) {
+    _recordingStarted = false;
+
+    debugPrint(
+      '[RecordingGovernance] Mobile Booking: '
+      'Error starting call recording: $e',
+    );
   }
+}
 
   Future<void> _stopAndUploadRecording() async {
     if (!_recordingStarted) return;
@@ -125,23 +183,41 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
   }
 
   @override
-  void initState() {
-    super.initState();
-    _api = context.read<AppController>().api;
-    WidgetsBinding.instance.addObserver(this);
-    localRenderer.initialize();
-    remoteRenderer.initialize();
-    voiceFx.onFrame = (frame) {
-      final dc = voiceChannel;
-      if (dc != null && mic) dc.send(RTCDataChannelMessage.fromBinary(frame)).catchError((_) {});
-    };
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      context.read<AppController>().enterActiveSession();
-      registeredActiveSession = true;
-      _bootstrap();
-    });
-  }
+void initState() {
+  super.initState();
+
+  _api = context.read<AppController>().api;
+
+  WidgetsBinding.instance.addObserver(this);
+
+  /*
+   * Initialize renderers once.
+   */
+  _renderersReady = Future.wait([
+    localRenderer.initialize(),
+    remoteRenderer.initialize(),
+  ]).then((_) {});
+
+  voiceFx.onFrame = (frame) {
+    final dc = voiceChannel;
+
+    if (dc != null && mic) {
+      dc.send(
+        RTCDataChannelMessage.fromBinary(frame),
+      ).catchError((_) {});
+    }
+  };
+
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!mounted) return;
+
+    context.read<AppController>().enterActiveSession();
+
+    registeredActiveSession = true;
+
+    _bootstrap();
+  });
+}
 
   Future<void> _bootstrap() async {
     try {
@@ -182,84 +258,304 @@ class _BookingCallScreenState extends State<BookingCallScreen> with WidgetsBindi
     }
   }
 
+  Future<MediaStream> _createBookingLocalStream() async {
+  final constraints = <String, dynamic>{
+    'audio': true,
+    'video': isVideo
+        ? <String, dynamic>{
+            'mandatory': <String, dynamic>{
+              'minWidth': '640',
+              'minHeight': '480',
+              'minFrameRate': '24',
+            },
+            'facingMode': 'user',
+            'optional': <dynamic>[],
+          }
+        : false,
+  };
+
+  try {
+    debugPrint(
+      '[WebRTC Booking] Requesting 640x480 camera stream.',
+    );
+
+    final stream =
+        await navigator.mediaDevices.getUserMedia(
+      constraints,
+    );
+
+    debugPrint(
+      '[WebRTC Booking] Capture success. '
+      'stream=${stream.id}, '
+      'videoTracks=${stream.getVideoTracks().length}',
+    );
+
+    return stream;
+  } catch (e) {
+    debugPrint(
+      '[WebRTC Booking] Constrained camera failed: $e',
+    );
+
+    return navigator.mediaDevices.getUserMedia(
+      <String, dynamic>{
+        'audio': true,
+        'video': isVideo
+            ? <String, dynamic>{
+                'facingMode': 'user',
+              }
+            : false,
+      },
+    );
+  }
+}
+
   Future<void> _joinMedia() async {
-    final perms = <Permission>[Permission.microphone, if (isVideo) Permission.camera];
-    final result = await perms.request();
-    if (result.values.any((v) => !v.isGranted)) {
-      throw Exception('Microphone${isVideo ? ' and camera' : ''} permission is required.');
+  /*
+   * Permissions
+   */
+  final permissions = <Permission>[
+    Permission.microphone,
+    if (isVideo) Permission.camera,
+  ];
+
+  final result = await permissions.request();
+
+  if (result.values.any((status) => !status.isGranted)) {
+    throw Exception(
+      'Microphone${isVideo ? ' and camera' : ''} permission is required.',
+    );
+  }
+
+  /*
+   * Wait for renderer surfaces.
+   */
+  await _renderersReady;
+
+  if (!mounted || _isDisposed || ending) {
+    return;
+  }
+
+  final api = context.read<AppController>().api;
+
+  /*
+   * ============================================================
+   * CREATE CAMERA STREAM FIRST
+   * ============================================================
+   */
+  final capturedStream =
+      await _createBookingLocalStream();
+
+  if (!mounted || _isDisposed || ending) {
+    for (final track in capturedStream.getTracks()) {
+      try {
+        track.stop();
+      } catch (_) {}
     }
 
-    final api = context.read<AppController>().api;
-    final ice = await api.iceServers();
-    pc = await createPeerConnection({'iceServers': ice});
+    try {
+      await capturedStream.dispose();
+    } catch (_) {}
 
-    pc!.onTrack = (event) async {
-      if (event.streams.isNotEmpty) {
-        remoteStream = event.streams.first;
-      } else {
-        remoteStream ??= await createLocalMediaStream('booking_remote_stream');
-        if (!remoteStream!.getTracks().any((t) => t.id == event.track.id)) {
-          remoteStream!.addTrack(event.track);
-        }
+    return;
+  }
+
+  localStream = capturedStream;
+
+  localRenderer.srcObject = capturedStream;
+
+  if (mounted) {
+    setState(() {});
+  }
+
+  /*
+   * ============================================================
+   * CREATE WEBRTC CONNECTION
+   * ============================================================
+   */
+  final ice = await api.iceServers();
+
+  final peer = await createPeerConnection({
+    'iceServers': ice,
+    'sdpSemantics': 'unified-plan',
+  });
+
+  pc = peer;
+
+  /*
+   * Remote media
+   */
+  peer.onTrack = (event) async {
+    if (_isDisposed || ending) return;
+
+    debugPrint(
+      '[WebRTC Booking] onTrack '
+      'kind=${event.track.kind}, '
+      'id=${event.track.id}, '
+      'streams=${event.streams.length}',
+    );
+
+    if (event.streams.isNotEmpty) {
+      remoteStream = event.streams.first;
+    } else {
+      remoteStream ??=
+          await createLocalMediaStream(
+        'booking_remote_stream',
+      );
+
+      final alreadyExists = remoteStream!
+          .getTracks()
+          .any(
+            (track) =>
+                track.id == event.track.id,
+          );
+
+      if (!alreadyExists) {
+        remoteStream!.addTrack(event.track);
       }
-      if (remoteRenderer.srcObject != remoteStream) {
-        remoteRenderer.srcObject = remoteStream;
-      }
-      _startRecordingIfEligible();
-      if (mounted) setState(() {});
-    };
-    pc!.onIceCandidate = (candidate) {
-      if (candidate.candidate == null) return;
-      api.sendSignal(widget.booking.id, {
+    }
+
+    if (remoteRenderer.srcObject != remoteStream) {
+      remoteRenderer.srcObject = remoteStream;
+    }
+
+    /*
+     * Once remote VIDEO arrives recording can safely start.
+     */
+    _startRecordingIfEligible();
+
+    if (mounted) {
+      setState(() {});
+    }
+  };
+
+  /*
+   * ICE
+   */
+  peer.onIceCandidate = (candidate) {
+    final value = candidate.candidate;
+
+    if (value == null || value.trim().isEmpty) {
+      return;
+    }
+
+    api.sendSignal(
+      widget.booking.id,
+      {
         'type': 'candidate',
         'candidate': {
-          'candidate': candidate.candidate,
+          'candidate': value,
           'sdpMid': candidate.sdpMid,
-          'sdpMLineIndex': candidate.sdpMLineIndex,
-        }
-      }).catchError((_) {});
-    };
-    pc!.onDataChannel = _attachVoiceChannel;
-    pc!.onConnectionState = (state) {
-      if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
-        _finishReconnect();
-        _startRecordingIfEligible();
-        if (!connectedRecorded) {
-          connectedRecorded = true;
-          api.recordCallConnected(widget.booking.id).catchError((_) {});
-        }
-      } else if (state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected || state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
-        _beginReconnect();
-      }
-    };
+          'sdpMLineIndex':
+              candidate.sdpMLineIndex,
+        },
+      },
+    ).catchError((_) {});
+  };
 
-    // Keep a normal WebRTC audio track for Android <-> web/iOS compatibility.
-    // The custom native PCM path is enabled only for a non-natural effect after
-    // both mobile peers advertise support.
-    localStream = await navigator.mediaDevices.getUserMedia({'audio': true, 'video': isVideo ? {'facingMode': 'user'} : false});
+  peer.onDataChannel = _attachVoiceChannel;
 
-    if (localStream != null) {
-      localRenderer.srcObject = localStream;
-      for (final track in localStream!.getAudioTracks()) {
-        await pc!.addTrack(track, localStream!);
-      }
-      for (final track in localStream!.getVideoTracks()) {
-        await pc!.addTrack(track, localStream!);
-      }
+  peer.onConnectionState = (state) {
+    if (_isDisposed || ending) {
+      return;
     }
 
-    if (widget.callerSide) {
-      final init = RTCDataChannelInit()
-        ..ordered = false
-        ..maxRetransmits = 0;
-      _attachVoiceChannel(await pc!.createDataChannel('voice_fx', init));
+    debugPrint(
+      '[WebRTC Booking] connectionState=$state',
+    );
+
+    if (state ==
+        RTCPeerConnectionState
+            .RTCPeerConnectionStateConnected) {
+      _finishReconnect();
+
+      _startRecordingIfEligible();
+
+      if (!connectedRecorded) {
+        connectedRecorded = true;
+
+        api.recordCallConnected(
+          widget.booking.id,
+        ).catchError((_) {});
+      }
+    } else if (state ==
+            RTCPeerConnectionState
+                .RTCPeerConnectionStateDisconnected ||
+        state ==
+            RTCPeerConnectionState
+                .RTCPeerConnectionStateFailed) {
+      _beginReconnect();
     }
-    await api.sendSignal(widget.booking.id, {
+  };
+
+  /*
+   * Add local audio first.
+   */
+  for (final track
+      in capturedStream.getAudioTracks()) {
+    await peer.addTrack(
+      track,
+      capturedStream,
+    );
+
+    debugPrint(
+      '[WebRTC Booking] Added audio track ${track.id}',
+    );
+  }
+
+  /*
+   * Add local camera second.
+   */
+  for (final track
+      in capturedStream.getVideoTracks()) {
+    await peer.addTrack(
+      track,
+      capturedStream,
+    );
+
+    debugPrint(
+      '[WebRTC Booking] Added video track ${track.id}',
+    );
+  }
+
+  /*
+   * Caller data channel
+   */
+  if (widget.callerSide) {
+    final init = RTCDataChannelInit()
+      ..ordered = false
+      ..maxRetransmits = 0;
+
+    final channel =
+        await peer.createDataChannel(
+      'voice_fx',
+      init,
+    );
+
+    _attachVoiceChannel(channel);
+  }
+
+  /*
+   * Voice capability
+   */
+  await api.sendSignal(
+    widget.booking.id,
+    {
       'type': 'VOICE_FX_CAPABILITY',
       'supported': voiceFx.supported,
-    }).catchError((_) {});
-    if (widget.callerSide) await _sendOffer();
+    },
+  ).catchError((_) {});
+
+  /*
+   * Caller creates offer.
+   */
+  if (widget.callerSide) {
+    await _sendOffer();
   }
+
+  if (mounted) {
+    setState(() {});
+  }
+}
 
   void _attachVoiceChannel(RTCDataChannel channel) {
     voiceChannel = channel;

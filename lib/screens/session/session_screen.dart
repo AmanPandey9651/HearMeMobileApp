@@ -36,6 +36,8 @@ class _SessionScreenState extends State<SessionScreen>
   late InstantSessionModel session = widget.initialSession;
   final localRenderer = RTCVideoRenderer();
   final remoteRenderer = RTCVideoRenderer();
+
+late final Future<void> _renderersReady;
   final voiceFx = AndroidVoiceFx();
   final _privacyAlerts = PrivacyAlertService();
   final gameSignal = ValueNotifier<Map<String, dynamic>?>(null);
@@ -75,46 +77,94 @@ class _SessionScreenState extends State<SessionScreen>
   bool get isLive => const {'ACCEPTED', 'CONNECTING', 'CONNECTED', 'ACTIVE'}.contains(session.status);
 
   Future<void> _startRecordingIfEligible() async {
-    if (_recordingStarted || ending || session.ended || isChat) return;
+  if (_recordingStarted || ending || session.ended || isChat) return;
 
-    try {
-      final app = mounted ? context.read<AppController>() : null;
-      if (app != null) {
-        await app.refreshGovernance();
-      }
-      final gov = app?.recordingGovernance;
+  try {
+    final app = mounted ? context.read<AppController>() : null;
 
-      final audioAllowed = gov?.audioRecordingEnabled ?? true;
-      final videoAllowed = gov?.videoRecordingEnabled ?? true;
+    if (app != null) {
+      await app.refreshGovernance();
+    }
 
-      if (isVideo && !videoAllowed) {
-        debugPrint('[RecordingGovernance] Mobile: Video recording disabled by admin policy.');
+    final gov = app?.recordingGovernance;
+
+    final audioAllowed = gov?.audioRecordingEnabled ?? true;
+    final videoAllowed = gov?.videoRecordingEnabled ?? true;
+
+    if (isVideo && !videoAllowed) {
+      debugPrint(
+        '[RecordingGovernance] Mobile: Video recording disabled by admin policy.',
+      );
+      return;
+    }
+
+    if (!isVideo && !audioAllowed) {
+      debugPrint(
+        '[RecordingGovernance] Mobile: Audio recording disabled by admin policy.',
+      );
+      return;
+    }
+
+    /*
+     * IMPORTANT:
+     *
+     * For a VIDEO call we deliberately wait for the REMOTE video track.
+     *
+     * Do NOT start flutter_webrtc MediaRecorder using the local camera track.
+     * On Android this means the same camera track would simultaneously be used by:
+     *
+     * Camera -> RTCVideoRenderer
+     * Camera -> RTCRtpSender
+     * Camera -> MediaRecorder
+     *
+     * We don't want that while debugging Android camera corruption.
+     */
+    if (isVideo) {
+      final remoteVideoTracks =
+          remoteStream?.getVideoTracks() ?? <MediaStreamTrack>[];
+
+      if (remoteVideoTracks.isEmpty) {
+        debugPrint(
+          '[Recording] Waiting for remote video track before starting video recorder.',
+        );
         return;
       }
-      if (!isVideo && !audioAllowed) {
-        debugPrint('[RecordingGovernance] Mobile: Audio recording disabled by admin policy.');
-        return;
-      }
+
+      final remoteVideoTrack = remoteVideoTracks.first;
 
       _recordingStarted = true;
 
-      if (isVideo) {
-        final remoteVid = remoteStream?.getVideoTracks().firstOrNull;
-        final localVid = localStream?.getVideoTracks().firstOrNull;
-        final targetTrack = remoteVid ?? localVid;
-        if (targetTrack != null) {
-          await CallRecordingService.startVideoRecording(session.id, targetTrack);
-        }
+      await CallRecordingService.startVideoRecording(
+        session.id,
+        remoteVideoTrack,
+      );
+
+      if (audioAllowed) {
         await CallRecordingService.startAudioRecording(session.id);
-        debugPrint('[RecordingGovernance] Mobile: Started video call recording for session ${session.id}');
-      } else {
-        await CallRecordingService.startAudioRecording(session.id);
-        debugPrint('[RecordingGovernance] Mobile: Started audio call recording for session ${session.id}');
       }
-    } catch (e) {
-      debugPrint('[RecordingGovernance] Mobile: Error starting call recording: $e');
+
+      debugPrint(
+        '[RecordingGovernance] Mobile: Started recording remote video for session ${session.id}',
+      );
+
+      return;
     }
+
+    _recordingStarted = true;
+
+    await CallRecordingService.startAudioRecording(session.id);
+
+    debugPrint(
+      '[RecordingGovernance] Mobile: Started audio call recording for session ${session.id}',
+    );
+  } catch (e) {
+    debugPrint(
+      '[RecordingGovernance] Mobile: Error starting call recording: $e',
+    );
+
+    _recordingStarted = false;
   }
+}
 
   Future<void> _stopAndUploadRecording() async {
     if (!_recordingStarted) return;
@@ -304,127 +354,418 @@ class _SessionScreenState extends State<SessionScreen>
     } catch (_) {}
   }
 
-  Future<void> _joinMedia() async {
-    joining = true;
-    try {
-      final api = context.read<AppController>().api;
-      try { session = await api.startSession(session.id); } catch (_) {}
-
-      final perms = <Permission>[Permission.microphone, if (isVideo) Permission.camera];
-      final statuses = await perms.request();
-      if (statuses.values.any((v) => !v.isGranted)) {
-        throw Exception('Microphone${isVideo ? ' and camera' : ''} permission is required.');
-      }
-
-      // Ensure native video renderers are fully initialized before stream binding
-      try { await localRenderer.initialize(); } catch (_) {}
-      try { await remoteRenderer.initialize(); } catch (_) {}
-
-      final ice = await api.iceServers();
-      pc = await createPeerConnection({
-        'iceServers': ice,
-        'sdpSemantics': 'unified-plan',
-      });
-      pc!.onTrack = (event) async {
-        debugPrint('[WebRTC] Mobile onTrack: kind=${event.track.kind}, id=${event.track.id}, streams=${event.streams.length}');
-        if (event.streams.isNotEmpty) {
-          remoteStream = event.streams.first;
-        } else {
-          remoteStream ??= await createLocalMediaStream('remote_stream');
-          if (!remoteStream!.getTracks().any((t) => t.id == event.track.id)) {
-            remoteStream!.addTrack(event.track);
+  Future<MediaStream> _createLocalMediaStream() async {
+  /*
+   * These are the constraint structures expected by flutter_webrtc's
+   * Android camera capturer.
+   *
+   * Start with a conservative 640x480 stream. Once Android <-> Web works
+   * correctly, we can increase this to 720p.
+   */
+  final constraints = <String, dynamic>{
+    'audio': true,
+    'video': isVideo
+        ? <String, dynamic>{
+            'mandatory': <String, dynamic>{
+              'minWidth': '640',
+              'minHeight': '480',
+              'minFrameRate': '24',
+            },
+            'facingMode': 'user',
+            'optional': <dynamic>[],
           }
-        }
-        if (event.track.kind == 'video' || remoteStream!.getVideoTracks().isNotEmpty) {
-          remoteRenderer.srcObject = null;
-        }
-        remoteRenderer.srcObject = remoteStream;
-        _startRecordingIfEligible();
-        if (mounted) setState(() {});
-      };
-      pc!.onIceCandidate = (candidate) {
-        if (candidate.candidate != null && candidate.candidate!.trim().isNotEmpty) {
-          api.sendSignal(session.id, {
-            'type': 'candidate',
-            'candidate': {
-              'candidate': candidate.candidate,
-              'sdpMid': candidate.sdpMid,
-              'sdpMLineIndex': candidate.sdpMLineIndex,
+        : false,
+  };
+
+  try {
+    debugPrint(
+      '[WebRTC] Requesting local media. '
+      'video=$isVideo, resolution=640x480, minimumFPS=24',
+    );
+
+    final stream =
+        await navigator.mediaDevices.getUserMedia(constraints);
+
+    debugPrint(
+      '[WebRTC] getUserMedia success. '
+      'stream=${stream.id}, '
+      'audioTracks=${stream.getAudioTracks().length}, '
+      'videoTracks=${stream.getVideoTracks().length}',
+    );
+
+    for (final track in stream.getVideoTracks()) {
+      debugPrint(
+        '[WebRTC] Local video track: '
+        'id=${track.id}, '
+        'kind=${track.kind}, '
+        'enabled=${track.enabled}, '
+        'muted=${track.muted}',
+      );
+    }
+
+    return stream;
+  } catch (e) {
+    debugPrint(
+      '[WebRTC] 640x480 camera constraints failed: $e',
+    );
+
+    /*
+     * Fallback:
+     * Ask Android for its default front camera configuration.
+     */
+    final fallbackConstraints = <String, dynamic>{
+      'audio': true,
+      'video': isVideo
+          ? <String, dynamic>{
+              'facingMode': 'user',
             }
-          }).catchError((_) {});
-        }
-      };
-      pc!.onDataChannel = _attachVoiceChannel;
-      pc!.onConnectionState = (state) {
-        if (!mounted) return;
-        if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
-          _finishReconnect();
-          _startRecordingIfEligible();
-        } else if (state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
-          _beginReconnect();
-        }
-      };
+          : false,
+    };
 
-      // Always establish audio track, with camera stream if video call
+    final stream = await navigator.mediaDevices.getUserMedia(
+      fallbackConstraints,
+    );
+
+    debugPrint(
+      '[WebRTC] Fallback getUserMedia success. '
+      'stream=${stream.id}, '
+      'videoTracks=${stream.getVideoTracks().length}',
+    );
+
+    return stream;
+  }
+}
+
+  Future<void> _joinMedia() async {
+  if (joining || ending || _isDisposed) {
+    return;
+  }
+
+  joining = true;
+
+  try {
+    final api = context.read<AppController>().api;
+
+    try {
+      session = await api.startSession(session.id);
+    } catch (e) {
+      debugPrint(
+        '[WebRTC] startSession warning: $e',
+      );
+    }
+
+    /*
+     * Permission
+     */
+    final permissions = <Permission>[
+      Permission.microphone,
+      if (isVideo) Permission.camera,
+    ];
+
+    final permissionStatuses = await permissions.request();
+
+    if (permissionStatuses.values.any((status) => !status.isGranted)) {
+      throw Exception(
+        'Microphone${isVideo ? ' and camera' : ''} permission is required.',
+      );
+    }
+
+    /*
+     * Wait until Android RTC render surfaces are initialized.
+     *
+     * Do NOT initialize the same RTCVideoRenderer again here.
+     */
+    await _renderersReady;
+
+    if (ending || _isDisposed || !mounted) {
+      return;
+    }
+
+    /*
+     * ============================================================
+     * 1. CREATE CAMERA/MIC STREAM FIRST
+     * ============================================================
+     */
+    final capturedStream = await _createLocalMediaStream();
+
+    if (ending || _isDisposed || !mounted) {
+      for (final track in capturedStream.getTracks()) {
+        try {
+          track.stop();
+        } catch (_) {}
+      }
+
       try {
-        localStream = await navigator.mediaDevices.getUserMedia({
-          'audio': true,
-          'video': isVideo
-              ? {
-                  'facingMode': 'user',
-                  'width': {'ideal': 640},
-                  'height': {'ideal': 480},
-                  'frameRate': {'ideal': 30},
-                }
-              : false,
-        });
-      } catch (camErr) {
-        debugPrint('[WebRTC] getUserMedia with constraints failed ($camErr), trying unconstrained:');
-        localStream = await navigator.mediaDevices.getUserMedia({
-          'audio': true,
-          'video': isVideo ? true : false,
-        });
+        await capturedStream.dispose();
+      } catch (_) {}
+
+      return;
+    }
+
+    localStream = capturedStream;
+
+    /*
+     * Bind the RAW camera stream directly to the local renderer.
+     */
+    localRenderer.srcObject = capturedStream;
+
+    debugPrint(
+      '[WebRTC] Local renderer bound to stream ${capturedStream.id}',
+    );
+
+    if (mounted) {
+      setState(() {});
+    }
+
+    /*
+     * ============================================================
+     * 2. CREATE PEER CONNECTION
+     * ============================================================
+     */
+    final ice = await api.iceServers();
+
+    final peer = await createPeerConnection({
+      'iceServers': ice,
+      'sdpSemantics': 'unified-plan',
+    });
+
+    pc = peer;
+
+    /*
+     * ============================================================
+     * 3. REMOTE TRACK HANDLER
+     * ============================================================
+     */
+    peer.onTrack = (event) async {
+      if (_isDisposed || ending) {
+        return;
       }
 
-      if (localStream != null) {
-        localRenderer.srcObject = localStream;
-        // Strictly add audio first, then video so m-line order is: mid 0 = audio, mid 1 = video
-        for (final track in localStream!.getAudioTracks()) {
-          await pc!.addTrack(track, localStream!);
+      debugPrint(
+        '[WebRTC] Mobile onTrack: '
+        'kind=${event.track.kind}, '
+        'id=${event.track.id}, '
+        'streams=${event.streams.length}',
+      );
+
+      if (event.streams.isNotEmpty) {
+        remoteStream = event.streams.first;
+      } else {
+        remoteStream ??=
+            await createLocalMediaStream('remote_stream');
+
+        final alreadyAdded = remoteStream!
+            .getTracks()
+            .any((track) => track.id == event.track.id);
+
+        if (!alreadyAdded) {
+          remoteStream!.addTrack(event.track);
         }
-        for (final track in localStream!.getVideoTracks()) {
-          await pc!.addTrack(track, localStream!);
-        }
-        if (mounted) setState(() {});
-        Future.delayed(const Duration(milliseconds: 300), () {
-          if (mounted && !_isDisposed) setState(() {});
-        });
       }
 
-      if (widget.callerSide) {
-        final init = RTCDataChannelInit()
-          ..ordered = false
-          ..maxRetransmits = 0;
-        _attachVoiceChannel(await pc!.createDataChannel('voice_fx', init));
+      /*
+       * Do not set renderer to null and immediately re-bind it.
+       * Just attach the MediaStream once.
+       */
+      if (remoteRenderer.srcObject != remoteStream) {
+        remoteRenderer.srcObject = remoteStream;
       }
 
-      signalPoll ??= Timer.periodic(const Duration(milliseconds: 650), (_) => _pollSignals());
-      await api.sendSignal(session.id, {
+      debugPrint(
+        '[WebRTC] Remote stream now has '
+        '${remoteStream?.getAudioTracks().length ?? 0} audio track(s) and '
+        '${remoteStream?.getVideoTracks().length ?? 0} video track(s)',
+      );
+
+      /*
+       * Video recording waits for this REMOTE track.
+       */
+      _startRecordingIfEligible();
+
+      if (mounted) {
+        setState(() {});
+      }
+    };
+
+    /*
+     * ============================================================
+     * 4. ICE
+     * ============================================================
+     */
+    peer.onIceCandidate = (candidate) {
+      final candidateString = candidate.candidate;
+
+      if (candidateString == null ||
+          candidateString.trim().isEmpty) {
+        return;
+      }
+
+      api.sendSignal(
+        session.id,
+        {
+          'type': 'candidate',
+          'candidate': {
+            'candidate': candidateString,
+            'sdpMid': candidate.sdpMid,
+            'sdpMLineIndex': candidate.sdpMLineIndex,
+          },
+        },
+      ).catchError((_) {});
+    };
+
+    /*
+     * ============================================================
+     * 5. DATA CHANNEL
+     * ============================================================
+     */
+    peer.onDataChannel = _attachVoiceChannel;
+
+    /*
+     * ============================================================
+     * 6. CONNECTION STATE
+     * ============================================================
+     */
+    peer.onConnectionState = (state) {
+      if (!mounted || _isDisposed || ending) {
+        return;
+      }
+
+      debugPrint(
+        '[WebRTC] Mobile connection state = $state',
+      );
+
+      if (state ==
+          RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
+        _finishReconnect();
+
+        /*
+         * For audio calls this can start recording immediately.
+         *
+         * For video calls _startRecordingIfEligible() will simply wait
+         * until remote onTrack has supplied the remote video track.
+         */
+        _startRecordingIfEligible();
+      } else if (state ==
+          RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
+        _beginReconnect();
+      }
+    };
+
+    /*
+     * ============================================================
+     * 7. ADD LOCAL TRACKS
+     * ============================================================
+     *
+     * Audio first.
+     * Video second.
+     */
+    for (final audioTrack in capturedStream.getAudioTracks()) {
+      debugPrint(
+        '[WebRTC] Adding LOCAL audio track ${audioTrack.id}',
+      );
+
+      await peer.addTrack(
+        audioTrack,
+        capturedStream,
+      );
+    }
+
+    for (final videoTrack in capturedStream.getVideoTracks()) {
+      debugPrint(
+        '[WebRTC] Adding LOCAL video track ${videoTrack.id}',
+      );
+
+      await peer.addTrack(
+        videoTrack,
+        capturedStream,
+      );
+    }
+
+    /*
+     * Print all WebRTC senders.
+     */
+    final senders = await peer.getSenders();
+
+    for (final sender in senders) {
+      debugPrint(
+        '[WebRTC] Sender: '
+        'kind=${sender.track?.kind}, '
+        'track=${sender.track?.id}, '
+        'enabled=${sender.track?.enabled}',
+      );
+    }
+
+    /*
+     * ============================================================
+     * 8. OPTIONAL DATA CHANNEL FOR CALLER
+     * ============================================================
+     */
+    if (widget.callerSide) {
+      final init = RTCDataChannelInit()
+        ..ordered = false
+        ..maxRetransmits = 0;
+
+      final channel =
+          await peer.createDataChannel('voice_fx', init);
+
+      _attachVoiceChannel(channel);
+    }
+
+    /*
+     * Start signaling polling.
+     */
+    signalPoll ??=
+        Timer.periodic(
+          const Duration(milliseconds: 650),
+          (_) => _pollSignals(),
+        );
+
+    /*
+     * Tell peer about Android voice-FX support.
+     */
+    await api.sendSignal(
+      session.id,
+      {
         'type': 'VOICE_FX_CAPABILITY',
         'supported': voiceFx.supported,
-      }).catchError((_) {});
-      if (widget.callerSide) {
-        await _sendOffer();
-      } else {
-        await api.sendSignal(session.id, {'type': 'peer_ready'}).catchError((_) {});
-      }
-      if (mounted) setState(() {});
-    } catch (e) {
-      if (mounted) showError(context, e);
-    } finally {
-      joining = false;
+      },
+    ).catchError((_) {});
+
+    /*
+     * ============================================================
+     * 9. SIGNALING
+     * ============================================================
+     */
+    if (widget.callerSide) {
+      await _sendOffer();
+    } else {
+      await api.sendSignal(
+        session.id,
+        {
+          'type': 'peer_ready',
+        },
+      ).catchError((_) {});
     }
+
+    if (mounted) {
+      setState(() {});
+    }
+  } catch (e, stackTrace) {
+    debugPrint(
+      '[WebRTC] _joinMedia ERROR: $e',
+    );
+
+    debugPrint(
+      '[WebRTC] _joinMedia STACK: $stackTrace',
+    );
+
+    if (mounted) {
+      showError(context, e);
+    }
+  } finally {
+    joining = false;
   }
+}
 
   void _attachVoiceChannel(RTCDataChannel channel) {
     voiceChannel = channel;
@@ -2998,49 +3339,88 @@ class _SessionScreenState extends State<SessionScreen>
   }
 
   Future<void> _videoFilters() async {
-    final selected = await showDialog<String>(
-      context: context,
-      builder: (ctx) => SimpleDialog(
-        title: const Text('Video privacy filters'),
-        children: [
-          // Prominent "Show Real Camera" shortcut when filter is active
-          if (activeVideoFilter != VideoPrivacyFilter.none)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF10B981),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                icon: const Icon(Icons.videocam_rounded, size: 18),
-                label: const Text('📷 Show Real Camera (Remove Filter)'),
-                onPressed: () => Navigator.pop(ctx, VideoPrivacyFilter.none),
-              ),
+  final selected = await showDialog<String>(
+    context: context,
+    builder: (ctx) => SimpleDialog(
+      title: const Text('Video privacy filters'),
+      children: [
+        if (activeVideoFilter != VideoPrivacyFilter.none)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              16,
+              0,
+              16,
+              8,
             ),
-          ...VideoPrivacyFilter.options.map((o) => RadioListTile<String>(
-            value: o['id']!,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              icon: const Icon(
+                Icons.videocam_rounded,
+                size: 18,
+              ),
+              label: const Text(
+                '📷 Show Real Camera (Remove Filter)',
+              ),
+              onPressed: () {
+                Navigator.pop(
+                  ctx,
+                  VideoPrivacyFilter.none,
+                );
+              },
+            ),
+          ),
+
+        ...VideoPrivacyFilter.options.map(
+          (option) => RadioListTile<String>(
+            value: option['id']!,
             groupValue: activeVideoFilter,
-            title: Text('${o['emoji']} ${o['label']}'),
-            subtitle: Text(o['description']!),
-            onChanged: (v) => Navigator.pop(ctx, v),
-          )),
-        ],
-      ),
-    );
-    if (selected == null || selected == activeVideoFilter) return;
-    activeVideoFilter = selected;
-    await context.read<AppController>().api.sendSignal(session.id, {'type': 'VIDEO_FILTER_CHANGED', 'filter': selected});
-    if (!mounted) return;
-    // Force renderer srcObject rebind so the new (or removed) ColorFilter takes effect immediately
-    // Without this, Flutter reuses the cached platform texture and the old filter stays visible.
-    if (isVideo && localStream != null) {
-      localRenderer.srcObject = null;
-      await Future.delayed(const Duration(milliseconds: 60));
-      if (mounted) localRenderer.srcObject = localStream;
-    }
-    if (mounted) setState(() {});
+            title: Text(
+              '${option['emoji']} ${option['label']}',
+            ),
+            subtitle: Text(
+              option['description']!,
+            ),
+            onChanged: (value) {
+              Navigator.pop(ctx, value);
+            },
+          ),
+        ),
+      ],
+    ),
+  );
+
+  if (selected == null ||
+      selected == activeVideoFilter) {
+    return;
   }
+
+  if (mounted) {
+    setState(() {
+      activeVideoFilter = selected;
+    });
+  } else {
+    activeVideoFilter = selected;
+  }
+
+  /*
+   * The filter is a Flutter UI overlay.
+   *
+   * There is NO need to destroy/re-bind the native RTC texture.
+   */
+  await context.read<AppController>().api.sendSignal(
+    session.id,
+    {
+      'type': 'VIDEO_FILTER_CHANGED',
+      'filter': selected,
+    },
+  );
+}
 
   Future<void> _inCallChat() async {
     await _refreshMessages();
