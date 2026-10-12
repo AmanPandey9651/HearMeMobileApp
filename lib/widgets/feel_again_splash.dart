@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// Full-screen splash screen using the exact FeelAgain image
-/// Features a smooth fade-in and fade-out animation on app startup and reload
+/// Full-page seamless splash screen for FeelAgain
+/// Features an edge-to-edge dark luxury ambient gradient and cleanly sized HD logo
 class FeelAgainSplashScreen extends StatefulWidget {
   final VoidCallback? onComplete;
 
@@ -25,7 +25,7 @@ class _FeelAgainSplashScreenState extends State<FeelAgainSplashScreen>
       duration: const Duration(milliseconds: 2200),
     );
 
-    // Fade in (0-25%), hold (25-75%), fade out (75-100%)
+    // Fade-in (0-25%), hold (25-75%), fade-out (75-100%)
     _opacityAnimation = TweenSequence<double>([
       TweenSequenceItem(
         tween: Tween<double>(begin: 0.0, end: 1.0)
@@ -45,7 +45,7 @@ class _FeelAgainSplashScreenState extends State<FeelAgainSplashScreen>
 
     _scaleAnimation = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 0.96, end: 1.0)
+        tween: Tween<double>(begin: 0.95, end: 1.0)
             .chain(CurveTween(curve: Curves.easeOut)),
         weight: 25,
       ),
@@ -54,7 +54,7 @@ class _FeelAgainSplashScreenState extends State<FeelAgainSplashScreen>
         weight: 50,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1.0, end: 1.02)
+        tween: Tween<double>(begin: 1.0, end: 1.03)
             .chain(CurveTween(curve: Curves.easeInOut)),
         weight: 25,
       ),
@@ -86,24 +86,41 @@ class _FeelAgainSplashScreenState extends State<FeelAgainSplashScreen>
         }
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFF121316),
-        body: Center(
-          child: AnimatedBuilder(
-            animation: _controller,
-            builder: (context, child) {
-              return Opacity(
-                opacity: _opacityAnimation.value.clamp(0.0, 1.0),
-                child: Transform.scale(
-                  scale: _scaleAnimation.value,
-                  child: Image.asset(
-                    'assets/images/feelagain-splash.png',
-                    width: double.infinity,
-                    height: double.infinity,
-                    fit: BoxFit.contain,
+        backgroundColor: const Color(0xFF0C0D10),
+        body: Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: RadialGradient(
+              center: Alignment.center,
+              radius: 0.85,
+              colors: [
+                Color(0xFF24221C),
+                Color(0xFF15161A),
+                Color(0xFF0C0D10),
+              ],
+              stops: [0.0, 0.5, 1.0],
+            ),
+          ),
+          child: Center(
+            child: AnimatedBuilder(
+              animation: _controller,
+              builder: (context, child) {
+                return Opacity(
+                  opacity: _opacityAnimation.value.clamp(0.0, 1.0),
+                  child: Transform.scale(
+                    scale: _scaleAnimation.value,
+                    child: SizedBox(
+                      width: 220,
+                      child: Image.asset(
+                        'assets/images/feelagain-splash.png',
+                        fit: BoxFit.contain,
+                      ),
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
       ),
