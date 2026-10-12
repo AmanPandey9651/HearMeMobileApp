@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Full-page seamless splash screen for FeelAgain matching ZemoProject / LateNight with golden healing heart
+/// Full-page seamless splash screen for FeelAgain matching ZemoProject / LateNight
 class FeelAgainSplashScreen extends StatefulWidget {
   final VoidCallback? onComplete;
 
@@ -78,8 +78,6 @@ class _FeelAgainSplashScreenState extends State<FeelAgainSplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-
     return Scaffold(
       backgroundColor: Colors.black,
       body: Center(
@@ -90,46 +88,12 @@ class _FeelAgainSplashScreenState extends State<FeelAgainSplashScreen>
               opacity: _opacityAnimation.value.clamp(0.0, 1.0),
               child: Transform.scale(
                 scale: _scaleAnimation.value,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Color(0x99F59E0B),
-                            blurRadius: 28,
-                            spreadRadius: 4,
-                          ),
-                        ],
-                      ),
-                      child: ShaderMask(
-                        shaderCallback: (bounds) => const LinearGradient(
-                          colors: [
-                            Color(0xFFFDE68A),
-                            Color(0xFFF59E0B),
-                            Color(0xFFD97706),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ).createShader(bounds),
-                        child: const Icon(
-                          Icons.favorite_rounded,
-                          size: 46,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: screenWidth * 0.72,
-                      child: Image.asset(
-                        'assets/images/feelagain-splash.png',
-                        fit: BoxFit.contain,
-                      ),
-                    ),
-                  ],
+                child: SizedBox(
+                  width: MediaQuery.of(context).size.width * 0.72,
+                  child: Image.asset(
+                    'assets/images/feelagain-splash.png',
+                    fit: BoxFit.contain,
+                  ),
                 ),
               ),
             );
