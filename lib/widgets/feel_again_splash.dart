@@ -89,7 +89,7 @@ class _FeelAgainSplashScreenState extends State<FeelAgainSplashScreen>
               child: Transform.scale(
                 scale: _scaleAnimation.value,
                 child: SizedBox(
-                  width: MediaQuery.of(context).size.width * 0.72,
+                  width: MediaQuery.of(context).size.width * 0.82,
                   child: Image.asset(
                     'assets/images/feelagain-splash.png',
                     fit: BoxFit.contain,
