@@ -37,44 +37,10 @@ class _PublicHomeScreenState extends State<PublicHomeScreen> {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         titleSpacing: 16,
-        title: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFF95B3D), Color(0xFFFF7A45)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: primaryOrange.withValues(alpha: 0.35),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: const Icon(Icons.headphones_rounded, color: Colors.white, size: 21),
-            ),
-            const SizedBox(width: 10),
-            RichText(
-              text: const TextSpan(
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: textDark,
-                  letterSpacing: -0.4,
-                ),
-                children: [
-                  TextSpan(text: 'Hear'),
-                  TextSpan(text: 'Me', style: TextStyle(color: primaryOrange)),
-                ],
-              ),
-            ),
-          ],
+        title: Image.asset(
+          'assets/images/feelagain-splash.png',
+          height: 38,
+          fit: BoxFit.contain,
         ),
         actions: [
           // Solid Orange Pill "Log In" Button
@@ -914,6 +880,33 @@ class _PublicHowItWorksView extends StatelessWidget {
             child: const Text('Get Started Now', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
           ),
         ),
+
+        const SizedBox(height: 36),
+        Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset(
+                'assets/images/feelagain-splash.png',
+                height: 48,
+                fit: BoxFit.contain,
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Anonymous Emotional Wellness & Healing Support',
+                style: TextStyle(fontSize: 12.5, color: textMuted, fontWeight: FontWeight.w600),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                '100% Zero-PII • Confidential • Empathetic Listeners',
+                style: TextStyle(fontSize: 11, color: textMuted),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
       ],
     );
   }

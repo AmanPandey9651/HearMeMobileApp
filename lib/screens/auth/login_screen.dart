@@ -98,45 +98,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: textDark, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                gradient: const LinearGradient(
-                  colors: [primaryOrange, secondaryOrange],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: primaryOrange.withValues(alpha: 0.35),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: const Icon(Icons.headphones_rounded, color: Colors.white, size: 19),
-            ),
-            const SizedBox(width: 8),
-            RichText(
-              text: const TextSpan(
-                style: TextStyle(
-                  fontSize: 21,
-                  fontWeight: FontWeight.w900,
-                  color: textDark,
-                  letterSpacing: -0.4,
-                ),
-                children: [
-                  TextSpan(text: 'Hear'),
-                  TextSpan(text: 'Me', style: TextStyle(color: primaryOrange)),
-                ],
-              ),
-            ),
-          ],
+        title: Image.asset(
+          'assets/images/feelagain-splash.png',
+          height: 36,
+          fit: BoxFit.contain,
         ),
         centerTitle: true,
       ),

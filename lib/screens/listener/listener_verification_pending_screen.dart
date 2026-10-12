@@ -158,44 +158,10 @@ class _ListenerVerificationPendingScreenState extends State<ListenerVerification
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         titleSpacing: 18,
-        title: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                gradient: const LinearGradient(
-                  colors: [primaryOrange, secondaryOrange],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: primaryOrange.withValues(alpha: 0.35),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: const Icon(Icons.headphones_rounded, color: Colors.white, size: 20),
-            ),
-            const SizedBox(width: 10),
-            RichText(
-              text: const TextSpan(
-                style: TextStyle(
-                  fontSize: 21,
-                  fontWeight: FontWeight.w900,
-                  color: textDark,
-                  letterSpacing: -0.4,
-                ),
-                children: [
-                  TextSpan(text: 'Hear'),
-                  TextSpan(text: 'Me', style: TextStyle(color: primaryOrange)),
-                ],
-              ),
-            ),
-          ],
+        title: Image.asset(
+          'assets/images/feelagain-splash.png',
+          height: 36,
+          fit: BoxFit.contain,
         ),
         actions: [
           // Sign Out Button

@@ -237,56 +237,11 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // Logo + Brand Title + Subtitle
-                  Container(
-                    width: 38,
+                  // FeelAgain Splash Logo
+                  Image.asset(
+                    'assets/images/feelagain-splash.png',
                     height: 38,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      gradient: const LinearGradient(
-                        colors: [secondaryOrange, primaryOrange],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: primaryOrange.withValues(alpha: 0.35),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(Icons.headphones_rounded, color: Colors.white, size: 21),
-                  ),
-                  const SizedBox(width: 8),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      RichText(
-                        text: const TextSpan(
-                          style: TextStyle(
-                            fontSize: 19,
-                            fontWeight: FontWeight.w900,
-                            color: textDark,
-                            letterSpacing: -0.4,
-                          ),
-                          children: [
-                            TextSpan(text: 'Hear'),
-                            TextSpan(text: 'Me', style: TextStyle(color: primaryOrange)),
-                          ],
-                        ),
-                      ),
-                      const Text(
-                        'Listen. Support. Earn.',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: textMuted,
-                          letterSpacing: -0.1,
-                        ),
-                      ),
-                    ],
+                    fit: BoxFit.contain,
                   ),
 
                   const Spacer(),

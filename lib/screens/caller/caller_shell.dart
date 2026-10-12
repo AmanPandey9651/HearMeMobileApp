@@ -112,39 +112,10 @@ class _CallerShellState extends State<CallerShell> {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         title: index == 0
-            ? Row(
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      gradient: const LinearGradient(
-                        colors: [primaryOrange, secondaryOrange],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: primaryOrange.withValues(alpha: 0.35),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(Icons.headphones_rounded, color: Colors.white, size: 21),
-                  ),
-                  const SizedBox(width: 10),
-                  RichText(
-                    text: const TextSpan(
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: textDark, letterSpacing: -0.4),
-                      children: [
-                        TextSpan(text: 'Hear'),
-                        TextSpan(text: 'Me', style: TextStyle(color: primaryOrange)),
-                      ],
-                    ),
-                  ),
-                ],
+            ? Image.asset(
+                'assets/images/feelagain-splash.png',
+                height: 38,
+                fit: BoxFit.contain,
               )
             : Text(
                 ['FeelAgain', 'Sessions', 'Wallet', 'Anonymous Profile', 'More'][index],

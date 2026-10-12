@@ -132,6 +132,7 @@ class AppController extends ChangeNotifier {
     }
     await _persist();
     _startAccountWatcher();
+    showAuthSplash = true;
     notifyListeners();
   }
 
