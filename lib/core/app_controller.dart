@@ -299,8 +299,6 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> logout({bool markOffline = true}) async {
-    showAuthSplash = true;
-    notifyListeners();
     await PrivacyPlatform.setSecure(false);
     if (markOffline && user?.isListener == true && client.token != null) {
       try { await api.updatePresence('OFFLINE'); } catch (_) {}
@@ -313,6 +311,8 @@ class AppController extends ChangeNotifier {
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: _userKey);
     await _storage.delete(key: _expertProfileKey);
+    // Show splash AFTER logout completes
+    showAuthSplash = true;
     notifyListeners();
   }
 }
