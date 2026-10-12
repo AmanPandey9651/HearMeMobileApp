@@ -36,6 +36,12 @@ class AppController extends ChangeNotifier {
   AppUser? user;
   Map<String, dynamic>? expertProfile;
   bool loading = true;
+  bool showAuthSplash = false;
+
+  void finishAuthSplash() {
+    showAuthSplash = false;
+    notifyListeners();
+  }
   String? lastError;
   RecordingGovernanceModel? recordingGovernance;
   bool phoneLoginEnabled = false;
@@ -109,6 +115,8 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> _applyAuth(Map<String, dynamic> auth) async {
+    showAuthSplash = true;
+    notifyListeners();
     final token = '${auth['accessToken'] ?? ''}';
     if (token.isEmpty) throw ApiException(500, 'Backend did not return an access token');
     client.token = token;
@@ -291,6 +299,8 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> logout({bool markOffline = true}) async {
+    showAuthSplash = true;
+    notifyListeners();
     await PrivacyPlatform.setSecure(false);
     if (markOffline && user?.isListener == true && client.token != null) {
       try { await api.updatePresence('OFFLINE'); } catch (_) {}

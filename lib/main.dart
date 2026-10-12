@@ -50,14 +50,17 @@ class _RootGateState extends State<RootGate> {
   Widget build(BuildContext context) {
     final app = context.watch<AppController>();
 
-    // Show FeelAgain splash screen on startup and reload/bootstrap
-    if (!_splashFinished || app.loading) {
+    // Show FeelAgain splash screen on startup, reload, and during logging in / logging out
+    if (!_splashFinished || app.loading || app.showAuthSplash) {
       return FeelAgainSplashScreen(
         onComplete: () {
           if (mounted) {
             setState(() {
               _splashFinished = true;
             });
+            if (app.showAuthSplash) {
+              app.finishAuthSplash();
+            }
           }
         },
       );
