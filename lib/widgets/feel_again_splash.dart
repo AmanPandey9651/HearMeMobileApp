@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// Full-screen splash screen for FeelAgain startup and reload
-/// Features an elegant obsidian dark theme and fade-in fade-out animation
+/// Full-screen splash screen using the exact FeelAgain image
+/// Features a smooth fade-in and fade-out animation on app startup and reload
 class FeelAgainSplashScreen extends StatefulWidget {
   final VoidCallback? onComplete;
 
@@ -22,10 +22,10 @@ class _FeelAgainSplashScreenState extends State<FeelAgainSplashScreen>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2300),
+      duration: const Duration(milliseconds: 2200),
     );
 
-    // Fade-in during first 25%, hold until 75%, fade-out until 100%
+    // Fade in (0-25%), hold (25-75%), fade out (75-100%)
     _opacityAnimation = TweenSequence<double>([
       TweenSequenceItem(
         tween: Tween<double>(begin: 0.0, end: 1.0)
@@ -45,14 +45,18 @@ class _FeelAgainSplashScreenState extends State<FeelAgainSplashScreen>
 
     _scaleAnimation = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 0.92, end: 1.0)
+        tween: Tween<double>(begin: 0.96, end: 1.0)
             .chain(CurveTween(curve: Curves.easeOut)),
-        weight: 30,
+        weight: 25,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1.0, end: 1.04)
+        tween: ConstantTween<double>(1.0),
+        weight: 50,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 1.02)
             .chain(CurveTween(curve: Curves.easeInOut)),
-        weight: 70,
+        weight: 25,
       ),
     ]).animate(_controller);
 
@@ -82,7 +86,7 @@ class _FeelAgainSplashScreenState extends State<FeelAgainSplashScreen>
         }
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFF0C0D11),
+        backgroundColor: const Color(0xFF121316),
         body: Center(
           child: AnimatedBuilder(
             animation: _controller,
@@ -91,33 +95,11 @@ class _FeelAgainSplashScreenState extends State<FeelAgainSplashScreen>
                 opacity: _opacityAnimation.value.clamp(0.0, 1.0),
                 child: Transform.scale(
                   scale: _scaleAnimation.value,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(20),
-                          child: Image.asset(
-                            'assets/images/feelagain-splash.png',
-                            width: MediaQuery.of(context).size.width * 0.85,
-                            fit: BoxFit.contain,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        const Text(
-                          'ANONYMOUS EMOTIONAL SUPPORT',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontFamily: 'Roboto',
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 2.4,
-                            color: Color(0xFFFBD38D),
-                          ),
-                        ),
-                      ],
-                    ),
+                  child: Image.asset(
+                    'assets/images/feelagain-splash.png',
+                    width: double.infinity,
+                    height: double.infinity,
+                    fit: BoxFit.contain,
                   ),
                 ),
               );
