@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Full-page seamless splash screen for FeelAgain
-/// Features an edge-to-edge dark luxury ambient gradient, golden heart icon, and HD logo
+/// Full-page seamless splash screen for FeelAgain matching ZemoProject / LateNight
 class FeelAgainSplashScreen extends StatefulWidget {
   final VoidCallback? onComplete;
 
@@ -22,19 +21,19 @@ class _FeelAgainSplashScreenState extends State<FeelAgainSplashScreen>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2200),
+      duration: const Duration(milliseconds: 1400),
     );
 
-    // Fade-in (0-25%), hold (25-75%), fade-out (75-100%)
+    // Fade-in (0-30%), hold (30-75%), fade-out (75-100%)
     _opacityAnimation = TweenSequence<double>([
       TweenSequenceItem(
         tween: Tween<double>(begin: 0.0, end: 1.0)
             .chain(CurveTween(curve: Curves.easeIn)),
-        weight: 25,
+        weight: 30,
       ),
       TweenSequenceItem(
         tween: ConstantTween<double>(1.0),
-        weight: 50,
+        weight: 45,
       ),
       TweenSequenceItem(
         tween: Tween<double>(begin: 1.0, end: 0.0)
@@ -45,16 +44,16 @@ class _FeelAgainSplashScreenState extends State<FeelAgainSplashScreen>
 
     _scaleAnimation = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 0.95, end: 1.0)
+        tween: Tween<double>(begin: 0.98, end: 1.0)
             .chain(CurveTween(curve: Curves.easeOut)),
-        weight: 25,
+        weight: 30,
       ),
       TweenSequenceItem(
         tween: ConstantTween<double>(1.0),
-        weight: 50,
+        weight: 45,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1.0, end: 1.03)
+        tween: Tween<double>(begin: 1.0, end: 1.02)
             .chain(CurveTween(curve: Curves.easeInOut)),
         weight: 25,
       ),
@@ -79,73 +78,26 @@ class _FeelAgainSplashScreenState extends State<FeelAgainSplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        if (widget.onComplete != null) {
-          widget.onComplete!();
-        }
-      },
-      child: Scaffold(
-        backgroundColor: const Color(0xFF0C0D10),
-        body: Container(
-          width: double.infinity,
-          height: double.infinity,
-          decoration: const BoxDecoration(
-            gradient: RadialGradient(
-              center: Alignment.center,
-              radius: 0.85,
-              colors: [
-                Color(0xFF24221C),
-                Color(0xFF15161A),
-                Color(0xFF0C0D10),
-              ],
-              stops: [0.0, 0.5, 1.0],
-            ),
-          ),
-          child: Center(
-            child: AnimatedBuilder(
-              animation: _controller,
-              builder: (context, child) {
-                return Opacity(
-                  opacity: _opacityAnimation.value.clamp(0.0, 1.0),
-                  child: Transform.scale(
-                    scale: _scaleAnimation.value,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Golden Heart & Sparkle Emblem
-                        Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFFF59E0B).withOpacity(0.5),
-                                blurRadius: 28,
-                                spreadRadius: 4,
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.favorite_rounded,
-                            size: 40,
-                            color: Color(0xFFFBBF24),
-                          ),
-                        ),
-                        SizedBox(
-                          width: 250,
-                          child: Image.asset(
-                            'assets/images/feelagain-splash.png',
-                            fit: BoxFit.contain,
-                          ),
-                        ),
-                      ],
-                    ),
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Center(
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            return Opacity(
+              opacity: _opacityAnimation.value.clamp(0.0, 1.0),
+              child: Transform.scale(
+                scale: _scaleAnimation.value,
+                child: SizedBox(
+                  width: MediaQuery.of(context).size.width * 0.72,
+                  child: Image.asset(
+                    'assets/images/feelagain-splash.png',
+                    fit: BoxFit.contain,
                   ),
-                );
-              },
-            ),
-          ),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
