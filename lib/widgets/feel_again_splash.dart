@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 /// Full-page seamless splash screen for FeelAgain
-/// Features an edge-to-edge dark luxury ambient gradient and cleanly sized HD logo
+/// Features an edge-to-edge dark luxury ambient gradient, golden heart icon, and HD logo
 class FeelAgainSplashScreen extends StatefulWidget {
   final VoidCallback? onComplete;
 
@@ -110,12 +110,36 @@ class _FeelAgainSplashScreenState extends State<FeelAgainSplashScreen>
                   opacity: _opacityAnimation.value.clamp(0.0, 1.0),
                   child: Transform.scale(
                     scale: _scaleAnimation.value,
-                    child: SizedBox(
-                      width: 220,
-                      child: Image.asset(
-                        'assets/images/feelagain-splash.png',
-                        fit: BoxFit.contain,
-                      ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Golden Heart & Sparkle Emblem
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFF59E0B).withOpacity(0.5),
+                                blurRadius: 28,
+                                spreadRadius: 4,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.favorite_rounded,
+                            size: 40,
+                            color: Color(0xFFFBBF24),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 250,
+                          child: Image.asset(
+                            'assets/images/feelagain-splash.png',
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 );
