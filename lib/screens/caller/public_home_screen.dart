@@ -861,7 +861,7 @@ class _PublicHowItWorksView extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'How HearMe Works',
+                  'How FeelAgain Works',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: textDark),
                 ),
                 Text(

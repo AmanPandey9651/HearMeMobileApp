@@ -249,9 +249,17 @@ void initState() {
   /// screenshot or screen-recording attempt during an active session.
   void _onPrivacyAlert(String type) {
     // Report silently to backend for admin audit log
-    context.read<AppController>().api
-        .securityAlert(session.id, type, 'Mobile screenshot/screen-recording attempt detected')
-        .catchError((_) {});
+    final sId = session.id;
+    final apiService = context.read<AppController>().api;
+    apiService.securityAlert(sId, type, 'Mobile screenshot/screen-recording attempt detected').catchError((_) {});
+    apiService.logInterceptionAudit({
+      'sessionId': sId,
+      'captureType': type.contains('RECORD') ? 'SCREEN_RECORDING' : 'SCREENSHOT',
+      'commandPressed': type,
+      'platform': 'MOBILE',
+      'actionTaken': 'FLAG_SECURE_BLOCKED',
+      'pageUrl': 'mobile/session/' + sId,
+    }).catchError((_) {});
     // Show an in-session warning banner to the user
     if (mounted) {
       setState(() => banner = '🚫 Screenshot / recording is prohibited and has been reported.');

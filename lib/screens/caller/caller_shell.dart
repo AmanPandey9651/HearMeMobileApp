@@ -147,7 +147,7 @@ class _CallerShellState extends State<CallerShell> {
                 ],
               )
             : Text(
-                ['HearMe', 'Sessions', 'Wallet', 'Anonymous Profile', 'More'][index],
+                ['FeelAgain', 'Sessions', 'Wallet', 'Anonymous Profile', 'More'][index],
                 style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 19, color: textDark),
               ),
         actions: [

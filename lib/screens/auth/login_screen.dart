@@ -777,7 +777,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               ),
               const SizedBox(height: 14),
               const Text(
-                'Want to become a listener on HearMe?',
+                'Want to become a listener on FeelAgain?',
                 style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: textDark),
                 textAlign: TextAlign.center,
               ),

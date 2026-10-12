@@ -250,9 +250,17 @@ void initState() {
   }
 
   void _onPrivacyAlert(String type) {
-    context.read<AppController>().api
-        .securityAlert(widget.booking.id, type, 'Mobile screenshot/screen-recording attempt detected')
-        .catchError((_) {});
+    final sId = widget.booking.id;
+    final apiService = context.read<AppController>().api;
+    apiService.securityAlert(sId, type, 'Mobile screenshot/screen-recording attempt detected').catchError((_) {});
+    apiService.logInterceptionAudit({
+      'sessionId': sId,
+      'captureType': type.contains('RECORD') ? 'SCREEN_RECORDING' : 'SCREENSHOT',
+      'commandPressed': type,
+      'platform': 'MOBILE',
+      'actionTaken': 'FLAG_SECURE_BLOCKED',
+      'pageUrl': 'mobile/booking/' + sId,
+    }).catchError((_) {});
     if (mounted) {
       setState(() => banner = '🚫 Screenshot / recording is prohibited and has been reported.');
     }

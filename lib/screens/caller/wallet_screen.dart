@@ -160,7 +160,7 @@ class _WalletScreenState extends State<WalletScreen> {
         'amount': ((order['amount'] as num?)?.toDouble() ?? amount) * 100,
         'currency': order['currency'] ?? 'INR',
         'order_id': order['orderId'],
-        'name': 'HearMe',
+        'name': 'FeelAgain',
         'description': 'Wallet recharge',
         'prefill': {
           'email': context.read<AppController>().user?.email ?? '',

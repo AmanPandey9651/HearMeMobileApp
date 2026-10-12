@@ -8,43 +8,61 @@ import 'screens/caller/caller_shell.dart';
 import 'screens/caller/public_home_screen.dart';
 import 'screens/listener/listener_shell.dart';
 import 'screens/listener/listener_verification_pending_screen.dart';
+import 'widgets/feel_again_splash.dart';
 import 'widgets/global_call_host.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppConfig.initialize();
-  runApp(ChangeNotifierProvider(create: (_) => AppController()..bootstrap(), child: const TalkStrangersApp()));
+  runApp(ChangeNotifierProvider(create: (_) => AppController()..bootstrap(), child: const FeelAgainApp()));
 }
 
-class TalkStrangersApp extends StatelessWidget {
+/// Backwards compatibility alias
+typedef TalkStrangersApp = FeelAgainApp;
+
+class FeelAgainApp extends StatelessWidget {
   static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-  const TalkStrangersApp({super.key});
+  const FeelAgainApp({super.key});
 
   @override
   Widget build(BuildContext context) => MaterialApp(
         navigatorKey: navigatorKey,
         debugShowCheckedModeBanner: false,
-        title: 'HearMe',
+        title: 'FeelAgain',
         theme: AppTheme.light,
         builder: (context, child) => GlobalCallHost(child: child ?? const SizedBox.shrink()),
         home: const InactivityGuard(child: RootGate()),
       );
 }
 
-class RootGate extends StatelessWidget {
+class RootGate extends StatefulWidget {
   const RootGate({super.key});
+
+  @override
+  State<RootGate> createState() => _RootGateState();
+}
+
+class _RootGateState extends State<RootGate> {
+  bool _splashFinished = false;
+
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppController>();
-    if (app.loading) {
-      return const Scaffold(
-        backgroundColor: Color(0xFFFAF5EE),
-        body: Center(
-          child: CircularProgressIndicator(color: Color(0xFFF95B3D)),
-        ),
+
+    // Show FeelAgain splash screen on startup and reload/bootstrap
+    if (!_splashFinished || app.loading) {
+      return FeelAgainSplashScreen(
+        onComplete: () {
+          if (mounted) {
+            setState(() {
+              _splashFinished = true;
+            });
+          }
+        },
       );
     }
+
     if (app.user == null) return const PublicHomeScreen();
     if (app.user!.isListener) {
       if (app.isListenerVerified) {
