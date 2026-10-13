@@ -37,6 +37,7 @@ class AppController extends ChangeNotifier {
   Map<String, dynamic>? expertProfile;
   bool loading = true;
   bool showAuthSplash = false;
+  bool isResolvingListenerStatus = false;
 
   void finishAuthSplash() {
     showAuthSplash = false;
@@ -58,7 +59,10 @@ class AppController extends ChangeNotifier {
   bool get isListenerVerified {
     if (user == null || !user!.isListener) return false;
     final status = '${expertProfile?['status'] ?? ''}'.toUpperCase();
-    return status == 'VERIFIED';
+    if (status == 'VERIFIED') return true;
+    if (status == 'SUBMITTED' || status == 'REJECTED' || status == 'SUSPENDED') return false;
+    // An active listener whose account is approved on the backend is verified
+    return user!.status.toUpperCase() == 'ACTIVE';
   }
 
   AppController() {
@@ -100,7 +104,11 @@ class AppController extends ChangeNotifier {
           if (user != null && user!.isListener) {
             try {
               expertProfile = await api.myExpertProfile();
-            } catch (_) {}
+            } catch (_) {
+              if (user!.status.toUpperCase() == 'ACTIVE') {
+                expertProfile ??= {'status': 'VERIFIED'};
+              }
+            }
           }
           await _persist();
           _startAccountWatcher();
@@ -115,25 +123,34 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> _applyAuth(Map<String, dynamic> auth) async {
+    isResolvingListenerStatus = true;
     showAuthSplash = true;
     notifyListeners();
-    final token = '${auth['accessToken'] ?? ''}';
-    if (token.isEmpty) throw ApiException(500, 'Backend did not return an access token');
-    client.token = token;
-    user = AppUser.fromJson(Map<String, dynamic>.from(auth['user'] as Map));
-    if (user != null && user!.isListener) {
-      try {
-        expertProfile = await api.myExpertProfile();
-      } catch (_) {
-        expertProfile = {'status': 'SUBMITTED'};
+    try {
+      final token = '${auth['accessToken'] ?? ''}';
+      if (token.isEmpty) throw ApiException(500, 'Backend did not return an access token');
+      client.token = token;
+      final parsedUser = AppUser.fromJson(Map<String, dynamic>.from(auth['user'] as Map));
+      user = parsedUser;
+      if (parsedUser.isListener) {
+        try {
+          expertProfile = await api.myExpertProfile();
+        } catch (_) {
+          if (parsedUser.status.toUpperCase() == 'ACTIVE') {
+            expertProfile = {'status': 'VERIFIED'};
+          } else {
+            expertProfile = {'status': 'SUBMITTED'};
+          }
+        }
+      } else {
+        expertProfile = null;
       }
-    } else {
-      expertProfile = null;
+      await _persist();
+      _startAccountWatcher();
+    } finally {
+      isResolvingListenerStatus = false;
+      notifyListeners();
     }
-    await _persist();
-    _startAccountWatcher();
-    showAuthSplash = true;
-    notifyListeners();
   }
 
   Future<void> _persist() async {
@@ -200,7 +217,11 @@ class AppController extends ChangeNotifier {
     if (user != null && user!.isListener) {
       try {
         expertProfile = await api.myExpertProfile();
-      } catch (_) {}
+      } catch (_) {
+        if (user!.status.toUpperCase() == 'ACTIVE') {
+          expertProfile ??= {'status': 'VERIFIED'};
+        }
+      }
     }
     await _persist();
     notifyListeners();
