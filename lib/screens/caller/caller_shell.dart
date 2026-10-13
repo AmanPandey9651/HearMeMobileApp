@@ -114,7 +114,7 @@ class _CallerShellState extends State<CallerShell> {
         title: index == 0
             ? Image.asset(
                 'assets/images/feelagain-splash.png',
-                height: 38,
+                height: 27,
                 fit: BoxFit.contain,
               )
             : Text(

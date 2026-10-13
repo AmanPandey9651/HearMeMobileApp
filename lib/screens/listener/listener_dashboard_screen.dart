@@ -240,7 +240,7 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
                   // FeelAgain Splash Logo
                   Image.asset(
                     'assets/images/feelagain-splash.png',
-                    height: 38,
+                    height: 27,
                     fit: BoxFit.contain,
                   ),
 

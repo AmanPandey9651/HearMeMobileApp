@@ -100,7 +100,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         ),
         title: Image.asset(
           'assets/images/feelagain-splash.png',
-          height: 36,
+          height: 27,
           fit: BoxFit.contain,
         ),
         centerTitle: true,

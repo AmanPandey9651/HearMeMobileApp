@@ -39,7 +39,7 @@ class _PublicHomeScreenState extends State<PublicHomeScreen> {
         titleSpacing: 16,
         title: Image.asset(
           'assets/images/feelagain-splash.png',
-          height: 38,
+          height: 27,
           fit: BoxFit.contain,
         ),
         actions: [
@@ -888,7 +888,7 @@ class _PublicHowItWorksView extends StatelessWidget {
             children: [
               Image.asset(
                 'assets/images/feelagain-splash.png',
-                height: 48,
+                height: 36,
                 fit: BoxFit.contain,
               ),
               const SizedBox(height: 10),

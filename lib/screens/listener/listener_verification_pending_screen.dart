@@ -160,7 +160,7 @@ class _ListenerVerificationPendingScreenState extends State<ListenerVerification
         titleSpacing: 18,
         title: Image.asset(
           'assets/images/feelagain-splash.png',
-          height: 36,
+          height: 27,
           fit: BoxFit.contain,
         ),
         actions: [
