@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/app_controller.dart';
 import '../../core/app_theme.dart';
-import '../../widgets/common_widgets.dart';
+import '../../widgets/sign_out_card.dart';
 import '../common/how_it_works_screen.dart';
 import '../common/notifications_screen.dart';
 import '../common/safety_support_screen.dart';
@@ -164,36 +164,9 @@ class CallerMoreScreen extends StatelessWidget {
 
           const SizedBox(height: 18),
 
-          // 4. Sign Out Card matching Screenshot 2 (Right)
-          _MenuActionCard(
-            onTap: () async {
-              final ok = await confirm(
-                context,
-                'Sign out?',
-                'You will need to sign in again to use your account.',
-              );
-              if (ok && context.mounted) {
-                await context.read<AppController>().logout();
-              }
-            },
-            leading: Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: softPeach,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.logout_rounded, color: primaryOrange, size: 20),
-            ),
-            titleWidget: const Text(
-              'Sign out',
-              style: TextStyle(
-                fontSize: 15.5,
-                fontWeight: FontWeight.w800,
-                color: textDark,
-              ),
-            ),
-            showChevron: true,
+          // 4. Luxury Sign Out Card
+          const BeautifulSignOutCard(
+            subtitle: 'End caller session & switch account',
           ),
         ],
       ),

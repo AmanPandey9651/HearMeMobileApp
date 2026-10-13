@@ -5,6 +5,7 @@ import '../../core/app_controller.dart';
 import '../../main.dart';
 import '../../models/app_models.dart';
 import '../../widgets/common_widgets.dart';
+import '../../widgets/sign_out_card.dart';
 import '../common/how_it_works_screen.dart';
 import '../common/notifications_screen.dart';
 import '../common/safety_support_screen.dart';
@@ -783,21 +784,9 @@ class _ListenerMoreScreenState extends State<ListenerMoreScreen> {
                   ),
                   const SizedBox(height: 14),
 
-                  // 6. Sign out Card
-                  _MenuItemCard(
-                    icon: Icons.logout_rounded,
-                    title: 'Sign out',
-                    iconColor: primaryOrange,
-                    onTap: () async {
-                      final shouldLogout = await confirm(
-                        context,
-                        'Sign out',
-                        'Are you sure you want to sign out of your listener account?',
-                      );
-                      if (shouldLogout) {
-                        await app.logout();
-                      }
-                    },
+                  // 6. Luxury Sign out Card
+                  const BeautifulSignOutCard(
+                    subtitle: 'End listener session & take a break',
                   ),
                 ],
               ),
