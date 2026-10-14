@@ -49,6 +49,9 @@ class ApiService {
   Future<void> resetPassword(String identifier, String code, String newPassword) async =>
       client.post('/auth/reset-password', body: {'identifier': identifier, 'code': code, 'newPassword': newPassword});
 
+  Future<Map<String, dynamic>> brandGovernance() async =>
+      Map<String, dynamic>.from(await client.get('/config/brand-governance'));
+
   Future<Map<String, dynamic>> authGovernance() async =>
       Map<String, dynamic>.from(await client.get('/config/auth-governance'));
 

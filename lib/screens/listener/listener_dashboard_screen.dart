@@ -237,9 +237,9 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // FeelAgain Splash Logo
+                  // Brand Logo
                   Image.asset(
-                    'assets/images/feelagain-splash.png',
+                    app.headerLogoAsset,
                     height: 27,
                     fit: BoxFit.contain,
                   ),

@@ -30,6 +30,7 @@ class _PublicHomeScreenState extends State<PublicHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final app = context.watch<AppController>();
     return Scaffold(
       backgroundColor: bgCream,
       appBar: AppBar(
@@ -38,7 +39,7 @@ class _PublicHomeScreenState extends State<PublicHomeScreen> {
         elevation: 0,
         titleSpacing: 16,
         title: Image.asset(
-          'assets/images/feelagain-splash.png',
+          app.headerLogoAsset,
           height: 27,
           fit: BoxFit.contain,
         ),
@@ -805,6 +806,7 @@ class _PublicHowItWorksView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final app = context.watch<AppController>();
     const primaryOrange = Color(0xFFF95B3D);
     const textDark = Color(0xFF111827);
     const textMuted = Color(0xFF6B7280);
@@ -823,11 +825,11 @@ class _PublicHowItWorksView extends StatelessWidget {
               child: const Icon(Icons.help_outline_rounded, color: primaryOrange, size: 20),
             ),
             const SizedBox(width: 10),
-            const Column(
+            Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'How FeelAgain Works',
+                  'How ${app.activeBrandName} Works',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: textDark),
                 ),
                 Text(
@@ -887,7 +889,7 @@ class _PublicHowItWorksView extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Image.asset(
-                'assets/images/feelagain-splash.png',
+                app.headerLogoAsset,
                 height: 36,
                 fit: BoxFit.contain,
               ),

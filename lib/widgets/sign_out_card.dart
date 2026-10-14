@@ -229,8 +229,8 @@ Future<bool> showSignOutConfirmation(BuildContext context) async {
             const SizedBox(height: 18),
 
             // Title
-            const Text(
-              'Sign out of FeelAgain?',
+            Text(
+              'Sign out of ${context.read<AppController>().activeBrandName}?',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w800,

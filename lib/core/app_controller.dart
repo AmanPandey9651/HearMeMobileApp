@@ -29,6 +29,14 @@ class AppController extends ChangeNotifier {
   static const _userKey = 'talkstrangers_user';
   static const _expertProfileKey = 'talkstrangers_expert_profile';
   static const _authGovernanceKey = 'talkstrangers_auth_governance';
+  static const _brandGovernanceKey = 'talkstrangers_brand_governance';
+  String brandTheme = 'FEELAGAIN';
+  String brandName = 'FeelAgain';
+
+  bool get isFeelBack => brandTheme.toUpperCase() == 'FEELBACK';
+  String get activeBrandName => isFeelBack ? 'FeelBack' : 'FeelAgain';
+  String get headerLogoAsset => isFeelBack ? 'assets/images/feelback-logo.png' : 'assets/images/feelagain-splash.png';
+  String get splashLogoAsset => isFeelBack ? 'assets/images/feelback-logo-white.png' : 'assets/images/feelagain-splash.png';
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   final ApiClient client = ApiClient();
   late final ApiService api = ApiService(client);
@@ -79,6 +87,14 @@ class AppController extends ChangeNotifier {
     try {
       await PrivacyPlatform.setSecure(false);
       final savedAuth = await _storage.read(key: _authGovernanceKey);
+      final savedBrand = await _storage.read(key: _brandGovernanceKey);
+      if (savedBrand != null) {
+        try {
+          final parsed = jsonDecode(savedBrand);
+          brandTheme = '${parsed['brandTheme'] ?? 'FEELAGAIN'}'.toUpperCase();
+          brandName = brandTheme == 'FEELBACK' ? 'FeelBack' : 'FeelAgain';
+        } catch (_) {}
+      }
       if (savedAuth != null) {
         try {
           final parsed = jsonDecode(savedAuth);
@@ -86,8 +102,11 @@ class AppController extends ChangeNotifier {
           googleLoginEnabled = parsed['googleLoginEnabled'] != false;
         } catch (_) {}
       }
-      await Future.wait([refreshGovernance(), refreshAuthGovernance(), refreshInactivityGovernance()]);
-      _governanceTimer ??= Timer.periodic(const Duration(seconds: 10), (_) => refreshGovernance());
+      await Future.wait([refreshGovernance(), refreshAuthGovernance(), refreshInactivityGovernance(), refreshBrandGovernance()]);
+      _governanceTimer ??= Timer.periodic(const Duration(seconds: 10), (_) {
+        refreshGovernance();
+        refreshBrandGovernance();
+      });
       final token = await _storage.read(key: _tokenKey);
       final savedUser = await _storage.read(key: _userKey);
       final savedExpert = await _storage.read(key: _expertProfileKey);
@@ -276,6 +295,23 @@ class AppController extends ChangeNotifier {
     } catch (_) {
       await PrivacyPlatform.setSecure(false);
     }
+  }
+
+  Future<void> refreshBrandGovernance() async {
+    try {
+      final settings = await api.brandGovernance();
+      final nextTheme = '${settings['brandTheme'] ?? 'FEELAGAIN'}'.toUpperCase();
+      final nextName = nextTheme == 'FEELBACK' ? 'FeelBack' : 'FeelAgain';
+      if (nextTheme != brandTheme || nextName != brandName) {
+        brandTheme = nextTheme;
+        brandName = nextName;
+        await _storage.write(
+          key: _brandGovernanceKey,
+          value: jsonEncode({'brandTheme': brandTheme, 'brandName': brandName}),
+        );
+        notifyListeners();
+      }
+    } catch (_) {}
   }
 
   Future<void> refreshAuthGovernance() async {

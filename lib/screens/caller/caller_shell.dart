@@ -104,6 +104,7 @@ class _CallerShellState extends State<CallerShell> {
 
   @override
   Widget build(BuildContext context) {
+    final app = context.watch<AppController>();
     return Scaffold(
       backgroundColor: bgCream,
       appBar: AppBar(
@@ -113,12 +114,12 @@ class _CallerShellState extends State<CallerShell> {
         elevation: 0,
         title: index == 0
             ? Image.asset(
-                'assets/images/feelagain-splash.png',
+                app.headerLogoAsset,
                 height: 27,
                 fit: BoxFit.contain,
               )
             : Text(
-                ['FeelAgain', 'Sessions', 'Wallet', 'Anonymous Profile', 'More'][index],
+                [app.activeBrandName, 'Sessions', 'Wallet', 'Anonymous Profile', 'More'][index],
                 style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 19, color: textDark),
               ),
         actions: [

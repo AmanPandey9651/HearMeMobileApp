@@ -1,3 +1,5 @@
+import 'package:provider/provider.dart';
+import '../core/app_controller.dart';
 import 'package:flutter/material.dart';
 
 /// Full-page seamless splash screen for FeelAgain matching ZemoProject / LateNight
@@ -78,8 +80,11 @@ class _FeelAgainSplashScreenState extends State<FeelAgainSplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    final app = context.watch<AppController>();
+    final isFeelBack = app.isFeelBack;
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: isFeelBack ? const Color(0xFFFE6F61) : Colors.black,
       body: Center(
         child: AnimatedBuilder(
           animation: _controller,
@@ -89,9 +94,9 @@ class _FeelAgainSplashScreenState extends State<FeelAgainSplashScreen>
               child: Transform.scale(
                 scale: _scaleAnimation.value,
                 child: SizedBox(
-                  width: MediaQuery.of(context).size.width * 0.82,
+                  width: MediaQuery.of(context).size.width * (isFeelBack ? 0.72 : 0.82),
                   child: Image.asset(
-                    'assets/images/feelagain-splash.png',
+                    app.splashLogoAsset,
                     fit: BoxFit.contain,
                   ),
                 ),
