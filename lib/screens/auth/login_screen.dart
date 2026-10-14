@@ -741,9 +741,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                 child: const Icon(Icons.group_rounded, color: primaryOrange, size: 24),
               ),
               const SizedBox(height: 14),
-              const Text(
-                'Want to become a listener on FeelAgain?',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: textDark),
+              Text(
+                'Want to become a listener on ${app.activeBrandName}?',
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: textDark),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 4),

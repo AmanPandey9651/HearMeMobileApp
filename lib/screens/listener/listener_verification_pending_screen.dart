@@ -32,8 +32,8 @@ class _ListenerVerificationPendingScreenState extends State<ListenerVerification
 
       if (app.isListenerVerified) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🎉 Congratulations! Your profile has been verified! Welcome to FeelAgain.'),
+          SnackBar(
+            content: Text('🎉 Congratulations! Your profile has been verified! Welcome to ${app.activeBrandName}.'),
             backgroundColor: Color(0xFF10B981),
             behavior: SnackBarBehavior.floating,
           ),

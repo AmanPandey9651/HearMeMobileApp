@@ -26,14 +26,17 @@ class FeelAgainApp extends StatelessWidget {
   const FeelAgainApp({super.key});
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-        navigatorKey: navigatorKey,
-        debugShowCheckedModeBanner: false,
-        title: 'FeelAgain',
-        theme: AppTheme.light,
-        builder: (context, child) => GlobalCallHost(child: child ?? const SizedBox.shrink()),
-        home: const InactivityGuard(child: RootGate()),
-      );
+  Widget build(BuildContext context) {
+    final app = context.watch<AppController>();
+    return MaterialApp(
+      navigatorKey: navigatorKey,
+      debugShowCheckedModeBanner: false,
+      title: app.activeBrandName,
+      theme: AppTheme.light,
+      builder: (context, child) => GlobalCallHost(child: child ?? const SizedBox.shrink()),
+      home: const InactivityGuard(child: RootGate()),
+    );
+  }
 }
 
 class RootGate extends StatefulWidget {
