@@ -35,8 +35,8 @@ class AppController extends ChangeNotifier {
 
   bool get isFeelBack => brandTheme.toUpperCase() == 'FEELBACK';
   String get activeBrandName => isFeelBack ? 'FeelBack' : 'FeelAgain';
-  String get headerLogoAsset => isFeelBack ? 'assets/images/feelback-logo.png' : 'assets/images/feelagain-splash.png';
-  String get splashLogoAsset => isFeelBack ? 'assets/images/feelback-logo-white.png' : 'assets/images/feelagain-splash.png';
+  String get headerLogoAsset => isFeelBack ? 'assets/images/feelback-logo.png' : 'assets/images/feelagain-logo.png';
+  String get splashLogoAsset => isFeelBack ? 'assets/images/feelback-logo-white.png' : 'assets/images/feelagain-logo.png';
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   final ApiClient client = ApiClient();
   late final ApiService api = ApiService(client);
