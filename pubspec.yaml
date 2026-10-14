@@ -36,4 +36,9 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/images/
+    - assets/images/feelagain-logo.png
     - assets/images/feelagain-splash.png
+    - assets/images/feelback-logo.png
+    - assets/images/feelback-logo-white.png
+    - assets/images/feelback-splash.png
