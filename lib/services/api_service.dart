@@ -271,10 +271,27 @@ class ApiService {
   List<Map<String, dynamic>>? _cachedIceServers;
   Future<List<Map<String, dynamic>>> iceServers({bool forceRefresh = false}) async {
     if (_cachedIceServers != null && !forceRefresh) return _cachedIceServers!;
-    final data = _content(await client.get('/webrtc/ice-servers'));
-    final list = data.map((e) => Map<String, dynamic>.from(e)).toList();
-    _cachedIceServers = list;
-    return list;
+    try {
+      final data = _content(await client.get('/webrtc/ice-servers'));
+      final list = (data as List).map((e) => Map<String, dynamic>.from(e)).toList();
+      _cachedIceServers = list;
+      return list;
+    } catch (_) {
+      return [
+        {
+          'urls': [
+            'stun:stun.l.google.com:19302',
+            'stun:stun1.l.google.com:19302',
+            'stun:stun2.l.google.com:19302',
+            'stun:stun3.l.google.com:19302',
+            'stun:stun4.l.google.com:19302',
+          ]
+        },
+        {
+          'urls': ['stun:stun.cloudflare.com:3478']
+        }
+      ];
+    }
   }
   Future<List<dynamic>> signals(String sessionId, [int? since]) async => _content(await client.get('/webrtc/sessions/$sessionId/signals', query: {if (since != null) 'since': since}));
   Future<void> sendSignal(String sessionId, Map<String, dynamic> data) async => client.post('/webrtc/sessions/$sessionId/signal', body: data);
