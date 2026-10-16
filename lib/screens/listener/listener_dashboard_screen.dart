@@ -148,6 +148,11 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
   Future<void> _toggle() async {
     final isOnlineOrBusy = presence == 'ONLINE' || presence == 'BUSY_IN_CALL' || presence == 'BUSY';
     final next = isOnlineOrBusy ? 'OFFLINE' : 'ONLINE';
+    final prev = presence;
+    setState(() {
+      presence = next;
+    });
+    context.read<AppController>().updatePresence(next);
     try {
       final result = await context.read<AppController>().api.updatePresence(next);
       if (!mounted) return;
@@ -157,7 +162,13 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
       context.read<AppController>().updatePresence(presence);
       await _load(silent: true);
     } catch (e) {
-      if (mounted) showError(context, e);
+      if (mounted) {
+        setState(() {
+          presence = prev;
+        });
+        context.read<AppController>().updatePresence(prev);
+        showError(context, e);
+      }
     }
   }
 
