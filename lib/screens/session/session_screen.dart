@@ -1016,6 +1016,11 @@ void initState() {
   }
 
   Future<void> _processSignal(Map<String, dynamic> s) async {
+    final senderId = s['senderId']?.toString();
+    final currentUserId = context.read<AppController>().user?.id;
+    if (senderId != null && currentUserId != null && senderId == currentUserId) {
+      return;
+    }
     final type = '${s['type'] ?? ''}';
     if (const {'call_ended', 'hangup', 'peer_left'}.contains(type)) {
       if (!ending) await _finishFromPeer();
@@ -1169,6 +1174,18 @@ void initState() {
       return;
     }
     try {
+      final localDesc = await peer.getLocalDescription();
+      final signalingState = await peer.getSignalingState();
+      final isRestart = s['restart'] == true;
+      if (!isRestart && localDesc != null && localDesc.type == 'answer' && signalingState == RTCSignalingState.RTCSignalingStateStable) {
+        debugPrint('[WebRTC] Repeat offer received, re-sending existing answer');
+        await context.read<AppController>().api.sendSignal(session.id, {
+          'type': 'answer',
+          'restart': false,
+          'sdp': {'type': localDesc.type, 'sdp': localDesc.sdp},
+        });
+        return;
+      }
       final d = Map<String, dynamic>.from(s['sdp'] as Map);
       final rawSdp = d['sdp']?.toString() ?? '';
       await peer.setRemoteDescription(RTCSessionDescription(_preferVP8(rawSdp), d['type']?.toString()));
