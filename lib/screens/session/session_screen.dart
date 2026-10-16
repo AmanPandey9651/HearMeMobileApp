@@ -73,7 +73,7 @@ late final Future<void> _renderersReady;
   bool reconnecting = false, gameSheetOpen = false, registeredActiveSession = false, everLive = false;
   bool peerVoiceFxCapable = false, nativeVoiceFxActive = false;
   final queuedCandidates = <Map<String, dynamic>>[];
-  Map<String, dynamic>? pendingOffer;
+  Map<String, dynamic>? pendingOffer, pendingAnswer;
   List<dynamic> messages = [];
   String? banner;
   String activeVoiceFilter = AndroidVoiceFx.normal;
@@ -911,7 +911,7 @@ void initState() {
 
     if (widget.callerSide && !isChat) {
       _offerWatchdogTimer?.cancel();
-      _offerWatchdogTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) async {
+      _offerWatchdogTimer = Timer.periodic(const Duration(milliseconds: 2000), (timer) async {
         if (!mounted || _isDisposed || ending || session.ended) {
           timer.cancel();
           return;
