@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -22,6 +23,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   final _otp = TextEditingController();
   bool _obscurePassword = true;
   bool _otpSent = false;
+  String? _verificationId;
+  int? _resendToken;
   bool _busy = false;
 
   static const Color bgCream = AppTheme.bgCream;
@@ -367,11 +370,66 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                 final mobile = _mobile.text.replaceAll(RegExp(r'\D'), '');
                                 if (mobile.length < 10) throw Exception('Enter a valid mobile number.');
                                 if (!_otpSent) {
-                                  await app.api.sendOtp(mobile);
-                                  if (mounted) setState(() => _otpSent = true);
+                                  final fullNumber = mobile.startsWith('91') && mobile.length == 12 ? '+$mobile' : '+91${mobile.substring(mobile.length - 10)}';
+                                  try {
+                                    await FirebaseAuth.instance.verifyPhoneNumber(
+                                      phoneNumber: fullNumber,
+                                      verificationCompleted: (PhoneAuthCredential credential) async {
+                                        try {
+                                          final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
+                                          final idToken = await userCred.user?.getIdToken();
+                                          if (idToken != null) {
+                                            await app.firebaseOtpLogin(idToken, mobile);
+                                          }
+                                        } catch (_) {}
+                                      },
+                                      verificationFailed: (FirebaseAuthException e) async {
+                                        // Fallback to server SMS OTP if Firebase fails
+                                        await app.api.sendOtp(mobile);
+                                        if (mounted) setState(() => _otpSent = true);
+                                      },
+                                      codeSent: (String verificationId, int? resendToken) {
+                                        if (mounted) {
+                                          setState(() {
+                                            _verificationId = verificationId;
+                                            _resendToken = resendToken;
+                                            _otpSent = true;
+                                          });
+                                        }
+                                      },
+                                      codeAutoRetrievalTimeout: (String verificationId) {
+                                        _verificationId = verificationId;
+                                      },
+                                    );
+                                  } catch (e) {
+                                    // Fallback to server SMS OTP
+                                    await app.api.sendOtp(mobile);
+                                    if (mounted) setState(() => _otpSent = true);
+                                  }
                                 } else {
-                                  if (_otp.text.trim().isEmpty) throw Exception('Enter the OTP.');
-                                  await app.verifyOtp(mobile, _otp.text.trim());
+                                  final code = _otp.text.trim();
+                                  if (code.isEmpty) throw Exception('Enter the OTP.');
+
+                                  // If Firebase verificationId is available, verify with Firebase first
+                                  if (_verificationId != null) {
+                                    try {
+                                      final credential = PhoneAuthProvider.credential(
+                                        verificationId: _verificationId!,
+                                        smsCode: code,
+                                      );
+                                      final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
+                                      final idToken = await userCred.user?.getIdToken();
+                                      if (idToken != null) {
+                                        await app.firebaseOtpLogin(idToken, mobile);
+                                        return;
+                                      }
+                                    } catch (fbErr) {
+                                      debugPrint('Firebase verify error, falling back to server verify: $fbErr');
+                                    }
+                                  }
+
+                                  // Fallback to server verification
+                                  await app.verifyOtp(mobile, code);
                                 }
                               }),
                       child: Center(

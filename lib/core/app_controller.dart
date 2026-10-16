@@ -184,6 +184,7 @@ class AppController extends ChangeNotifier {
 
   Future<void> login(String email, String password) async => _applyAuth(await api.login(email, password));
   Future<void> verifyOtp(String mobile, String otp) async => _applyAuth(await api.verifyOtp(mobile, otp));
+  Future<void> firebaseOtpLogin(String idToken, [String? mobileNumber]) async => _applyAuth(await api.firebaseOtpLogin(idToken, mobileNumber));
   Future<void> registerListener(Map<String, dynamic> data) async => _applyAuth(await api.registerListener(data));
 
   Future<void> googleLogin() async {
