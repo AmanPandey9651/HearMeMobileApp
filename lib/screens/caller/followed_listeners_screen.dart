@@ -1,3 +1,4 @@
+import '../../services/call_launcher.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -982,12 +983,7 @@ class _FollowedListenersScreenState extends State<FollowedListenersScreen> {
                         Expanded(
                           flex: 3,
                           child: OutlinedButton.icon(
-                            onPressed: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ListenerDetailScreen(listener: listener, initialSessionType: 'CHAT'),
-                              ),
-                            ).then((_) => _load(silent: true)),
+                            onPressed: () => CallLauncher.startDirectCall(context, listener, 'CHAT'),
                             icon: const Icon(Icons.chat_bubble_rounded, size: 15),
                             label: const Text('Chat', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
                             style: OutlinedButton.styleFrom(
@@ -1051,12 +1047,7 @@ class _FollowedListenersScreenState extends State<FollowedListenersScreen> {
                         Expanded(
                           flex: 3,
                           child: OutlinedButton.icon(
-                            onPressed: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ListenerDetailScreen(listener: listener, initialSessionType: 'VIDEO_CALL'),
-                              ),
-                            ).then((_) => _load(silent: true)),
+                            onPressed: () => CallLauncher.startDirectCall(context, listener, 'VIDEO_CALL'),
                             icon: const Icon(Icons.videocam_rounded, size: 16),
                             label: const Text('Video', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
                             style: OutlinedButton.styleFrom(

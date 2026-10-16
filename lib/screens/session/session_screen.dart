@@ -1,3 +1,4 @@
+import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -42,6 +43,22 @@ late final Future<void> _renderersReady;
   final _privacyAlerts = PrivacyAlertService();
   final gameSignal = ValueNotifier<Map<String, dynamic>?>(null);
   final messageController = TextEditingController();
+
+  void _startRingtone() {
+    try {
+      FlutterRingtonePlayer().playRingtone(
+        volume: 0.8,
+        looping: true,
+        asAlarm: false,
+      );
+    } catch (_) {}
+  }
+
+  void _stopRingtone() {
+    try {
+      FlutterRingtonePlayer().stop();
+    } catch (_) {}
+  }
   late final AnimationController _pulseController = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1600),
@@ -1246,6 +1263,7 @@ void initState() {
   }
 
   Future<void> _end() async {
+    _stopRingtone();
     if (ending) return;
     ending = true;
 
@@ -1290,6 +1308,7 @@ void initState() {
   }
 
   Future<void> _cancel() async {
+    _stopRingtone();
     ending = true;
     clock?.cancel();
     clock = null;

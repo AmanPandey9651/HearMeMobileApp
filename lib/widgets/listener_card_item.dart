@@ -67,10 +67,10 @@ class ListenerCardItem extends StatelessWidget {
         : 'Here to listen, without judgment. You deserve to be heard.';
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: const Color(0xFFF1E6D8),
           width: 1.0,
@@ -86,10 +86,10 @@ class ListenerCardItem extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
@@ -99,28 +99,28 @@ class ListenerCardItem extends StatelessWidget {
                   children: [
                     // 1. Left: Profile Image with top-left beacon dot and bottom "Online now" pill
                     SizedBox(
-                      width: 84,
-                      height: 84,
+                      width: 68,
+                      height: 68,
                       child: Stack(
                         children: [
                           // Square photo with rounded corners
                           ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(14),
                             child: buildAvatarImage(
                               _getResolvedAvatar(),
-                              width: 84,
-                              height: 84,
+                              width: 68,
+                              height: 68,
                               fit: BoxFit.cover,
                               errorBuilder: (_, __, ___) => Container(
-                                width: 84,
-                                height: 84,
+                                width: 68,
+                                height: 68,
                                 decoration: BoxDecoration(
                                   gradient: const LinearGradient(
                                     colors: [Color(0xFFF95B3D), Color(0xFFFF7A45)],
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
                                   ),
-                                  borderRadius: BorderRadius.circular(16),
+                                  borderRadius: BorderRadius.circular(14),
                                 ),
                                 child: Center(
                                   child: Text(
@@ -128,7 +128,7 @@ class ListenerCardItem extends StatelessWidget {
                                         ? listener.displayName.substring(0, 1).toUpperCase()
                                         : 'L',
                                     style: const TextStyle(
-                                      fontSize: 28,
+                                      fontSize: 22,
                                       fontWeight: FontWeight.bold,
                                       color: Colors.white,
                                     ),
@@ -143,8 +143,8 @@ class ListenerCardItem extends StatelessWidget {
                         top: 5,
                         left: 5,
                         child: Container(
-                          width: 12,
-                          height: 12,
+                          width: 10,
+                          height: 10,
                           decoration: BoxDecoration(
                             color: statusColor,
                             shape: BoxShape.circle,
@@ -196,7 +196,7 @@ class ListenerCardItem extends StatelessWidget {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    fontSize: 9,
+                                    fontSize: 8.5,
                                     fontWeight: FontWeight.w700,
                                     color: isOnline ? Colors.white : const Color(0xFFCBD5E1),
                                   ),
@@ -210,7 +210,7 @@ class ListenerCardItem extends StatelessWidget {
                   ),
                 ),
 
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
 
                 // 2. Center: Details (Name + Verified + Rating, Headline, Topic Pills, Bio)
                 Expanded(
@@ -228,7 +228,7 @@ class ListenerCardItem extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 fontWeight: FontWeight.w800,
-                                fontSize: 15.5,
+                                fontSize: 14.5,
                                 color: Color(0xFF111827),
                                 letterSpacing: -0.2,
                               ),
@@ -237,7 +237,7 @@ class ListenerCardItem extends StatelessWidget {
                           const SizedBox(width: 4),
                           const Icon(
                             Icons.verified,
-                            size: 15.5,
+                            size: 14,
                             color: Color(0xFFF95B3D),
                           ),
                           const Spacer(),
@@ -246,14 +246,14 @@ class ListenerCardItem extends StatelessWidget {
                             children: [
                               const Icon(
                                 Icons.star_rounded,
-                                size: 14.5,
+                                size: 13.5,
                                 color: Color(0xFFF59E0B),
                               ),
                               const SizedBox(width: 2),
                               Text(
                                 listener.rating.toStringAsFixed(1),
                                 style: const TextStyle(
-                                  fontSize: 12.5,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w800,
                                   color: Color(0xFF111827),
                                 ),
@@ -261,7 +261,7 @@ class ListenerCardItem extends StatelessWidget {
                               Text(
                                 ' (${listener.reviewCount > 0 ? listener.reviewCount : 120})',
                                 style: const TextStyle(
-                                  fontSize: 11,
+                                  fontSize: 10.5,
                                   fontWeight: FontWeight.w500,
                                   color: Color(0xFF6B7280),
                                 ),
@@ -279,7 +279,7 @@ class ListenerCardItem extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 11.5,
+                          fontSize: 11,
                           fontWeight: FontWeight.w500,
                           color: Color(0xFF6B7280),
                         ),
@@ -293,7 +293,7 @@ class ListenerCardItem extends StatelessWidget {
                         runSpacing: 4,
                         children: categories.take(3).map((cat) {
                           return Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6.5, vertical: 2),
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF4F5F7),
                               borderRadius: BorderRadius.circular(8),
@@ -305,7 +305,7 @@ class ListenerCardItem extends StatelessWidget {
                             child: Text(
                               cat,
                               style: const TextStyle(
-                                fontSize: 10,
+                                fontSize: 9.5,
                                 fontWeight: FontWeight.w600,
                                 color: Color(0xFF4B5563),
                               ),
@@ -322,16 +322,16 @@ class ListenerCardItem extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 11,
+                          fontSize: 10.5,
                           color: Color(0xFF6B7280),
-                          height: 1.25,
+                          height: 1.2,
                         ),
                       ),
                     ],
                   ),
                 ),
 
-                const SizedBox(width: 10),
+                const SizedBox(width: 6),
 
                 // 3. Right: Vertical 3-Button Stack (Chat, Call, Video) in Warm Peach Circle
                 Column(
@@ -360,7 +360,7 @@ class ListenerCardItem extends StatelessWidget {
                       },
                     ),
 
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
 
                     // Middle: Voice Call (Warm Peach + Orange Icon)
                     _ActionButton(
@@ -385,7 +385,7 @@ class ListenerCardItem extends StatelessWidget {
                       },
                     ),
 
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
 
                     // Bottom: Video Call (Warm Peach + Orange Icon)
                     _ActionButton(
@@ -593,8 +593,8 @@ class _ActionButton extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(18),
           child: Container(
-            width: 34,
-            height: 34,
+            width: 30,
+            height: 30,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: const Color(0xFFFFECE5),
@@ -615,7 +615,7 @@ class _ActionButton extends StatelessWidget {
             child: Center(
               child: Icon(
                 icon,
-                size: 15.5,
+                size: 14,
                 color: const Color(0xFFF95B3D),
               ),
             ),

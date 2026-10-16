@@ -1,3 +1,4 @@
+import '../../services/call_launcher.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -93,12 +94,7 @@ class _CallerHomeScreenState extends State<CallerHomeScreen> {
 
     if (candidates.isNotEmpty) {
       candidates.sort((a, b) => b.rating.compareTo(a.rating));
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ListenerDetailScreen(listener: candidates.first, initialSessionType: modality),
-        ),
-      ).then((_) => _load(silent: true));
+      CallLauncher.startDirectCall(context, candidates.first, modality);
     } else {
       // Fallback: filter list to this modality
       setState(() => filter = modality == 'CHAT' ? 'CHAT' : modality == 'AUDIO_CALL' ? 'VOICE' : 'VIDEO');
@@ -596,12 +592,7 @@ class _CallerHomeScreenState extends State<CallerHomeScreen> {
                   context,
                   MaterialPageRoute(builder: (_) => ListenerDetailScreen(listener: l)),
                 ).then((_) => _load(silent: true)),
-                onDirectCall: (type) => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ListenerDetailScreen(listener: l, initialSessionType: type),
-                  ),
-                ).then((_) => _load(silent: true)),
+                onDirectCall: (type) => CallLauncher.startDirectCall(context, l, type),
               ),
             ),
         ],

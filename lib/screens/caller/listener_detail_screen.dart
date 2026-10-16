@@ -170,11 +170,7 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
     setState(() => busy = true);
     try {
       final app = context.read<AppController>();
-      final wallet = await app.api.wallet();
-      final rate = type == 'VIDEO_CALL' ? videoRate : type == 'CHAT' ? chatRate : audioRate;
-      if (wallet.totalBalance < rate) {
-        throw Exception('Minimum ₹${rate.toStringAsFixed(0)} (1 minute) is required. Recharge your wallet before starting.');
-      }
+      // Backend automatically checks 1-min balance and returns helpful message if insufficient
       final session = await app.api.requestSession(widget.listener.id, type, categorySlug: _categorySlug());
       if (!mounted) return;
       ActiveCallManager.instance.startCall(session, callerSide: true);
