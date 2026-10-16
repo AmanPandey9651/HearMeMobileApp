@@ -73,6 +73,7 @@ late final Future<void> _renderersReady;
   bool reconnecting = false, gameSheetOpen = false, registeredActiveSession = false, everLive = false;
   bool peerVoiceFxCapable = false, nativeVoiceFxActive = false;
   final queuedCandidates = <Map<String, dynamic>>[];
+  Map<String, dynamic>? pendingOffer;
   List<dynamic> messages = [];
   String? banner;
   String activeVoiceFilter = AndroidVoiceFx.normal;
@@ -260,6 +261,11 @@ void initState() {
 
   _startPolling();
   _privacyAlerts.start(_onPrivacyAlert);
+
+  // Sub-second connection: join media immediately if already live on mount
+  if (isLive && !isChat && pc == null && !joining) {
+    unawaited(_joinMedia());
+  }
 }
 
   /// Called by PrivacyAlertService whenever native Android detects a
@@ -276,7 +282,7 @@ void initState() {
       'platform': 'MOBILE',
       'actionTaken': 'FLAG_SECURE_BLOCKED',
       'pageUrl': 'mobile/session/' + sId,
-    }).catchError((_) {});
+    }).catchError((_) => <String, dynamic>{});
     // Show an in-session warning banner to the user
     if (mounted) {
       setState(() => banner = '🚫 Screenshot / recording is prohibited and has been reported.');
@@ -284,7 +290,7 @@ void initState() {
   }
 
   void _startPolling() {
-    sessionPoll = Timer.periodic(const Duration(milliseconds: 800), (timer) {
+    sessionPoll = Timer.periodic(const Duration(milliseconds: 300), (timer) {
       if (!mounted || _isDisposed) {
         timer.cancel();
         return;
@@ -351,7 +357,8 @@ void initState() {
       }
       if (isLive) _refreshMessages();
     });
-    signalPoll = Timer.periodic(const Duration(milliseconds: 650), (timer) {
+    // Ultra-fast 180ms signal polling during initial negotiation
+    signalPoll = Timer.periodic(const Duration(milliseconds: 180), (timer) {
       if (!mounted || _isDisposed) {
         timer.cancel();
         return;
@@ -498,13 +505,12 @@ void initState() {
   try {
     final api = context.read<AppController>().api;
 
-    try {
-      session = await api.startSession(session.id);
-    } catch (e) {
-      debugPrint(
-        '[WebRTC] startSession warning: $e',
-      );
-    }
+    // Start session in background without blocking media initialization
+    unawaited(api.startSession(session.id).then((s) {
+      session = s;
+    }).catchError((e) {
+      debugPrint('[WebRTC] startSession warning: $e');
+    }));
 
     /*
      * Permission
@@ -524,8 +530,6 @@ void initState() {
 
     /*
      * Wait until Android RTC render surfaces are initialized.
-     *
-     * Do NOT initialize the same RTCVideoRenderer again here.
      */
     await _renderersReady;
 
@@ -535,12 +539,16 @@ void initState() {
 
     /*
      * ============================================================
-     * 1. CREATE CAMERA/MIC STREAM FIRST
+     * 1. CREATE CAMERA/MIC STREAM & ICE IN PARALLEL (SUB-SECOND)
      * ============================================================
      */
-    final capturedStream = await _createLocalMediaStream();
+    final parallelResults = await Future.wait([
+      _createLocalMediaStream(),
+      api.iceServers(),
+    ]);
 
     if (ending || _isDisposed || !mounted) {
+      final capturedStream = parallelResults[0] as MediaStream;
       for (final track in capturedStream.getTracks()) {
         try {
           track.stop();
@@ -553,6 +561,9 @@ void initState() {
 
       return;
     }
+
+    final capturedStream = parallelResults[0] as MediaStream;
+    final ice = parallelResults[1] as List<Map<String, dynamic>>;
 
     localStream = capturedStream;
 
@@ -574,8 +585,6 @@ void initState() {
      * 2. CREATE PEER CONNECTION
      * ============================================================
      */
-    final ice = await api.iceServers();
-
     final peer = await createPeerConnection({
       'iceServers': ice,
       'sdpSemantics': 'unified-plan',
@@ -689,6 +698,13 @@ void initState() {
       if (state ==
           RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
         _finishReconnect();
+        _offerWatchdogTimer?.cancel();
+        _offerWatchdogTimer = null;
+        // Relax signaling and session polling once connected
+        signalPoll?.cancel();
+        signalPoll = Timer.periodic(const Duration(milliseconds: 500), (_) => _pollSignals());
+        sessionPoll?.cancel();
+        sessionPoll = Timer.periodic(const Duration(milliseconds: 1000), (_) => _refreshSession());
 
         /*
          * For audio calls this can start recording immediately.
@@ -764,24 +780,34 @@ void initState() {
     }
 
     /*
-     * Start signaling polling.
+     * Ultra-fast 180ms signal polling during negotiation.
      */
-    signalPoll ??=
-        Timer.periodic(
-          const Duration(milliseconds: 650),
-          (_) => _pollSignals(),
-        );
+    signalPoll?.cancel();
+    signalPoll = Timer.periodic(
+      const Duration(milliseconds: 180),
+      (_) => _pollSignals(),
+    );
 
     /*
-     * Tell peer about Android voice-FX support.
+     * Tell peer about Android voice-FX support in background.
      */
-    await api.sendSignal(
+    unawaited(api.sendSignal(
       session.id,
       {
         'type': 'VOICE_FX_CAPABILITY',
         'supported': voiceFx.supported,
       },
-    ).catchError((_) {});
+    ).catchError((_) {}));
+
+    /*
+     * If an offer arrived while camera/mic was initializing, answer it immediately!
+     */
+    if (pendingOffer != null && !widget.callerSide) {
+      final bufferedOffer = pendingOffer!;
+      pendingOffer = null;
+      debugPrint('[WebRTC] Answering buffered offer immediately after PC ready');
+      await _handleRemoteOffer(bufferedOffer);
+    }
 
     /*
      * ============================================================
@@ -885,7 +911,7 @@ void initState() {
 
     if (widget.callerSide && !isChat) {
       _offerWatchdogTimer?.cancel();
-      _offerWatchdogTimer = Timer.periodic(const Duration(milliseconds: 2000), (timer) async {
+      _offerWatchdogTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) async {
         if (!mounted || _isDisposed || ending || session.ended) {
           timer.cancel();
           return;
@@ -1086,9 +1112,63 @@ void initState() {
       return;
     }
 
+    // Offer handling: if PC is not ready yet, buffer offer so it is NEVER lost!
+    if (type == 'offer' && !widget.callerSide) {
+      if (pc == null) {
+        debugPrint('[WebRTC] Offer arrived before PC ready, buffering in pendingOffer');
+        pendingOffer = s;
+        return;
+      }
+      await _handleRemoteOffer(s);
+      return;
+    }
+
+    // Candidate handling: buffer if PC or remote description not ready yet
+    if (type == 'candidate' && s['candidate'] is Map) {
+      final c = Map<String, dynamic>.from(s['candidate'] as Map);
+      final rawCand = c['candidate']?.toString() ?? '';
+      if (rawCand.trim().isEmpty) return;
+      final peer = pc;
+      if (peer == null) {
+        queuedCandidates.add(c);
+        return;
+      }
+      final desc = await peer.getRemoteDescription();
+      if (desc == null) {
+        queuedCandidates.add(c);
+      } else {
+        final lineIdx = c['sdpMLineIndex'] is num
+            ? (c['sdpMLineIndex'] as num).toInt()
+            : int.tryParse('${c['sdpMLineIndex'] ?? ''}');
+        final cand = RTCIceCandidate(
+          rawCand,
+          c['sdpMid']?.toString(),
+          lineIdx,
+        );
+        await peer.addCandidate(cand).catchError((_) {});
+      }
+      return;
+    }
+
     final peer = pc;
     if (peer == null) return;
-    if (type == 'offer' && !widget.callerSide) {
+
+    if (type == 'answer' && widget.callerSide) {
+      final d = Map<String, dynamic>.from(s['sdp'] as Map);
+      final rawSdp = d['sdp']?.toString() ?? '';
+      await peer.setRemoteDescription(RTCSessionDescription(_preferVP8(rawSdp), d['type']?.toString()));
+      await _flushCandidates();
+      return;
+    }
+  }
+
+  Future<void> _handleRemoteOffer(Map<String, dynamic> s) async {
+    final peer = pc;
+    if (peer == null) {
+      pendingOffer = s;
+      return;
+    }
+    try {
       final d = Map<String, dynamic>.from(s['sdp'] as Map);
       final rawSdp = d['sdp']?.toString() ?? '';
       await peer.setRemoteDescription(RTCSessionDescription(_preferVP8(rawSdp), d['type']?.toString()));
@@ -1101,29 +1181,9 @@ void initState() {
         'restart': s['restart'] == true,
         'sdp': {'type': finalAnswer.type, 'sdp': finalAnswer.sdp},
       });
-    } else if (type == 'answer' && widget.callerSide) {
-      final d = Map<String, dynamic>.from(s['sdp'] as Map);
-      final rawSdp = d['sdp']?.toString() ?? '';
-      await peer.setRemoteDescription(RTCSessionDescription(_preferVP8(rawSdp), d['type']?.toString()));
-      await _flushCandidates();
-    } else if (type == 'candidate' && s['candidate'] is Map) {
-      final c = Map<String, dynamic>.from(s['candidate'] as Map);
-      final rawCand = c['candidate']?.toString() ?? '';
-      if (rawCand.trim().isEmpty) return;
-      final desc = await peer.getRemoteDescription();
-      final lineIdx = c['sdpMLineIndex'] is num
-          ? (c['sdpMLineIndex'] as num).toInt()
-          : int.tryParse('${c['sdpMLineIndex'] ?? ''}');
-      final cand = RTCIceCandidate(
-        rawCand,
-        c['sdpMid']?.toString(),
-        lineIdx,
-      );
-      if (desc == null) {
-        queuedCandidates.add(c);
-      } else {
-        await peer.addCandidate(cand);
-      }
+      debugPrint('[WebRTC] Answer dispatched for remote offer');
+    } catch (e) {
+      debugPrint('[WebRTC] Error answering offer: $e');
     }
   }
 

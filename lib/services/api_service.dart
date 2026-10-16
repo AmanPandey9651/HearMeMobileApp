@@ -268,9 +268,13 @@ class ApiService {
   Future<Map<String, dynamic>> sendMessage(String sessionId, String text, {required String senderName, required String senderRole}) async =>
       Map<String, dynamic>.from(await client.post('/sessions/$sessionId/messages', body: {'text': text, 'senderName': senderName, 'senderRole': senderRole}));
 
-  Future<List<Map<String, dynamic>>> iceServers() async {
+  List<Map<String, dynamic>>? _cachedIceServers;
+  Future<List<Map<String, dynamic>>> iceServers({bool forceRefresh = false}) async {
+    if (_cachedIceServers != null && !forceRefresh) return _cachedIceServers!;
     final data = _content(await client.get('/webrtc/ice-servers'));
-    return data.map((e) => Map<String, dynamic>.from(e)).toList();
+    final list = data.map((e) => Map<String, dynamic>.from(e)).toList();
+    _cachedIceServers = list;
+    return list;
   }
   Future<List<dynamic>> signals(String sessionId, [int? since]) async => _content(await client.get('/webrtc/sessions/$sessionId/signals', query: {if (since != null) 'since': since}));
   Future<void> sendSignal(String sessionId, Map<String, dynamic> data) async => client.post('/webrtc/sessions/$sessionId/signal', body: data);
