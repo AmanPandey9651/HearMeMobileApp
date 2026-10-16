@@ -41,6 +41,12 @@ class ApiService {
   Future<Map<String, dynamic>> verifyOtp(String mobile, String otp) async =>
       Map<String, dynamic>.from(await client.post('/auth/verify-otp', body: {'mobileNumber': mobile, 'otp': otp}));
 
+  Future<Map<String, dynamic>> firebaseOtpLogin(String idToken, [String? mobileNumber]) async =>
+      Map<String, dynamic>.from(await client.post('/auth/firebase-otp', body: {
+        'idToken': idToken,
+        if (mobileNumber != null && mobileNumber.trim().isNotEmpty) 'mobileNumber': mobileNumber.trim(),
+      }));
+
   Future<void> forgotPassword(String identifier) async => client.post('/auth/forgot-password', body: {
         'identifier': identifier,
         'channel': identifier.contains('@') ? 'EMAIL' : 'MOBILE',

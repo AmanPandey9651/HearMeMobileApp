@@ -384,7 +384,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                         } catch (_) {}
                                       },
                                       verificationFailed: (FirebaseAuthException e) {
-                                        showError(context, e.message ?? 'Firebase Phone verification failed.');
+                                        String msg = e.message ?? 'Firebase Phone verification failed.';
+                                        if (e.code == 'billing-not-enabled') {
+                                          msg = 'Firebase SMS requires Blaze billing plan. Please upgrade in Firebase Console or use a test phone number.';
+                                        }
+                                        showError(context, msg);
                                       },
                                       codeSent: (String verificationId, int? resendToken) {
                                         if (mounted) {
