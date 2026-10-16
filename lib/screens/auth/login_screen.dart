@@ -383,10 +383,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                           }
                                         } catch (_) {}
                                       },
-                                      verificationFailed: (FirebaseAuthException e) async {
-                                        // Fallback to server SMS OTP if Firebase fails
-                                        await app.api.sendOtp(mobile);
-                                        if (mounted) setState(() => _otpSent = true);
+                                      verificationFailed: (FirebaseAuthException e) {
+                                        showError(context, e.message ?? 'Firebase Phone verification failed.');
                                       },
                                       codeSent: (String verificationId, int? resendToken) {
                                         if (mounted) {
@@ -402,34 +400,26 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                       },
                                     );
                                   } catch (e) {
-                                    // Fallback to server SMS OTP
-                                    await app.api.sendOtp(mobile);
-                                    if (mounted) setState(() => _otpSent = true);
+                                    showError(context, e);
                                   }
                                 } else {
                                   final code = _otp.text.trim();
                                   if (code.isEmpty) throw Exception('Enter the OTP.');
 
-                                  // If Firebase verificationId is available, verify with Firebase first
-                                  if (_verificationId != null) {
-                                    try {
-                                      final credential = PhoneAuthProvider.credential(
-                                        verificationId: _verificationId!,
-                                        smsCode: code,
-                                      );
-                                      final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
-                                      final idToken = await userCred.user?.getIdToken();
-                                      if (idToken != null) {
-                                        await app.firebaseOtpLogin(idToken, mobile);
-                                        return;
-                                      }
-                                    } catch (fbErr) {
-                                      debugPrint('Firebase verify error, falling back to server verify: $fbErr');
-                                    }
+                                  if (_verificationId == null) {
+                                    throw Exception('No active verification session. Please request a new OTP.');
                                   }
 
-                                  // Fallback to server verification
-                                  await app.verifyOtp(mobile, code);
+                                  final credential = PhoneAuthProvider.credential(
+                                    verificationId: _verificationId!,
+                                    smsCode: code,
+                                  );
+                                  final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
+                                  final idToken = await userCred.user?.getIdToken();
+                                  if (idToken == null) {
+                                    throw Exception('Failed to obtain Firebase ID token.');
+                                  }
+                                  await app.firebaseOtpLogin(idToken, mobile);
                                 }
                               }),
                       child: Center(
