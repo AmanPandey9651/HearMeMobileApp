@@ -91,6 +91,30 @@ class ApiService {
     }
   }
 
+  Set<String>? _cachedBlockedMe;
+  DateTime? _cachedBlockedMeAt;
+
+  Future<Set<String>> blockedMeIds() async {
+    if (client.token == null || client.token!.isEmpty) return <String>{};
+    if (_cachedBlockedMe != null &&
+        _cachedBlockedMeAt != null &&
+        DateTime.now().difference(_cachedBlockedMeAt!) < const Duration(seconds: 45)) {
+      return _cachedBlockedMe!;
+    }
+    try {
+      final res = await client.get('/safety/blocked-me');
+      final out = <String>{};
+      for (final item in _content(res)) {
+        if (item != null) out.add(item.toString());
+      }
+      _cachedBlockedMe = out;
+      _cachedBlockedMeAt = DateTime.now();
+      return out;
+    } catch (_) {
+      return _cachedBlockedMe ?? <String>{};
+    }
+  }
+
   Future<bool> amIBlockedBy(String targetUserId, {bool force = false}) async {
     if (targetUserId.isEmpty || client.token == null || client.token!.isEmpty) return false;
     final last = _blockedByTargetCheckedAt[targetUserId];
@@ -108,23 +132,15 @@ class ApiService {
     }
   }
 
-  Future<List<dynamic>> _expertCards({String? query, String? category}) async {
-    final data = await client.get('/experts', query: {
-      if (query?.isNotEmpty == true) 'query': query,
-      if (category?.isNotEmpty == true) 'categorySlug': category,
-      'page': 0,
-      'size': 500,
-    });
-    return _content(data);
-  }
-
-  Future<List<ListenerCardModel>> _decorateAndHideBlocked(dynamic listenerData, List<dynamic> expertCards) async {
+  Future<List<ListenerCardModel>> _decorateAndHideBlocked(dynamic listenerData, [List<dynamic>? expertCards]) async {
     final userIds = <String, String>{};
-    for (final item in expertCards) {
-      if (item is! Map) continue;
-      final id = item['id']?.toString() ?? '';
-      final uid = item['userId']?.toString() ?? '';
-      if (id.isNotEmpty && uid.isNotEmpty) userIds[id] = uid;
+    if (expertCards != null && expertCards.isNotEmpty) {
+      for (final item in expertCards) {
+        if (item is! Map) continue;
+        final id = item['id']?.toString() ?? '';
+        final uid = item['userId']?.toString() ?? '';
+        if (id.isNotEmpty && uid.isNotEmpty) userIds[id] = uid;
+      }
     }
 
     var listeners = _content(listenerData)
@@ -133,33 +149,28 @@ class ApiService {
         .toList();
 
     if (client.token == null || client.token!.isEmpty || listeners.isEmpty) return listeners;
-    final blockedByMe = await blockedByMeIds();
-    listeners = listeners.where((e) {
-      final uid = e.userId;
-      return uid == null || !blockedByMe.contains(uid);
-    }).toList();
 
-    final checks = await Future.wait(listeners.map((e) async {
+    // Concurrently fetch blockedByMe and blockedMe in just 2 quick requests instead of 50 parallel calls!
+    final blockResults = await Future.wait<Set<String>>([
+      blockedByMeIds(),
+      blockedMeIds(),
+    ]);
+    final blockedByMe = blockResults[0];
+    final blockedMe = blockResults[1];
+
+    return listeners.where((e) {
       final uid = e.userId;
-      if (uid == null || uid.isEmpty) return false;
-      return amIBlockedBy(uid);
-    }));
-    final visible = <ListenerCardModel>[];
-    for (var i = 0; i < listeners.length; i++) {
-      if (!checks[i]) visible.add(listeners[i]);
-    }
-    return visible;
+      if (uid == null || uid.isEmpty) return true;
+      return !blockedByMe.contains(uid) && !blockedMe.contains(uid);
+    }).toList();
   }
 
   Future<List<ListenerCardModel>> onlineListeners({bool includeOffline = true, String? category}) async {
-    final results = await Future.wait<dynamic>([
-      client.get('/listeners/online', query: {
-        'includeOffline': includeOffline,
-        if (category?.isNotEmpty == true) 'categorySlug': category,
-      }),
-      _expertCards(category: category),
-    ]);
-    return _decorateAndHideBlocked(results[0], List<dynamic>.from(results[1] as List));
+    final data = await client.get('/listeners/online', query: {
+      'includeOffline': includeOffline,
+      if (category?.isNotEmpty == true) 'categorySlug': category,
+    });
+    return _decorateAndHideBlocked(data);
   }
 
   Future<List<ListenerCardModel>> allListeners({
@@ -168,14 +179,11 @@ class ApiService {
     double? minRating,
     double? maxRate,
   }) async {
-    final results = await Future.wait<dynamic>([
-      client.get('/listeners/all', query: {
-        if (query?.isNotEmpty == true) 'query': query,
-        if (category?.isNotEmpty == true) 'categorySlug': category,
-      }),
-      _expertCards(query: query, category: category),
-    ]);
-    var all = await _decorateAndHideBlocked(results[0], List<dynamic>.from(results[1] as List));
+    final data = await client.get('/listeners/all', query: {
+      if (query?.isNotEmpty == true) 'query': query,
+      if (category?.isNotEmpty == true) 'categorySlug': category,
+    });
+    var all = await _decorateAndHideBlocked(data);
     if (minRating != null) all = all.where((e) => e.rating >= minRating).toList();
     if (maxRate != null) all = all.where((e) => e.audioRate <= maxRate).toList();
     return all;
