@@ -43,6 +43,11 @@ late final Future<void> _renderersReady;
   final _privacyAlerts = PrivacyAlertService();
   final gameSignal = ValueNotifier<Map<String, dynamic>?>(null);
   final messageController = TextEditingController();
+  final ScrollController _chatScrollController = ScrollController();
+  bool isPeerTyping = false;
+  Timer? _peerTypingTimer;
+  Timer? _myTypingTimer;
+  bool _isMyTypingActive = false;
 
   void _startRingtone() {
     try {
@@ -1101,10 +1106,26 @@ void initState() {
       }
       return;
     }
+    if (type == 'TYPING_STATUS') {
+      final isTyping = s['isTyping'] == true;
+      if (mounted) {
+        setState(() => isPeerTyping = isTyping);
+      }
+      _peerTypingTimer?.cancel();
+      if (isTyping) {
+        _scrollToChatBottom();
+        _peerTypingTimer = Timer(const Duration(seconds: 4), () {
+          if (mounted) setState(() => isPeerTyping = false);
+        });
+      }
+      return;
+    }
     if (type == 'IN_CALL_CHAT' && s['message'] is Map) {
       final msg = Map<String, dynamic>.from(s['message'] as Map);
       if (mounted) {
         setState(() {
+          isPeerTyping = false;
+          _peerTypingTimer?.cancel();
           final isDup = messages.any((m) =>
             (msg['id'] != null && m['id'] == msg['id']) ||
             (m['text'] == msg['text'] && m['senderRole'] == msg['senderRole'])
@@ -1113,6 +1134,7 @@ void initState() {
             messages.add(msg);
           }
         });
+        _scrollToChatBottom();
       }
       return;
     }
@@ -1228,6 +1250,52 @@ void initState() {
       final v = await _api.messages(session.id);
       if (mounted && !_isDisposed) setState(() => messages = v);
     } catch (_) {}
+  }
+
+  void _onChatInputChanged(String val) {
+    if (val.trim().isNotEmpty) {
+      if (!_isMyTypingActive) {
+        _isMyTypingActive = true;
+        context.read<AppController>().api.sendSignal(session.id, {
+          'type': 'TYPING_STATUS',
+          'isTyping': true,
+          'senderRole': widget.callerSide ? 'USER' : 'LISTENER',
+        }).catchError((_) {});
+      }
+      _myTypingTimer?.cancel();
+      _myTypingTimer = Timer(const Duration(milliseconds: 2500), () {
+        _isMyTypingActive = false;
+        if (mounted) {
+          context.read<AppController>().api.sendSignal(session.id, {
+            'type': 'TYPING_STATUS',
+            'isTyping': false,
+            'senderRole': widget.callerSide ? 'USER' : 'LISTENER',
+          }).catchError((_) {});
+        }
+      });
+    } else {
+      if (_isMyTypingActive) {
+        _isMyTypingActive = false;
+        _myTypingTimer?.cancel();
+        context.read<AppController>().api.sendSignal(session.id, {
+          'type': 'TYPING_STATUS',
+          'isTyping': false,
+          'senderRole': widget.callerSide ? 'USER' : 'LISTENER',
+        }).catchError((_) {});
+      }
+    }
+  }
+
+  void _scrollToChatBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_chatScrollController.hasClients) {
+        _chatScrollController.animateTo(
+          _chatScrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
   Future<void> _sendMessage() async {
@@ -1503,6 +1571,9 @@ void initState() {
     try { remoteRenderer.srcObject = null; } catch (_) {}
     localRenderer.dispose();
     remoteRenderer.dispose();
+    _peerTypingTimer?.cancel();
+    _myTypingTimer?.cancel();
+    _chatScrollController.dispose();
     messageController.dispose();
     gameSignal.dispose();
     super.dispose();
@@ -3092,11 +3163,11 @@ void initState() {
                     ),
                   ),
                   Text(
-                    'Chatting • ${_time(seconds)}',
-                    style: const TextStyle(
+                    isPeerTyping ? 'typing…' : 'Chatting • ${_time(seconds)}',
+                    style: TextStyle(
                       fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFFF95B3D),
+                      fontWeight: FontWeight.w700,
+                      color: isPeerTyping ? const Color(0xFF059669) : const Color(0xFFF95B3D),
                     ),
                   ),
                 ],
@@ -3225,9 +3296,60 @@ void initState() {
   }
 
   Widget _chatBody() => ListView.builder(
+        controller: _chatScrollController,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        itemCount: messages.length,
+        itemCount: messages.length + (isPeerTyping ? 1 : 0),
         itemBuilder: (context, i) {
+          if (i == messages.length && isPeerTyping) {
+            final peerName = widget.callerSide ? session.listenerName : session.callerNickname;
+            return Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(18),
+                    topRight: Radius.circular(18),
+                    bottomLeft: Radius.circular(4),
+                    bottomRight: Radius.circular(18),
+                  ),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '$peerName is typing…',
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontStyle: FontStyle.italic,
+                        color: Color(0xFF059669),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF059669),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
           final m = Map<String, dynamic>.from(messages[i]);
           final mine = (m['senderRole'] == 'USER') == widget.callerSide;
           return Align(
@@ -3317,6 +3439,7 @@ void initState() {
                 Expanded(
                   child: TextField(
                     controller: messageController,
+                    onChanged: _onChatInputChanged,
                     onSubmitted: (_) => _sendMessage(),
                     style: const TextStyle(fontSize: 15, color: Color(0xFF0F172A)),
                     decoration: const InputDecoration(
