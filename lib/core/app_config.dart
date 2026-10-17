@@ -11,7 +11,7 @@ enum AppEnvironment {
       case AppEnvironment.local:
         return 'Local Development (localhost:8080)';
       case AppEnvironment.netlify:
-        return 'Netlify / Render (hearmebackendd.onrender.com)';
+        return 'Netlify / Render (hearmebackendd-4hhf.onrender.com)';
       case AppEnvironment.production:
         return 'Production (feelback.in)';
     }
@@ -26,7 +26,7 @@ enum AppEnvironment {
         }
         return 'http://localhost:8080';
       case AppEnvironment.netlify:
-        return 'https://hearmebackendd.onrender.com';
+        return 'https://hearmebackendd-4hhf.onrender.com';
       case AppEnvironment.production:
         return 'https://www.feelback.in';
     }
@@ -79,7 +79,7 @@ class AppConfig {
   /// Active environment resolved from compile-time settings (defaults to Netlify/Render)
   static AppEnvironment get currentEnvironment => AppEnvironment.fromString(_compileTimeEnv);
 
-  /// Active API base URL for all ApiClient requests (e.g. https://hearmebackendd.onrender.com/api/v1)
+  /// Active API base URL for all ApiClient requests (e.g. https://hearmebackendd-4hhf.onrender.com/api/v1)
   static String get apiBaseUrl {
     // 1. Explicit compile-time API_BASE_URL override has top precedence
     if (_compileTimeApiUrl.isNotEmpty) {
@@ -89,10 +89,10 @@ class AppConfig {
     return currentEnvironment.apiBaseUrl;
   }
 
-  /// Active root origin (e.g. https://hearmebackendd.onrender.com)
+  /// Active root origin (e.g. https://hearmebackendd-4hhf.onrender.com)
   static String get currentHost => normalizeHostUrl(apiBaseUrl);
 
-  /// Active health check URL (e.g. https://hearmebackendd.onrender.com/health)
+  /// Active health check URL (e.g. https://hearmebackendd-4hhf.onrender.com/health)
   static String get healthUrl => '$currentHost/health';
 
   /// Optional initialization hook
