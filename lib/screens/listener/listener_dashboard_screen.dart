@@ -31,6 +31,8 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
   bool audioAvailable = true;
   bool videoAvailable = true;
   bool modalityBusy = false;
+  bool _presenceToggling = false;
+  DateTime? _presenceLockUntil;
   int selectedSubTab = 0; // 0: Calls & Chats, 1: Attendance, 2: Transactions, 3: Earnings, 4: Gifts, 5: UPI
   Timer? heartbeat;
   Timer? refresh;
@@ -77,20 +79,25 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
       if (!mounted) return;
       final p = Map<String, dynamic>.from(results[0] as Map);
       final a = Map<String, dynamic>.from(results[1] as Map);
+      final isLocked = _presenceToggling || (_presenceLockUntil != null && DateTime.now().isBefore(_presenceLockUntil!));
       setState(() {
         profile = p;
         attendance = a;
         wallet = results[2] as WalletModel;
         sessions = results[3] as List<InstantSessionModel>;
-        presence = '${p['presence'] ?? p['presenceStatus'] ?? a['presence'] ?? 'OFFLINE'}';
+        if (!isLocked) {
+          presence = '${p['presence'] ?? p['presenceStatus'] ?? a['presence'] ?? 'OFFLINE'}';
+        }
         activeSessionType = p['activeSessionType']?.toString();
         liveOnlineSeconds = (a['onlineSeconds'] as num?)?.toInt() ?? liveOnlineSeconds;
-        chatAvailable = p['chatAvailable'] != false;
-        audioAvailable = p['audioAvailable'] != false;
-        videoAvailable = p['videoAvailable'] != false;
+        if (!modalityBusy) {
+          chatAvailable = p['chatAvailable'] != false;
+          audioAvailable = p['audioAvailable'] != false;
+          videoAvailable = p['videoAvailable'] != false;
+        }
         loading = false;
       });
-      if (mounted) {
+      if (mounted && !isLocked) {
         context.read<AppController>().updatePresence(presence);
       }
     } catch (e) {
@@ -103,6 +110,7 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
   }
 
   Future<void> _toggleModality(String modality) async {
+    if (modalityBusy) return;
     final nextChat = modality == 'chat' ? !chatAvailable : chatAvailable;
     final nextAudio = modality == 'audio' ? !audioAvailable : audioAvailable;
     final nextVideo = modality == 'video' ? !videoAvailable : videoAvailable;
@@ -146,6 +154,10 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
   }
 
   Future<void> _toggle() async {
+    if (_presenceToggling) return;
+    _presenceToggling = true;
+    _presenceLockUntil = DateTime.now().add(const Duration(seconds: 8));
+
     final isOnlineOrBusy = presence == 'ONLINE' || presence == 'BUSY_IN_CALL' || presence == 'BUSY';
     final next = isOnlineOrBusy ? 'OFFLINE' : 'ONLINE';
     final prev = presence;
@@ -154,14 +166,15 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
     });
     context.read<AppController>().updatePresence(next);
     try {
-      final result = await context.read<AppController>().api.updatePresence(next);
+      await context.read<AppController>().api.updatePresence(next);
       if (!mounted) return;
       setState(() {
-        presence = '${result['presence'] ?? result['presenceStatus'] ?? next}';
+        presence = next;
       });
-      context.read<AppController>().updatePresence(presence);
+      context.read<AppController>().updatePresence(next);
       await _load(silent: true);
     } catch (e) {
+      _presenceLockUntil = null;
       if (mounted) {
         setState(() {
           presence = prev;
@@ -169,6 +182,8 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
         context.read<AppController>().updatePresence(prev);
         showError(context, e);
       }
+    } finally {
+      _presenceToggling = false;
     }
   }
 
@@ -452,6 +467,7 @@ class _ListenerDashboardScreenState extends State<ListenerDashboardScreen> {
                           width: 135,
                           child: _PresenceSliderSwitch(
                             isOnline: isOnline || isBusy,
+                            isBusy: _presenceToggling,
                             onToggle: _toggle,
                           ),
                         ),
@@ -1930,17 +1946,19 @@ class ConsultationRatesSheet extends StatelessWidget {
 
 class _PresenceSliderSwitch extends StatelessWidget {
   final bool isOnline;
+  final bool isBusy;
   final VoidCallback onToggle;
 
   const _PresenceSliderSwitch({
     required this.isOnline,
+    this.isBusy = false,
     required this.onToggle,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onToggle,
+      onTap: isBusy ? null : onToggle,
       child: Container(
         height: 36,
         padding: const EdgeInsets.all(2.5),
