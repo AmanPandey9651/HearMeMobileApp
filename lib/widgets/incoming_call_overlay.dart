@@ -128,7 +128,7 @@ class _IncomingCallOverlayState extends State<IncomingCallOverlay> {
   }
 
   void _startStatusPolling() {
-    _statusPollTimer = Timer.periodic(const Duration(milliseconds: 1200), (_) async {
+    _statusPollTimer = Timer.periodic(const Duration(milliseconds: 250), (_) async {
       if (_actionTaken || !mounted) return;
       try {
         final current = await context.read<AppController>().api.session(widget.session.id);
