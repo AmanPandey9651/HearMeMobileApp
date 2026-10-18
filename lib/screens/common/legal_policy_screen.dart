@@ -136,15 +136,7 @@ class _LegalPolicyScreenState extends State<LegalPolicyScreen> with SingleTicker
         const SizedBox(height: 12),
 
         _buildCard(
-          title: '3. Data Storage & Indian Sovereignty',
-          icon: Icons.cloud_done_rounded,
-          iconColor: const Color(0xFF3B82F6),
-          content: 'In strict compliance with India\'s Digital Personal Data Protection Act (DPDP Act 2023), all user account data, wallet ledgers, and database backups are hosted exclusively in Mumbai, India on AWS Lightsail datacenter servers with AES-256 encryption.',
-        ),
-        const SizedBox(height: 12),
-
-        _buildCard(
-          title: '4. Account & Data Deletion (Play Store SLA)',
+          title: '3. Account & Data Deletion (Play Store SLA)',
           icon: Icons.delete_forever_rounded,
           iconColor: Colors.deepPurple,
           content: 'In compliance with Google Play Store & Apple App Store user data policies, you have the absolute right to delete your account.\n\n'
