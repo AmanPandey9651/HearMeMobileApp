@@ -1,3 +1,4 @@
+import '../common/legal_policy_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -14,6 +15,7 @@ class ListenerRegisterScreen extends StatefulWidget {
 }
 
 class _ListenerRegisterScreenState extends State<ListenerRegisterScreen> {
+  bool _agreedToPolicy = false;
   // Account Information Controllers
   final first = TextEditingController();
   final last = TextEditingController();
@@ -946,7 +948,78 @@ class _ListenerRegisterScreenState extends State<ListenerRegisterScreen> {
               ],
             ),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
+
+            // Mandatory Policy Acceptance Checkbox
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _agreedToPolicy ? const Color(0xFF10B981) : borderWarm,
+                  width: _agreedToPolicy ? 1.5 : 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: Checkbox(
+                      value: _agreedToPolicy,
+                      activeColor: primaryOrange,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      onChanged: (val) {
+                        setState(() => _agreedToPolicy = val ?? false);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Wrap(
+                      children: [
+                        const Text(
+                          'I have read and agree to the ',
+                          style: TextStyle(fontSize: 12.5, color: textDark, height: 1.4),
+                        ),
+                        GestureDetector(
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LegalPolicyScreen(initialTab: 0))),
+                          child: const Text(
+                            'Privacy Policy',
+                            style: TextStyle(fontSize: 12.5, color: primaryOrange, fontWeight: FontWeight.w800, decoration: TextDecoration.underline, height: 1.4),
+                          ),
+                        ),
+                        const Text(
+                          ' and ',
+                          style: TextStyle(fontSize: 12.5, color: textDark, height: 1.4),
+                        ),
+                        GestureDetector(
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LegalPolicyScreen(initialTab: 1))),
+                          child: const Text(
+                            'Terms of Service',
+                            style: TextStyle(fontSize: 12.5, color: primaryOrange, fontWeight: FontWeight.w800, decoration: TextDecoration.underline, height: 1.4),
+                          ),
+                        ),
+                        const Text(
+                          ', and affirm to maintain 100% confidentiality of all caller sessions.',
+                          style: TextStyle(fontSize: 12.5, color: textDark, height: 1.4),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
 
             // 5. Submit Button (Big orange gradient pill with right arrow matching Screenshot 2)
             Container(
@@ -954,14 +1027,16 @@ class _ListenerRegisterScreenState extends State<ListenerRegisterScreen> {
               height: 52,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(18),
-                gradient: const LinearGradient(
-                  colors: [primaryOrange, secondaryOrange],
+                gradient: LinearGradient(
+                  colors: (busy || !_agreedToPolicy)
+                      ? [const Color(0xFFD1D5DB), const Color(0xFF9CA3AF)]
+                      : [primaryOrange, secondaryOrange],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: primaryOrange.withValues(alpha: 0.35),
+                    color: _agreedToPolicy ? primaryOrange.withValues(alpha: 0.35) : Colors.transparent,
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
@@ -971,7 +1046,7 @@ class _ListenerRegisterScreenState extends State<ListenerRegisterScreen> {
                 color: Colors.transparent,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(18),
-                  onTap: busy ? null : _submit,
+                  onTap: (busy || !_agreedToPolicy) ? null : _submit,
                   child: Center(
                     child: busy
                         ? const SizedBox(
