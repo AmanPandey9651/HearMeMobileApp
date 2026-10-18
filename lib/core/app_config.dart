@@ -3,17 +3,17 @@ import 'package:flutter/foundation.dart';
 
 enum AppEnvironment {
   local,
-  netlify,
+  staging,
   production;
 
   String get displayName {
     switch (this) {
       case AppEnvironment.local:
         return 'Local Development (localhost:8080)';
-      case AppEnvironment.netlify:
-        return 'Netlify / Render (hearmebackendd-4hhf.onrender.com)';
+      case AppEnvironment.staging:
+        return 'Staging / Render (hearmebackendd-4hhf.onrender.com)';
       case AppEnvironment.production:
-        return 'Production (feelback.in)';
+        return 'Production (www.feelback.in)';
     }
   }
 
@@ -25,7 +25,7 @@ enum AppEnvironment {
           return 'http://10.0.2.2:8080';
         }
         return 'http://localhost:8080';
-      case AppEnvironment.netlify:
+      case AppEnvironment.staging:
         return 'https://hearmebackendd-4hhf.onrender.com';
       case AppEnvironment.production:
         return 'https://www.feelback.in';
@@ -35,22 +35,23 @@ enum AppEnvironment {
   String get apiBaseUrl => AppConfig.normalizeApiUrl(defaultHost);
 
   static AppEnvironment fromString(String? value) {
-    if (value == null) return AppEnvironment.netlify;
+    if (value == null) return AppEnvironment.production;
     final clean = value.trim().toLowerCase();
     if (clean == 'local' || clean.contains('localhost') || clean.contains('10.0.2.2')) {
       return AppEnvironment.local;
     }
-    if (clean == 'production' || clean == 'prod' || clean.contains('feelback')) {
-      return AppEnvironment.production;
+    if (clean == 'staging' || clean == 'netlify' || clean.contains('onrender')) {
+      return AppEnvironment.staging;
     }
-    return AppEnvironment.netlify;
+    return AppEnvironment.production;
   }
 }
 
 class AppConfig {
   // Compile-time environment configuration
-  // Pass: --dart-define=APP_ENV=local OR --dart-define=APP_ENV=production
-  static const String _compileTimeEnv = String.fromEnvironment('APP_ENV', defaultValue: 'netlify');
+  // Defaults to production (https://www.feelback.in)
+  // Pass: --dart-define=APP_ENV=staging OR --dart-define=APP_ENV=local
+  static const String _compileTimeEnv = String.fromEnvironment('APP_ENV', defaultValue: 'production');
   static const String _compileTimeApiUrl = String.fromEnvironment('API_BASE_URL', defaultValue: '');
 
   static const String googleServerClientId = String.fromEnvironment(
@@ -76,10 +77,10 @@ class AppConfig {
     return '$host/api/v1';
   }
 
-  /// Active environment resolved from compile-time settings (defaults to Netlify/Render)
+  /// Active environment resolved from compile-time settings (defaults to Production www.feelback.in)
   static AppEnvironment get currentEnvironment => AppEnvironment.fromString(_compileTimeEnv);
 
-  /// Active API base URL for all ApiClient requests (e.g. https://hearmebackendd-4hhf.onrender.com/api/v1)
+  /// Active API base URL for all ApiClient requests (e.g. https://www.feelback.in/api/v1)
   static String get apiBaseUrl {
     // 1. Explicit compile-time API_BASE_URL override has top precedence
     if (_compileTimeApiUrl.isNotEmpty) {
@@ -89,10 +90,10 @@ class AppConfig {
     return currentEnvironment.apiBaseUrl;
   }
 
-  /// Active root origin (e.g. https://hearmebackendd-4hhf.onrender.com)
+  /// Active root origin (e.g. https://www.feelback.in)
   static String get currentHost => normalizeHostUrl(apiBaseUrl);
 
-  /// Active health check URL (e.g. https://hearmebackendd-4hhf.onrender.com/health)
+  /// Active health check URL (e.g. https://www.feelback.in/health)
   static String get healthUrl => '$currentHost/health';
 
   /// Optional initialization hook
