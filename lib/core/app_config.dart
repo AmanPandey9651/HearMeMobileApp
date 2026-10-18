@@ -13,7 +13,7 @@ enum AppEnvironment {
       case AppEnvironment.staging:
         return 'Staging / Render (hearmebackendd-4hhf.onrender.com)';
       case AppEnvironment.production:
-        return 'Production (feebackbackendd.onrender.com)';
+        return 'Production (feelbackbackend.onrender.com)';
     }
   }
 
@@ -28,7 +28,7 @@ enum AppEnvironment {
       case AppEnvironment.staging:
         return 'https://hearmebackendd-4hhf.onrender.com';
       case AppEnvironment.production:
-        return 'https://feebackbackendd.onrender.com';
+        return 'https://feelbackbackend.onrender.com';
     }
   }
 
