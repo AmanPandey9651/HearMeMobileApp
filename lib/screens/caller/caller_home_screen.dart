@@ -1,3 +1,4 @@
+import '../../core/countries_data.dart';
 import '../../services/call_launcher.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -24,6 +25,7 @@ class _CallerHomeScreenState extends State<CallerHomeScreen> {
   bool loading = true;
   String filter = 'ALL';
   String categorySlug = '';
+  String selectedCountry = 'ALL';
   double? minRating;
   double? maxRate;
   Timer? timer;
@@ -105,6 +107,102 @@ class _CallerHomeScreenState extends State<CallerHomeScreen> {
         ),
       );
     }
+  }
+
+  void _showCountryPicker() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        String query = '';
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final filteredCountries = kGlobalCountries.where((c) {
+              if (query.isEmpty) return true;
+              return c.name.toLowerCase().contains(query.toLowerCase());
+            }).toList();
+
+            return Container(
+              height: MediaQuery.of(ctx).size.height * 0.72,
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Column(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Select Country (60+ Worldwide)',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: textDark),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    onChanged: (val) => setModalState(() => query = val),
+                    decoration: InputDecoration(
+                      hintText: 'Search country...',
+                      prefixIcon: const Icon(Icons.search_rounded, color: primaryOrange),
+                      filled: true,
+                      fillColor: const Color(0xFFFAF5EE),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: borderWarm),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: borderWarm),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: filteredCountries.length + 1,
+                      separatorBuilder: (_, __) => const Divider(height: 1, color: borderWarm),
+                      itemBuilder: (context, i) {
+                        if (i == 0) {
+                          return ListTile(
+                            leading: const Text('🌐', style: TextStyle(fontSize: 22)),
+                            title: const Text('All Countries (Worldwide)', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                            selected: selectedCountry == 'ALL',
+                            selectedTileColor: const Color(0xFFFFF3ED),
+                            onTap: () {
+                              setState(() => selectedCountry = 'ALL');
+                              Navigator.pop(ctx);
+                            },
+                          );
+                        }
+                        final c = filteredCountries[i - 1];
+                        final isSelected = selectedCountry == c.code;
+                        return ListTile(
+                          leading: Text(c.flag, style: const TextStyle(fontSize: 22)),
+                          title: Text(c.name, style: TextStyle(fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500, fontSize: 14, color: isSelected ? primaryOrange : textDark)),
+                          selected: isSelected,
+                          selectedTileColor: const Color(0xFFFFF3ED),
+                          onTap: () {
+                            setState(() => selectedCountry = c.code);
+                            Navigator.pop(ctx);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _advancedFilters() async {
@@ -222,6 +320,19 @@ class _CallerHomeScreenState extends State<CallerHomeScreen> {
   @override
   Widget build(BuildContext context) {
     var visible = List<ListenerCardModel>.from(listeners);
+    if (selectedCountry != 'ALL') {
+      visible = visible.where((x) {
+        final c = (x.country?.isNotEmpty == true ? x.country! : 'India').trim().toLowerCase();
+        final target = selectedCountry.trim().toLowerCase();
+        if (target == 'united states' || target == 'usa') {
+          return c == 'united states' || c == 'usa' || c == 'us';
+        }
+        if (target == 'united kingdom' || target == 'uk') {
+          return c == 'united kingdom' || c == 'uk';
+        }
+        return c == target;
+      }).toList();
+    }
     if (filter == 'ONLINE') visible = visible.where((x) => x.presence == 'ONLINE').toList();
     if (filter == 'VOICE') visible = visible.where((x) => x.audioAvailable).toList();
     if (filter == 'VIDEO') visible = visible.where((x) => x.videoAvailable).toList();
@@ -359,6 +470,62 @@ class _CallerHomeScreenState extends State<CallerHomeScreen> {
                   ),
                 );
               },
+            ),
+          ),
+
+          const SizedBox(height: 6),
+
+          // 2.5 Country Filter Pills
+          SizedBox(
+            height: 32,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              children: [
+                _BadgePill(
+                  label: '🌐 All Countries',
+                  isSelected: selectedCountry == 'ALL',
+                  onTap: () => setState(() => selectedCountry = 'ALL'),
+                ),
+                _BadgePill(
+                  label: '🇮🇳 India',
+                  isSelected: selectedCountry == 'India',
+                  onTap: () => setState(() => selectedCountry = 'India'),
+                ),
+                _BadgePill(
+                  label: '🇺🇸 USA',
+                  isSelected: selectedCountry == 'United States',
+                  onTap: () => setState(() => selectedCountry = 'United States'),
+                ),
+                _BadgePill(
+                  label: '🇬🇧 UK',
+                  isSelected: selectedCountry == 'United Kingdom',
+                  onTap: () => setState(() => selectedCountry = 'United Kingdom'),
+                ),
+                _BadgePill(
+                  label: '🇨🇦 Canada',
+                  isSelected: selectedCountry == 'Canada',
+                  onTap: () => setState(() => selectedCountry = 'Canada'),
+                ),
+                _BadgePill(
+                  label: '🇦🇺 Australia',
+                  isSelected: selectedCountry == 'Australia',
+                  onTap: () => setState(() => selectedCountry = 'Australia'),
+                ),
+                _BadgePill(
+                  label: '🇦🇪 UAE',
+                  isSelected: selectedCountry == 'United Arab Emirates',
+                  onTap: () => setState(() => selectedCountry = 'United Arab Emirates'),
+                ),
+                _BadgePill(
+                  label: (selectedCountry != 'ALL' && !['India', 'United States', 'United Kingdom', 'Canada', 'Australia', 'United Arab Emirates'].contains(selectedCountry))
+                      ? '📍 $selectedCountry'
+                      : '🌍 More (60+)...',
+                  isSelected: selectedCountry != 'ALL' && !['India', 'United States', 'United Kingdom', 'Canada', 'Australia', 'United Arab Emirates'].contains(selectedCountry),
+                  onTap: _showCountryPicker,
+                ),
+              ],
             ),
           ),
 

@@ -92,6 +92,7 @@ class ListenerCardModel {
   final List<String> languages;
   final String? gender;
   final String? hobbies;
+  final String? country;
   final bool chatAvailable;
   final bool audioAvailable;
   final bool videoAvailable;
@@ -118,6 +119,7 @@ class ListenerCardModel {
     required this.languages,
     this.gender,
     this.hobbies,
+    this.country,
     this.chatAvailable = true,
     this.audioAvailable = true,
     this.videoAvailable = true,
@@ -138,6 +140,7 @@ class ListenerCardModel {
     String? busyDescription,
     int? busyDurationMinutes,
     String? lastSeenAt,
+    String? country,
     bool? chatAvailable,
     bool? audioAvailable,
     bool? videoAvailable,
@@ -163,6 +166,7 @@ class ListenerCardModel {
         languages: languages,
         gender: gender,
         hobbies: hobbies,
+        country: country ?? this.country,
         chatAvailable: chatAvailable ?? this.chatAvailable,
         audioAvailable: audioAvailable ?? this.audioAvailable,
         videoAvailable: videoAvailable ?? this.videoAvailable,
