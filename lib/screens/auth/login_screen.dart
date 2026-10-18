@@ -1,3 +1,4 @@
+import '../common/legal_policy_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -524,6 +525,23 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               ),
             ],
           ),
+        ),
+        const SizedBox(height: 14),
+        Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            const Text('By continuing, you agree to our ', style: TextStyle(fontSize: 11, color: textMuted)),
+            GestureDetector(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LegalPolicyScreen(initialTab: 1))),
+              child: const Text('Terms of Service', style: TextStyle(fontSize: 11, color: primaryOrange, fontWeight: FontWeight.w700, decoration: TextDecoration.underline)),
+            ),
+            const Text(' & ', style: TextStyle(fontSize: 11, color: textMuted)),
+            GestureDetector(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LegalPolicyScreen(initialTab: 0))),
+              child: const Text('Privacy Policy', style: TextStyle(fontSize: 11, color: primaryOrange, fontWeight: FontWeight.w700, decoration: TextDecoration.underline)),
+            ),
+          ],
         ),
 
         const SizedBox(height: 12),

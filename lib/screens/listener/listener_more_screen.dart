@@ -9,6 +9,7 @@ import '../../widgets/sign_out_card.dart';
 import '../common/how_it_works_screen.dart';
 import '../common/notifications_screen.dart';
 import '../common/safety_support_screen.dart';
+import '../common/legal_policy_screen.dart';
 import 'listener_dashboard_screen.dart';
 import 'listener_peers_screen.dart';
 import 'listener_profile_screen.dart';
@@ -776,6 +777,17 @@ class _ListenerMoreScreenState extends State<ListenerMoreScreen> {
                             final nav = TalkStrangersApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
                             nav.push(
                               MaterialPageRoute(builder: (_) => const HowItWorksScreen()),
+                            );
+                          },
+                        ),
+                        const Divider(height: 1, thickness: 1, color: borderWarm, indent: 64),
+                        _MenuRowItem(
+                          icon: Icons.policy_outlined,
+                          title: 'Privacy Policy & Terms',
+                          onTap: () {
+                            final nav = TalkStrangersApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
+                            nav.push(
+                              MaterialPageRoute(builder: (_) => const LegalPolicyScreen()),
                             );
                           },
                         ),

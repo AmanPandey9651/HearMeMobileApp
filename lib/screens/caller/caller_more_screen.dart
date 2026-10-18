@@ -7,6 +7,7 @@ import '../../widgets/sign_out_card.dart';
 import '../common/how_it_works_screen.dart';
 import '../common/notifications_screen.dart';
 import '../common/safety_support_screen.dart';
+import '../common/legal_policy_screen.dart';
 import '../../main.dart';
 import 'anonymous_profile_screen.dart';
 import 'followed_listeners_screen.dart';
@@ -159,6 +160,16 @@ class CallerMoreScreen extends StatelessWidget {
             onTap: () {
               final nav = TalkStrangersApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
               nav.push(MaterialPageRoute(builder: (_) => const HowItWorksScreen()));
+            },
+          ),
+          const SizedBox(height: 10),
+
+          _MenuItemTile(
+            icon: Icons.policy_outlined,
+            title: 'Privacy Policy & Terms of Service',
+            onTap: () {
+              final nav = TalkStrangersApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
+              nav.push(MaterialPageRoute(builder: (_) => const LegalPolicyScreen()));
             },
           ),
 
