@@ -415,16 +415,25 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                     throw Exception('No active verification session. Please request a new OTP.');
                                   }
 
-                                  final credential = PhoneAuthProvider.credential(
-                                    verificationId: _verificationId!,
-                                    smsCode: code,
-                                  );
-                                  final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
-                                  final idToken = await userCred.user?.getIdToken();
-                                  if (idToken == null) {
-                                    throw Exception('Failed to obtain Firebase ID token.');
+                                  try {
+                                    final credential = PhoneAuthProvider.credential(
+                                      verificationId: _verificationId!,
+                                      smsCode: code,
+                                    );
+                                    final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
+                                    final idToken = await userCred.user?.getIdToken();
+                                    if (idToken == null) {
+                                      throw Exception('Failed to obtain Firebase ID token.');
+                                    }
+                                    await app.firebaseOtpLogin(idToken, mobile);
+                                  } on FirebaseAuthException catch (e) {
+                                    if (e.code == 'invalid-verification-code') {
+                                      throw Exception('Incorrect OTP. Please check the 6-digit code and try again.');
+                                    } else if (e.code == 'session-expired') {
+                                      throw Exception('OTP session expired. Please request a new code.');
+                                    }
+                                    throw Exception(e.message ?? 'OTP verification failed.');
                                   }
-                                  await app.firebaseOtpLogin(idToken, mobile);
                                 }
                               }),
                       child: Center(
