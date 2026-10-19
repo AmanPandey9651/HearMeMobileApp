@@ -94,6 +94,32 @@ class NudityGuardOverlay extends StatelessWidget {
                         letterSpacing: 0.2,
                       ),
                     ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEF4444).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: const Color(0xFFEF4444).withValues(alpha: 0.25),
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.auto_awesome, color: Color(0xFFF43F5E), size: 12),
+                          SizedBox(width: 5),
+                          Text(
+                            'AI Neural Vision Guard Active',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFFB7185),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 10),
                     Text(
                       customMessage ??
