@@ -6,6 +6,7 @@ class NudityGuardOverlay extends StatelessWidget {
   final String? source;
   final String? customMessage;
   final VoidCallback onDismiss;
+  final VoidCallback? onAllowNudity;
   final Widget child;
 
   const NudityGuardOverlay({
@@ -13,6 +14,7 @@ class NudityGuardOverlay extends StatelessWidget {
     required this.isBlurred,
     required this.onDismiss,
     required this.child,
+    this.onAllowNudity,
     this.source,
     this.customMessage,
   });
@@ -153,29 +155,59 @@ class NudityGuardOverlay extends StatelessWidget {
                       ),
                     ],
                     const SizedBox(height: 22),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: onDismiss,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFEF4444),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 13),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: onDismiss,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white.withValues(alpha: 0.12),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 13),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                side: BorderSide(
+                                  color: Colors.white.withValues(alpha: 0.25),
+                                ),
+                              ),
+                            ),
+                            child: const Text(
+                              'OK (Safe)',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
                           ),
-                          elevation: 6,
-                          shadowColor: const Color(0xFFEF4444).withValues(alpha: 0.5),
                         ),
-                        child: const Text(
-                          'OK',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.5,
+                        if (onAllowNudity != null) ...[
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: onAllowNudity,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFEC4899),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 13),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: 6,
+                                shadowColor: const Color(0xFFEC4899).withValues(alpha: 0.5),
+                              ),
+                              child: const Text(
+                                '🔞 Allow Nudity',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 8),
                     const Text(

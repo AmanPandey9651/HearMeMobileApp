@@ -88,8 +88,29 @@ late final Future<void> _renderersReady;
   String peerVideoFilter = VideoPrivacyFilter.none;
   bool isNudityBlurred = false;
   String? nuditySource;
+  bool isNudityAllowed = false;
   bool _nudityCooldownActive = false;
   Timer? _nudityCooldownTimer;
+
+  void _toggleNudityPermission({bool? forcedVal}) {
+    if (!mounted) return;
+    final nextVal = forcedVal ?? !isNudityAllowed;
+    setState(() {
+      isNudityAllowed = nextVal;
+      if (nextVal) {
+        isNudityBlurred = false;
+        nuditySource = null;
+        banner = '🔞 Nudity Mode ON — nudity allowed from both sides';
+      } else {
+        banner = '🛡️ Nudity protection re-enabled';
+      }
+    });
+    context.read<AppController>().api.sendSignal(session.id, {
+      'type': 'NUDITY_PERMISSION_TOGGLED',
+      'allowed': nextVal,
+      'senderRole': widget.callerSide ? 'USER' : 'LISTENER',
+    }).catchError((_) {});
+  }
 
   void _dismissNudityBlur() {
     if (!mounted) return;
@@ -110,6 +131,7 @@ late final Future<void> _renderersReady;
   }
 
   void _triggerNudityBlur({String? source}) {
+    if (isNudityAllowed) return;
     if (_nudityCooldownActive) return;
     setState(() {
       isNudityBlurred = true;
@@ -133,6 +155,7 @@ late final Future<void> _renderersReady;
 
   bool get isChat => session.type == 'CHAT';
   bool get isVideo => session.type == 'VIDEO_CALL';
+  String get peerName => widget.callerSide ? session.listenerName : session.callerNickname;
   bool get isLive => const {'ACCEPTED', 'CONNECTING', 'CONNECTED', 'ACTIVE'}.contains(session.status);
 
   Future<void> _startRecordingIfEligible() async {
@@ -1090,7 +1113,24 @@ void initState() {
       }
       return;
     }
+    if (type == 'NUDITY_PERMISSION_TOGGLED') {
+      final allowed = s['allowed'] == true;
+      if (mounted) {
+        setState(() {
+          isNudityAllowed = allowed;
+          if (allowed) {
+            isNudityBlurred = false;
+            nuditySource = null;
+            banner = '🔞 $peerName enabled Nudity Mode (allowed from both sides)';
+          } else {
+            banner = '🛡️ $peerName turned off Nudity Mode — protection re-enabled';
+          }
+        });
+      }
+      return;
+    }
     if (type == 'NUDITY_DETECTED') {
+      if (isNudityAllowed) return;
       if (mounted && !_nudityCooldownActive) {
         setState(() {
           isNudityBlurred = true;
@@ -2507,6 +2547,7 @@ void initState() {
           isBlurred: isNudityBlurred,
           source: nuditySource == 'local' ? 'Your camera' : (nuditySource != null ? "$nuditySource's camera" : "$peerName's camera"),
           onDismiss: _dismissNudityBlur,
+          onAllowNudity: () => _toggleNudityPermission(forcedVal: true),
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -2882,12 +2923,13 @@ void initState() {
                       tooltip: 'Video filters',
                       onTap: _videoFilters,
                     ),
-                    // Nudity Safety Blur Control
+                    // Nudity Mode Control (Mutual Consent)
                     _buildVideoGlassButton(
-                      icon: Icons.shield_rounded,
-                      isActive: isNudityBlurred,
-                      tooltip: 'Nudity safety blur',
-                      onTap: () => _triggerNudityBlur(source: 'peer'),
+                      icon: isNudityAllowed ? Icons.shield_rounded : Icons.shield_outlined,
+                      isActive: isNudityAllowed,
+                      isNudity: true,
+                      tooltip: isNudityAllowed ? 'Nudity allowed (both sides)' : 'Allow nudity (both sides)',
+                      onTap: _toggleNudityPermission,
                     ),
                     // Speaker
                     _buildVideoGlassButton(
@@ -3118,11 +3160,17 @@ void initState() {
     required bool isActive,
     required VoidCallback onTap,
     bool isFilter = false,
+    bool isNudity = false,
     String? tooltip,
   }) {
     final Color bgColor;
     final Color iconColor;
-    if (isFilter) {
+    if (isNudity) {
+      bgColor = isActive
+          ? const Color(0xFFEC4899).withValues(alpha: 0.88)
+          : Colors.white.withValues(alpha: 0.12);
+      iconColor = Colors.white;
+    } else if (isFilter) {
       bgColor = isActive
           ? const Color(0xFF7C3AED).withValues(alpha: 0.85)
           : Colors.white.withValues(alpha: 0.12);
@@ -3152,15 +3200,23 @@ void initState() {
               color: Colors.white.withValues(alpha: isActive ? 0.2 : 0.4),
               width: 0.8,
             ),
-            boxShadow: isActive
-                ? null
-                : [
+            boxShadow: (isNudity && isActive)
+                ? [
                     BoxShadow(
-                      color: const Color(0xFFEF4444).withValues(alpha: 0.35),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
+                      color: const Color(0xFFEC4899).withValues(alpha: 0.45),
+                      blurRadius: 10,
+                      spreadRadius: 1,
                     ),
-                  ],
+                  ]
+                : (isActive
+                    ? null
+                    : [
+                        BoxShadow(
+                          color: const Color(0xFFEF4444).withValues(alpha: 0.35),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]),
           ),
           child: Icon(
             icon,
@@ -3603,6 +3659,29 @@ void initState() {
             ListTile(leading: const Icon(Icons.graphic_eq), title: const Text('Voice privacy effects'), subtitle: Text(_voiceLabel(activeVoiceFilter)), onTap: () { Navigator.pop(ctx); _voiceFilters(); }),
           if (isVideo)
             ListTile(leading: const Icon(Icons.masks), title: const Text('Video masks & privacy filters'), subtitle: Text(_videoLabel(activeVideoFilter)), onTap: () { Navigator.pop(ctx); _videoFilters(); }),
+          if (isVideo)
+            ListTile(
+              leading: Icon(
+                isNudityAllowed ? Icons.shield_rounded : Icons.shield_outlined,
+                color: isNudityAllowed ? const Color(0xFFEC4899) : const Color(0xFF10B981),
+              ),
+              title: Text(isNudityAllowed ? 'Nudity Mode is ON (Allowed)' : 'Allow Nudity (Both Sides)'),
+              subtitle: Text(isNudityAllowed ? 'Nudity allowed from both sides. Tap to disable.' : 'Permit adult/nudity on both sides without blur'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _toggleNudityPermission();
+              },
+            ),
+          if (isVideo && !isNudityAllowed)
+            ListTile(
+              leading: const Icon(Icons.shield_outlined, color: Color(0xFFEF4444)),
+              title: const Text('Trigger Safety Blur'),
+              subtitle: const Text('Instantly blur the video feed for privacy'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _triggerNudityBlur(source: 'peer');
+              },
+            ),
           ListTile(leading: const Icon(Icons.lightbulb_outline), title: const Text('Send an icebreaker topic'), onTap: () { Navigator.pop(ctx); _topic(); }),
           ListTile(leading: const Icon(Icons.sports_esports), title: const Text('Open mini games'), subtitle: const Text('Tic-Tac-Toe • Would You Rather • 20 Questions'), onTap: () { Navigator.pop(ctx); _openGames(); }),
           ListTile(leading: const Icon(Icons.report_outlined), title: const Text('Report the other person'), onTap: () { Navigator.pop(ctx); _report(); }),
