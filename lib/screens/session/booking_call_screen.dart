@@ -13,6 +13,7 @@ import '../../services/call_recording_service.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/in_call_mini_games.dart';
 import '../../widgets/video_privacy_filter.dart';
+import '../../widgets/nudity_guard_overlay.dart';
 
 /// WebRTC room used by the legacy/scheduled booking flow that still exists in
 /// CustomerBookingsPage on the web client. Billing and call state remain
@@ -55,6 +56,41 @@ late final Future<void> _renderersReady;
   String peerVoiceFilter = AndroidVoiceFx.normal;
   String activeVideoFilter = VideoPrivacyFilter.none;
   String peerVideoFilter = VideoPrivacyFilter.none;
+  bool isNudityBlurred = false;
+  String? nuditySource;
+  bool _nudityCooldownActive = false;
+  Timer? _nudityCooldownTimer;
+
+  void _dismissNudityBlur() {
+    if (!mounted) return;
+    setState(() {
+      isNudityBlurred = false;
+      nuditySource = null;
+      _nudityCooldownActive = true;
+    });
+    _nudityCooldownTimer?.cancel();
+    _nudityCooldownTimer = Timer(const Duration(seconds: 10), () {
+      if (mounted) {
+        setState(() => _nudityCooldownActive = false);
+      }
+    });
+    context.read<AppController>().api.sendSignal(widget.booking.id, {
+      'type': 'NUDITY_ACKNOWLEDGED',
+    }).catchError((_) {});
+  }
+
+  void _triggerNudityBlur({String? source}) {
+    if (_nudityCooldownActive) return;
+    setState(() {
+      isNudityBlurred = true;
+      nuditySource = source ?? 'peer';
+    });
+    context.read<AppController>().api.sendSignal(widget.booking.id, {
+      'type': 'NUDITY_DETECTED',
+      'source': source ?? (widget.callerSide ? 'user' : 'listener'),
+      'reason': 'Nudity is strictly prohibited',
+    }).catchError((_) {});
+  }
   bool _recordingStarted = false;
   late final ApiService _api;
   bool _isDisposed = false;
@@ -634,6 +670,18 @@ void initState() {
       if (mounted) setState(() => peerVideoFilter = '${s['filter'] ?? VideoPrivacyFilter.none}');
       return;
     }
+    if (type == 'NUDITY_DETECTED') {
+      if (mounted && !_nudityCooldownActive) {
+        setState(() {
+          isNudityBlurred = true;
+          nuditySource = s['source']?.toString() ?? 'peer';
+        });
+      }
+      return;
+    }
+    if (type == 'NUDITY_ACKNOWLEDGED') {
+      return;
+    }
     if (type == 'VOICE_FX_CAPABILITY') {
       if (mounted) {
         setState(() => peerVoiceFxCapable = s['supported'] == true);
@@ -872,7 +920,11 @@ void initState() {
     );
   }
 
-  Widget _callBody(int elapsed) => Stack(children: [
+  Widget _callBody(int elapsed) => NudityGuardOverlay(
+        isBlurred: isNudityBlurred,
+        source: nuditySource == 'local' ? 'Your camera' : (nuditySource != null ? "$nuditySource's camera" : "$peerName's camera"),
+        onDismiss: _dismissNudityBlur,
+        child: Stack(children: [
         Positioned.fill(
           child: isVideo
               ? FilteredVideoView(filter: peerVideoFilter, child: RTCVideoView(remoteRenderer, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover))
@@ -912,11 +964,13 @@ void initState() {
           child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
             _round(Icons.mic, mic, _toggleMic),
             if (isVideo) _round(Icons.videocam, camera, _toggleCamera),
+            if (isVideo) _round(Icons.shield, isNudityBlurred, () => _triggerNudityBlur(source: 'peer')),
             _round(Icons.volume_up, speaker, _toggleSpeaker),
             FloatingActionButton(backgroundColor: Colors.red, onPressed: _end, child: const Icon(Icons.call_end)),
           ]),
         ),
-      ]);
+      ]),
+    );
 
   Widget _round(IconData icon, bool active, VoidCallback onTap) => FloatingActionButton.small(
         heroTag: null,

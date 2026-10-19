@@ -15,6 +15,7 @@ import '../../widgets/call_pulse_avatar.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/in_call_mini_games.dart';
 import '../../widgets/video_privacy_filter.dart';
+import '../../widgets/nudity_guard_overlay.dart';
 
 class SessionScreen extends StatefulWidget {
   final InstantSessionModel initialSession;
@@ -85,6 +86,41 @@ late final Future<void> _renderersReady;
   String peerVoiceFilter = AndroidVoiceFx.normal;
   String activeVideoFilter = VideoPrivacyFilter.none;
   String peerVideoFilter = VideoPrivacyFilter.none;
+  bool isNudityBlurred = false;
+  String? nuditySource;
+  bool _nudityCooldownActive = false;
+  Timer? _nudityCooldownTimer;
+
+  void _dismissNudityBlur() {
+    if (!mounted) return;
+    setState(() {
+      isNudityBlurred = false;
+      nuditySource = null;
+      _nudityCooldownActive = true;
+    });
+    _nudityCooldownTimer?.cancel();
+    _nudityCooldownTimer = Timer(const Duration(seconds: 10), () {
+      if (mounted) {
+        setState(() => _nudityCooldownActive = false);
+      }
+    });
+    context.read<AppController>().api.sendSignal(session.id, {
+      'type': 'NUDITY_ACKNOWLEDGED',
+    }).catchError((_) {});
+  }
+
+  void _triggerNudityBlur({String? source}) {
+    if (_nudityCooldownActive) return;
+    setState(() {
+      isNudityBlurred = true;
+      nuditySource = source ?? 'peer';
+    });
+    context.read<AppController>().api.sendSignal(session.id, {
+      'type': 'NUDITY_DETECTED',
+      'source': source ?? (widget.callerSide ? 'user' : 'listener'),
+      'reason': 'Nudity is strictly prohibited',
+    }).catchError((_) {});
+  }
   bool _recordingStarted = false;
   late final ApiService _api;
   bool _isDisposed = false;
@@ -1054,6 +1090,18 @@ void initState() {
       }
       return;
     }
+    if (type == 'NUDITY_DETECTED') {
+      if (mounted && !_nudityCooldownActive) {
+        setState(() {
+          isNudityBlurred = true;
+          nuditySource = s['source']?.toString() ?? 'peer';
+        });
+      }
+      return;
+    }
+    if (type == 'NUDITY_ACKNOWLEDGED') {
+      return;
+    }
     if (type == 'VOICE_FX_CAPABILITY') {
       if (mounted) {
         setState(() => peerVoiceFxCapable = s['supported'] == true);
@@ -1491,6 +1539,8 @@ void initState() {
   }
 
   Future<void> _cleanupMedia() async {
+    _nudityCooldownTimer?.cancel();
+    _nudityCooldownTimer = null;
     sessionPoll?.cancel();
     sessionPoll = null;
     signalPoll?.cancel();
@@ -2453,9 +2503,13 @@ void initState() {
       backgroundColor: const Color(0xFF0B0F19),
       resizeToAvoidBottomInset: false,
       body: SizedBox.expand(
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
+        child: NudityGuardOverlay(
+          isBlurred: isNudityBlurred,
+          source: nuditySource == 'local' ? 'Your camera' : (nuditySource != null ? "$nuditySource's camera" : "$peerName's camera"),
+          onDismiss: _dismissNudityBlur,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
             // 1. Fullscreen Remote Video or Connecting Fallback
             Positioned.fill(
               child: (remoteRenderer.srcObject != null &&
@@ -2828,6 +2882,13 @@ void initState() {
                       tooltip: 'Video filters',
                       onTap: _videoFilters,
                     ),
+                    // Nudity Safety Blur Control
+                    _buildVideoGlassButton(
+                      icon: Icons.shield_rounded,
+                      isActive: isNudityBlurred,
+                      tooltip: 'Nudity safety blur',
+                      onTap: () => _triggerNudityBlur(source: 'peer'),
+                    ),
                     // Speaker
                     _buildVideoGlassButton(
                       icon: speaker ? Icons.volume_up_rounded : Icons.volume_down_rounded,
@@ -2871,6 +2932,7 @@ void initState() {
               ),
             ),
           ],
+        ),
         ),
       ),
     );
