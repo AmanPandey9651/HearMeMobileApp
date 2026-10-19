@@ -375,6 +375,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                   try {
                                     await FirebaseAuth.instance.verifyPhoneNumber(
                                       phoneNumber: fullNumber,
+                                      timeout: const Duration(seconds: 30),
+                                      forceResendingToken: _resendToken,
                                       verificationCompleted: (PhoneAuthCredential credential) async {
                                         try {
                                           final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
