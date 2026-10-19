@@ -51,7 +51,7 @@ class AppConfig {
   // Compile-time environment configuration
   // Defaults to production (https://www.feelback.in)
   // Pass: --dart-define=APP_ENV=staging OR --dart-define=APP_ENV=local
-  static const String _compileTimeEnv = String.fromEnvironment('APP_ENV', defaultValue: 'production');
+  static const String _compileTimeEnv = String.fromEnvironment('APP_ENV', defaultValue: 'staging');
   static const String _compileTimeApiUrl = String.fromEnvironment('API_BASE_URL', defaultValue: '');
 
   static const String googleServerClientId = String.fromEnvironment(
