@@ -431,5 +431,35 @@ class ApiService {
 
   Future<Map<String, dynamic>> uploadRecording(String sessionId, File file) async =>
       client.multipart('/sessions/$sessionId/recording', file: file);
+  Future<void> reportNudityIncident({
+    required String sessionId,
+    String? userId,
+    String? userName,
+    String? userRole,
+    String? peerId,
+    String? peerName,
+    required String detectedSource,
+    String? classificationLabel,
+    double? confidenceScore,
+    double? skinRatio,
+    String? actionTaken,
+    bool? isNudityAllowed,
+    String? snapshotData,
+  }) async {
+    await client.post('/safety/nudity-incident', body: {
+      'sessionId': sessionId,
+      if (userId != null) 'userId': userId,
+      if (userName != null) 'userName': userName,
+      if (userRole != null) 'userRole': userRole,
+      if (peerId != null) 'peerId': peerId,
+      if (peerName != null) 'peerName': peerName,
+      'detectedSource': detectedSource,
+      if (classificationLabel != null) 'classificationLabel': classificationLabel,
+      if (confidenceScore != null) 'confidenceScore': confidenceScore,
+      if (skinRatio != null) 'skinRatio': skinRatio,
+      if (actionTaken != null) 'actionTaken': actionTaken,
+      if (isNudityAllowed != null) 'isNudityAllowed': isNudityAllowed,
+      if (snapshotData != null) 'snapshotData': snapshotData,
+    });
+  }
 }
-

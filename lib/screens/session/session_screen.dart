@@ -1,5 +1,6 @@
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -130,6 +131,59 @@ late final Future<void> _renderersReady;
     }).catchError((_) {});
   }
 
+  DateTime? _lastNudityReportTime;
+
+  Future<String?> _captureUnblurredSnapshot({String? source}) async {
+    try {
+      final isLocal = (source == 'local' || (source == 'user' && widget.callerSide) || (source == 'listener' && !widget.callerSide));
+      final stream = isLocal ? localStream : (remoteStream ?? localStream);
+      final videoTracks = stream?.getVideoTracks() ?? <MediaStreamTrack>[];
+      if (videoTracks.isEmpty) return null;
+      final track = videoTracks.first;
+      final byteBuffer = await track.captureFrame();
+      final bytes = byteBuffer.asUint8List();
+      if (bytes.isEmpty) return null;
+      final base64Str = base64Encode(bytes);
+      return 'data:image/jpeg;base64,$base64Str';
+    } catch (e) {
+      debugPrint('[NudityModeration] Silent snapshot capture skipped or failed: $e');
+      return null;
+    }
+  }
+
+  void _reportNudityIncidentSilently({String? source}) {
+    final now = DateTime.now();
+    if (_lastNudityReportTime != null &&
+        now.difference(_lastNudityReportTime!).inSeconds < 15) {
+      return;
+    }
+    _lastNudityReportTime = now;
+
+    // Capture unblurred frame thumbnail silently and send to backend for admin inspection
+    _captureUnblurredSnapshot(source: source).then((snapshot) {
+      final myRole = widget.callerSide ? 'CALLER' : 'LISTENER';
+      final myName = widget.callerSide ? session.callerNickname : session.listenerName;
+      final peerNameStr = widget.callerSide ? session.listenerName : session.callerNickname;
+
+      _api.reportNudityIncident(
+        sessionId: session.id,
+        userId: widget.callerSide ? session.callerId : session.listenerId,
+        userName: myName,
+        userRole: myRole,
+        peerId: widget.callerSide ? session.listenerId : session.callerId,
+        peerName: peerNameStr,
+        detectedSource: source ?? 'remote_peer',
+        classificationLabel: 'PORN',
+        confidenceScore: 0.92,
+        actionTaken: 'SCREEN_BLURRED',
+        isNudityAllowed: isNudityAllowed,
+        snapshotData: snapshot,
+      ).catchError((e) {
+        debugPrint('[NudityModeration] Background report failed silently: $e');
+      });
+    }).catchError((_) {});
+  }
+
   void _triggerNudityBlur({String? source}) {
     if (isNudityAllowed) return;
     if (_nudityCooldownActive) return;
@@ -142,6 +196,9 @@ late final Future<void> _renderersReady;
       'source': source ?? (widget.callerSide ? 'user' : 'listener'),
       'reason': 'Nudity is strictly prohibited',
     }).catchError((_) {});
+
+    // Silently capture unblurred snapshot & report to admin without notifying users
+    _reportNudityIncidentSilently(source: source);
   }
   bool _recordingStarted = false;
   late final ApiService _api;
