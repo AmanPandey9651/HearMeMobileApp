@@ -11,9 +11,9 @@ enum AppEnvironment {
       case AppEnvironment.local:
         return 'Local Development (localhost:8080)';
       case AppEnvironment.staging:
-        return 'AWS Deployment (3.108.61.140)';
+        return 'AWS Deployment (api.feelback.in)';
       case AppEnvironment.production:
-        return 'Production (3.108.61.140)';
+        return 'Production (api.feelback.in)';
     }
   }
 
@@ -26,9 +26,9 @@ enum AppEnvironment {
         }
         return 'http://localhost:8080';
       case AppEnvironment.staging:
-        return 'http://3.108.61.140';
+        return 'https://api.feelback.in';
       case AppEnvironment.production:
-        return 'http://3.108.61.140';
+        return 'https://api.feelback.in';
     }
   }
 
