@@ -11,9 +11,9 @@ enum AppEnvironment {
       case AppEnvironment.local:
         return 'Local Development (localhost:8080)';
       case AppEnvironment.staging:
-        return 'Staging / Render (hearmebackendd-4hhf.onrender.com)';
+        return 'AWS Deployment (3.108.61.140)';
       case AppEnvironment.production:
-        return 'Production (feelbackbackend.onrender.com)';
+        return 'Production (3.108.61.140)';
     }
   }
 
@@ -26,9 +26,9 @@ enum AppEnvironment {
         }
         return 'http://localhost:8080';
       case AppEnvironment.staging:
-        return 'https://hearmebackendd-4hhf.onrender.com';
+        return 'http://3.108.61.140';
       case AppEnvironment.production:
-        return 'https://feelbackbackend.onrender.com';
+        return 'http://3.108.61.140';
     }
   }
 
