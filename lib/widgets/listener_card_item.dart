@@ -333,13 +333,15 @@ class ListenerCardItem extends StatelessWidget {
 
                 const SizedBox(width: 6),
 
-                // 3. Right: Vertical 3-Button Stack (Chat, Call, Video) in Warm Peach Circle
+                // 3. Right: Vertical 3-Button Stack (Chat, Call, Video) with Live Rates
                 Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    // Top: Chat (Warm Peach + Orange Icon)
+                    // Top: Chat (Warm Peach + Orange Icon + Rate)
                     _ActionButton(
                       icon: Icons.chat_bubble_rounded,
+                      rate: listener.chatRate,
                       isEnabled: listener.chatAvailable,
                       onTap: () {
                         if (isPublic) {
@@ -360,11 +362,12 @@ class ListenerCardItem extends StatelessWidget {
                       },
                     ),
 
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 5),
 
-                    // Middle: Voice Call (Warm Peach + Orange Icon)
+                    // Middle: Voice Call (Warm Peach + Orange Icon + Rate)
                     _ActionButton(
                       icon: Icons.call_rounded,
+                      rate: listener.audioRate,
                       isEnabled: listener.audioAvailable,
                       onTap: () {
                         if (isPublic) {
@@ -385,11 +388,12 @@ class ListenerCardItem extends StatelessWidget {
                       },
                     ),
 
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 5),
 
-                    // Bottom: Video Call (Warm Peach + Orange Icon)
+                    // Bottom: Video Call (Warm Peach + Orange Icon + Rate)
                     _ActionButton(
                       icon: Icons.videocam_rounded,
+                      rate: listener.videoRate,
                       isEnabled: listener.videoAvailable,
                       onTap: () {
                         if (isPublic) {
@@ -574,30 +578,32 @@ class _OfflineNudgeBarState extends State<_OfflineNudgeBar> {
 
 class _ActionButton extends StatelessWidget {
   final IconData icon;
+  final double rate;
   final bool isEnabled;
   final VoidCallback onTap;
 
   const _ActionButton({
     required this.icon,
+    required this.rate,
     required this.isEnabled,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final rateLabel = rate > 0 ? '₹${rate.toStringAsFixed(0)}/m' : 'Free';
     return Opacity(
       opacity: isEnabled ? 1.0 : 0.35,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(16),
           child: Container(
-            width: 30,
-            height: 30,
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
               color: const Color(0xFFFFECE5),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: const Color(0xFFFCDFD5),
                 width: 0.8,
@@ -612,12 +618,25 @@ class _ActionButton extends StatelessWidget {
                     ]
                   : null,
             ),
-            child: Center(
-              child: Icon(
-                icon,
-                size: 14,
-                color: const Color(0xFFF95B3D),
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 13,
+                  color: const Color(0xFFF95B3D),
+                ),
+                const SizedBox(width: 3.5),
+                Text(
+                  rateLabel,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFFE04F2E),
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
