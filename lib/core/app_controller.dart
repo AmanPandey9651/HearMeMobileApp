@@ -200,7 +200,7 @@ class AppController extends ChangeNotifier {
       final err = e.toString();
       if (err.contains('10') || err.contains('ApiException: 10') || err.contains('DEVELOPER_ERROR')) {
         throw GoogleSignInException(
-          message: 'Google Sign-In configuration error (ApiException: 10).\nYour debug SHA-1 fingerprint needs to be registered in Google Cloud Console for com.talkstrangers.talkstrangersmobile.',
+          message: 'Google Sign-In configuration error (ApiException: 10).\nYour debug SHA-1 fingerprint needs to be registered in Google Cloud Console for com.harto.feelback.',
           isDeveloperError: true,
           originalError: e,
         );

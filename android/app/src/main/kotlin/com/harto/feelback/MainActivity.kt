@@ -1,4 +1,4 @@
-package com.talkstrangers.talkstrangersmobile
+package com.harto.feelback
 
 import android.app.Activity
 import android.media.AudioFormat
