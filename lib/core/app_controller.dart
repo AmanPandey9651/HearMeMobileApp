@@ -30,13 +30,13 @@ class AppController extends ChangeNotifier {
   static const _expertProfileKey = 'talkstrangers_expert_profile';
   static const _authGovernanceKey = 'talkstrangers_auth_governance';
   static const _brandGovernanceKey = 'talkstrangers_brand_governance';
-  String brandTheme = 'FEELAGAIN';
-  String brandName = 'FeelAgain';
+  String brandTheme = 'FEELBACK';
+  String brandName = 'FeelBack';
 
-  bool get isFeelBack => brandTheme.toUpperCase() == 'FEELBACK';
-  String get activeBrandName => isFeelBack ? 'FeelBack' : 'FeelAgain';
-  String get headerLogoAsset => isFeelBack ? 'assets/images/feelback-logo.png' : 'assets/images/feelagain-logo.png';
-  String get splashLogoAsset => isFeelBack ? 'assets/images/feelback-logo-white.png' : 'assets/images/feelagain-logo.png';
+  bool get isFeelBack => true;
+  String get activeBrandName => 'FeelBack';
+  String get headerLogoAsset => 'assets/images/feelback-logo.png';
+  String get splashLogoAsset => 'assets/images/feelback-logo-white.png';
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   final ApiClient client = ApiClient();
   late final ApiService api = ApiService(client);
@@ -91,8 +91,8 @@ class AppController extends ChangeNotifier {
       if (savedBrand != null) {
         try {
           final parsed = jsonDecode(savedBrand);
-          brandTheme = '${parsed['brandTheme'] ?? 'FEELAGAIN'}'.toUpperCase();
-          brandName = brandTheme == 'FEELBACK' ? 'FeelBack' : 'FeelAgain';
+          brandTheme = 'FEELBACK';
+          brandName = 'FeelBack';
         } catch (_) {}
       }
       if (savedAuth != null) {
@@ -301,8 +301,8 @@ class AppController extends ChangeNotifier {
   Future<void> refreshBrandGovernance() async {
     try {
       final settings = await api.brandGovernance();
-      final nextTheme = '${settings['brandTheme'] ?? 'FEELAGAIN'}'.toUpperCase();
-      final nextName = nextTheme == 'FEELBACK' ? 'FeelBack' : 'FeelAgain';
+      final nextTheme = 'FEELBACK';
+      final nextName = 'FeelBack';
       if (nextTheme != brandTheme || nextName != brandName) {
         brandTheme = nextTheme;
         brandName = nextName;

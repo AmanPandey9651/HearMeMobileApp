@@ -84,7 +84,7 @@ class _FeelAgainSplashScreenState extends State<FeelAgainSplashScreen>
     final isFeelBack = app.isFeelBack;
 
     return Scaffold(
-      backgroundColor: isFeelBack ? const Color(0xFFFE6F61) : Colors.black,
+      backgroundColor: const Color(0xFFFE6F61),
       body: Center(
         child: AnimatedBuilder(
           animation: _controller,
@@ -94,7 +94,7 @@ class _FeelAgainSplashScreenState extends State<FeelAgainSplashScreen>
               child: Transform.scale(
                 scale: _scaleAnimation.value,
                 child: SizedBox(
-                  width: MediaQuery.of(context).size.width * (isFeelBack ? 0.50 : 0.55),
+                  width: MediaQuery.of(context).size.width * (0.52),
                   child: Image.asset(
                     app.splashLogoAsset,
                     fit: BoxFit.contain,

@@ -25,6 +25,7 @@ void main() async {
 
 /// Backwards compatibility alias
 typedef TalkStrangersApp = FeelAgainApp;
+typedef FeelBackApp = FeelAgainApp;
 
 class FeelAgainApp extends StatelessWidget {
   static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
