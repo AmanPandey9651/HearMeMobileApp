@@ -1236,8 +1236,14 @@ class _ListenerRegisterScreenState extends State<ListenerRegisterScreen> {
       if (fullAddress.text.trim().isEmpty) {
         throw Exception('Full address is required.');
       }
+      if (idNumber.text.trim().isEmpty) {
+        throw Exception('Government ID document number is required.');
+      }
       if (title.text.trim().isEmpty) {
         throw Exception('Professional title is required.');
+      }
+      if (bio.text.trim().isEmpty || bio.text.trim().length < 15) {
+        throw Exception('A personal bio statement (minimum 15 characters) is required.');
       }
 
       final a = double.tryParse(audio.text) ?? 10;
@@ -1254,6 +1260,7 @@ class _ListenerRegisterScreenState extends State<ListenerRegisterScreen> {
         'mobileNumber': fullPhoneNumber,
         'countryCode': selectedDialCode,
         'gender': gender.text.trim(),
+        'hobbies': 'Listening, Reading, Mindful Conversation',
         'country': country.text.trim(),
         'state': state.text.trim(),
         'fullAddress': fullAddress.text.trim(),
