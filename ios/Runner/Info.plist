@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Talkstrangersmobile</string>
+	<string>FeelBack</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>talkstrangersmobile</string>
+	<string>FeelBack</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -43,28 +43,10 @@
 					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
 					<key>UISceneStoryboardFile</key>
 					<string>Main</string>
-					<key>NSCameraUsageDescription</key>
-	<string>Video calls require camera access.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Voice and video calls require microphone access.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Profile photo selection requires photo library access.</string>
-</dict>
+				</dict>
 			</array>
-			<key>NSCameraUsageDescription</key>
-	<string>Video calls require camera access.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Voice and video calls require microphone access.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Profile photo selection requires photo library access.</string>
-</dict>
-		<key>NSCameraUsageDescription</key>
-	<string>Video calls require camera access.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Voice and video calls require microphone access.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Profile photo selection requires photo library access.</string>
-</dict>
+		</dict>
+	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
@@ -85,11 +67,10 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>Video calls require camera access.</string>
+	<string>FeelBack requires camera access to enable real-time 1-on-1 video consultations with listeners.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Voice and video calls require microphone access.</string>
+	<string>FeelBack requires microphone access to enable voice and video consultations with listeners.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Profile photo selection requires photo library access.</string>
+	<string>FeelBack requires photo library access to upload profile pictures and verification documents.</string>
 </dict>
 </plist>
-
