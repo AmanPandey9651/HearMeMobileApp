@@ -161,18 +161,28 @@ late final Future<void> _renderersReady;
 
     // Capture unblurred frame thumbnail silently and send to backend for admin inspection
     _captureUnblurredSnapshot(source: source).then((snapshot) {
-      final myRole = widget.callerSide ? 'CALLER' : 'LISTENER';
-      final myName = widget.callerSide ? session.callerNickname : session.listenerName;
-      final peerNameStr = widget.callerSide ? session.listenerName : session.callerNickname;
+            final isOffenderLocal = (source == 'local' || (source == 'user' && widget.callerSide) || (source == 'listener' && !widget.callerSide));
+      final offenderRole = isOffenderLocal
+          ? (widget.callerSide ? 'USER' : 'LISTENER')
+          : (widget.callerSide ? 'LISTENER' : 'USER');
+      final offenderName = isOffenderLocal
+          ? (widget.callerSide ? session.callerNickname : session.listenerName)
+          : (widget.callerSide ? session.listenerName : session.callerNickname);
+      final offenderId = isOffenderLocal
+          ? (widget.callerSide ? session.callerId : session.listenerId)
+          : (widget.callerSide ? session.listenerId : session.callerId);
+      final otherPartyName = isOffenderLocal
+          ? (widget.callerSide ? session.listenerName : session.callerNickname)
+          : (widget.callerSide ? session.callerNickname : session.listenerName);
 
       _api.reportNudityIncident(
         sessionId: session.id,
-        userId: widget.callerSide ? session.callerId : session.listenerId,
-        userName: myName,
-        userRole: myRole,
-        peerId: widget.callerSide ? session.listenerId : session.callerId,
-        peerName: peerNameStr,
-        detectedSource: source ?? 'remote_peer',
+        userId: offenderId,
+        userName: offenderName,
+        userRole: offenderRole,
+        peerId: isOffenderLocal ? (widget.callerSide ? session.listenerId : session.callerId) : (widget.callerSide ? session.callerId : session.listenerId),
+        peerName: otherPartyName,
+        detectedSource: offenderRole,
         classificationLabel: 'PORN',
         confidenceScore: 0.92,
         actionTaken: 'SCREEN_BLURRED',
