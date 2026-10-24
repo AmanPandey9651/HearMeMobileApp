@@ -8,52 +8,12 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:972145849986:android:f951e5c012f5c58baea69b",
+        "mobilesdk_app_id": "1:972145849986:android:7e74ce33b40b3e98aea69b",
         "android_client_info": {
           "package_name": "com.harto.feelback"
         }
       },
       "oauth_client": [
-        {
-          "client_id": "972145849986-30osia9374qb19d8c96jdpjcp7tacme6.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.harto.feelback",
-            "certificate_hash": "b30dbf49fba048135981a1fea88e9a67681637c5"
-          }
-        },
-        {
-          "client_id": "972145849986-90vmgmd3oi13deoj1f5sueo2vqhicv44.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.harto.feelback",
-            "certificate_hash": "8f24bf186a765837690c52bba9fd928e18cde4d4"
-          }
-        },
-        {
-          "client_id": "972145849986-coak49h72v3cqb0gbmn9ulbv72lig2ne.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.harto.feelback",
-            "certificate_hash": "32f3e38dc0a2caa7ee5a5d52deeb534971fd4a98"
-          }
-        },
-        {
-          "client_id": "972145849986-mmbvrren8rm64tcuoci134chr5d371a3.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.harto.feelback",
-            "certificate_hash": "12054b8026b2cd324c82c08b4a37bfc9f9b241f5"
-          }
-        },
-        {
-          "client_id": "972145849986-tp4l973sfo4t9cif854gof34p4hlc9t2.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.harto.feelback",
-            "certificate_hash": "0e6df544de90bae1b9238330f32972c1a072795b"
-          }
-        },
         {
           "client_id": "972145849986-mkoc7g49f12p5g0fd5q0r4p95m32k7ff.apps.googleusercontent.com",
           "client_type": 3
@@ -90,6 +50,14 @@
         }
       },
       "oauth_client": [
+        {
+          "client_id": "972145849986-71o9ns7o6r7luito1f4atciok9o1d1og.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.talkstrangers.talkstrangersmobile",
+            "certificate_hash": "12054b8026b2cd324c82c08b4a37bfc9f9b241f5"
+          }
+        },
         {
           "client_id": "972145849986-mkoc7g49f12p5g0fd5q0r4p95m32k7ff.apps.googleusercontent.com",
           "client_type": 3

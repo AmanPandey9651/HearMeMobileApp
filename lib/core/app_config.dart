@@ -56,7 +56,7 @@ class AppConfig {
 
   static const String googleServerClientId = String.fromEnvironment(
     'GOOGLE_SERVER_CLIENT_ID',
-    defaultValue: '792080217058-430nba8au4hs4kn0lb6l94o2aoqmjb5r.apps.googleusercontent.com',
+    defaultValue: '972145849986-ekqs8cf9k446mp89b4c3ap1bs4qi6a29.apps.googleusercontent.com',
   );
 
   static const Duration networkTimeout = Duration(seconds: 25);
