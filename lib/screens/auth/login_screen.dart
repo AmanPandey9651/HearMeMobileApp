@@ -373,6 +373,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                 if (!_otpSent) {
                                   final fullNumber = mobile.startsWith('91') && mobile.length == 12 ? '+$mobile' : '+91${mobile.substring(mobile.length - 10)}';
                                   try {
+                                    try {
+                                      await FirebaseAuth.instance.setSettings(forceRecaptchaFlow: true);
+                                    } catch (_) {}
                                     await FirebaseAuth.instance.verifyPhoneNumber(
                                       phoneNumber: fullNumber,
                                       timeout: const Duration(seconds: 30),
