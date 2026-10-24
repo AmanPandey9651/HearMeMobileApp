@@ -43,6 +43,12 @@ android {
         }
     }
 
+    packaging {
+        jniLibs {
+            keepDebugSymbols.add("**/*.so")
+        }
+    }
+
     buildTypes {
         release {
             ndk {
