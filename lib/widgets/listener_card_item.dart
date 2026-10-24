@@ -1,3 +1,4 @@
+import '../screens/auth/login_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/app_controller.dart';
@@ -466,9 +467,16 @@ class _OfflineNudgeBarState extends State<_OfflineNudgeBar> {
 
   Future<void> _handleNudge() async {
     if (_nudged || _loading) return;
+    final app = context.read<AppController>();
+    if (app.user == null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen(initialTab: 0)),
+      );
+      return;
+    }
     setState(() => _loading = true);
     try {
-      final app = context.read<AppController>();
       final result = await app.api.nudge(widget.listener.id);
       if (mounted) {
         final success = result['success'] != false;

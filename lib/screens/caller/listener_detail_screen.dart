@@ -50,18 +50,20 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
   }
 
   Future<void> _load() async {
-    final api = context.read<AppController>().api;
+    final app = context.read<AppController>();
+    final api = app.api;
+    final isLoggedIn = app.user != null;
     try {
       final results = await Future.wait<dynamic>([
         api.expertDetail(widget.listener.id),
-        api.followingStatus(widget.listener.id),
+        isLoggedIn ? api.followingStatus(widget.listener.id) : Future.value(<String, dynamic>{'following': false}),
         api.expertReviews(widget.listener.id),
-        api.nudgeStatus(widget.listener.id).catchError((_) => <String, dynamic>{}),
-        api.blockedByMeIds(),
+        isLoggedIn ? api.nudgeStatus(widget.listener.id).catchError((_) => <String, dynamic>{}) : Future.value(<String, dynamic>{'notified': false}),
+        isLoggedIn ? api.blockedByMeIds() : Future.value(<String>{}),
       ]);
       final detail = Map<String, dynamic>.from(results[0] as Map);
       final uid = '${detail['userId'] ?? widget.listener.userId ?? ''}';
-      final blockedByThem = uid.isNotEmpty ? await api.amIBlockedBy(uid, force: true) : false;
+      final blockedByThem = (isLoggedIn && uid.isNotEmpty) ? await api.amIBlockedBy(uid, force: true) : false;
       if (!mounted) return;
       setState(() {
         expert = detail;
@@ -70,7 +72,7 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
         reviews = List<dynamic>.from(results[2] as List);
         final n = Map<String, dynamic>.from(results[3] as Map);
         nudgeNotified = n['notified'] == true;
-        blockedByMe = uid.isNotEmpty && (results[4] as Set<String>).contains(uid);
+        blockedByMe = (isLoggedIn && uid.isNotEmpty) && (results[4] as Set<String>).contains(uid);
         blockedByListener = blockedByThem;
         loading = false;
       });
@@ -200,6 +202,28 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
 
   Future<void> _handleDirectNudge() async {
     if (nudgeNotified) return;
+    final app = context.read<AppController>();
+    if (app.user == null) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Sign in to notify'),
+          content: Text('Please log in or create an account to notify ${widget.listener.displayName}.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.pop(ctx);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen(initialTab: 0)));
+              },
+              icon: const Icon(Icons.login, size: 16),
+              label: const Text('Log In / Sign Up'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     setState(() => busy = true);
     try {
       final result = await context.read<AppController>().api.nudge(widget.listener.id);
@@ -1315,6 +1339,28 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
   }
 
   Future<void> _safety(String action) async {
+    final app = context.read<AppController>();
+    if (app.user == null) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Sign in required'),
+          content: const Text('Please log in to report or block listeners.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.pop(ctx);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen(initialTab: 0)));
+              },
+              icon: const Icon(Icons.login, size: 16),
+              label: const Text('Log In'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     final name = '${expert['name'] ?? widget.listener.displayName}';
     final targetUserId = expertUserId;
     if (action == 'unblock') {
