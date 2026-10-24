@@ -52,7 +52,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     setState(() => _busy = true);
     try {
       await job();
-      if (mounted) {
+      if (mounted && context.read<AppController>().user != null) {
         Navigator.of(context).popUntil((route) => route.isFirst);
         return;
       }
@@ -383,15 +383,29 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                           final idToken = await userCred.user?.getIdToken();
                                           if (idToken != null) {
                                             await app.firebaseOtpLogin(idToken, mobile);
+                                            if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
                                           }
                                         } catch (_) {}
                                       },
-                                      verificationFailed: (FirebaseAuthException e) {
-                                        String msg = e.message ?? 'Firebase Phone verification failed.';
-                                        if (e.code == 'billing-not-enabled') {
-                                          msg = 'Firebase SMS requires Blaze billing plan. Please upgrade in Firebase Console or use a test phone number.';
+                                      verificationFailed: (FirebaseAuthException e) async {
+                                        try {
+                                          await app.api.sendOtp(mobile);
+                                          if (mounted) {
+                                            setState(() {
+                                              _verificationId = 'backend_direct';
+                                              _otpSent = true;
+                                            });
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(content: Text('OTP sent successfully.')),
+                                            );
+                                          }
+                                        } catch (backendErr) {
+                                          String msg = e.message ?? 'Phone verification failed.';
+                                          if (e.code == 'billing-not-enabled') {
+                                            msg = 'Firebase SMS requires Blaze billing plan. Please upgrade in Firebase Console or use test phone numbers.';
+                                          }
+                                          if (mounted) showError(context, msg);
                                         }
-                                        showError(context, msg);
                                       },
                                       codeSent: (String verificationId, int? resendToken) {
                                         if (mounted) {
@@ -407,34 +421,48 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                       },
                                     );
                                   } catch (e) {
-                                    showError(context, e);
+                                    try {
+                                      await app.api.sendOtp(mobile);
+                                      if (mounted) {
+                                        setState(() {
+                                          _verificationId = 'backend_direct';
+                                          _otpSent = true;
+                                        });
+                                      }
+                                    } catch (_) {
+                                      showError(context, e);
+                                    }
                                   }
                                 } else {
                                   final code = _otp.text.trim();
                                   if (code.isEmpty) throw Exception('Enter the OTP.');
 
-                                  if (_verificationId == null) {
-                                    throw Exception('No active verification session. Please request a new OTP.');
-                                  }
-
-                                  try {
-                                    final credential = PhoneAuthProvider.credential(
-                                      verificationId: _verificationId!,
-                                      smsCode: code,
-                                    );
-                                    final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
-                                    final idToken = await userCred.user?.getIdToken();
-                                    if (idToken == null) {
-                                      throw Exception('Failed to obtain Firebase ID token.');
+                                  if (_verificationId == 'backend_direct' || _verificationId == null) {
+                                    await app.verifyOtp(mobile, code);
+                                  } else {
+                                    try {
+                                      final credential = PhoneAuthProvider.credential(
+                                        verificationId: _verificationId!,
+                                        smsCode: code,
+                                      );
+                                      final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
+                                      final idToken = await userCred.user?.getIdToken();
+                                      if (idToken == null) throw Exception('Failed to obtain Firebase ID token.');
+                                      await app.firebaseOtpLogin(idToken, mobile);
+                                    } catch (e) {
+                                      try {
+                                        await app.verifyOtp(mobile, code);
+                                      } catch (_) {
+                                        if (e is FirebaseAuthException) {
+                                          if (e.code == 'invalid-verification-code') {
+                                            throw Exception('Incorrect OTP. Please check the 6-digit code and try again.');
+                                          } else if (e.code == 'session-expired') {
+                                            throw Exception('OTP session expired. Please request a new code.');
+                                          }
+                                        }
+                                        rethrow;
+                                      }
                                     }
-                                    await app.firebaseOtpLogin(idToken, mobile);
-                                  } on FirebaseAuthException catch (e) {
-                                    if (e.code == 'invalid-verification-code') {
-                                      throw Exception('Incorrect OTP. Please check the 6-digit code and try again.');
-                                    } else if (e.code == 'session-expired') {
-                                      throw Exception('OTP session expired. Please request a new code.');
-                                    }
-                                    throw Exception(e.message ?? 'OTP verification failed.');
                                   }
                                 }
                               }),
