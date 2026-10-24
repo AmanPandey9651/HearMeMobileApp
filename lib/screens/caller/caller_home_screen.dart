@@ -47,6 +47,7 @@ class _CallerHomeScreenState extends State<CallerHomeScreen> {
     {'name': 'Career', 'slug': 'career', 'icon': '💼'},
     {'name': 'Vent', 'slug': 'crisis', 'icon': '🌊'},
     {'name': 'Late Night', 'slug': 'late_night', 'icon': '🌙'},
+    {'name': '18+ Adult', 'slug': '18+ adult talk', 'icon': '🔞'},
   ];
 
   @override
@@ -349,6 +350,9 @@ class _CallerHomeScreenState extends State<CallerHomeScreen> {
       visible = visible.where((x) => x.audioRate > 0 && x.audioRate <= 15).toList()
         ..sort((a, b) => a.audioRate.compareTo(b.audioRate));
     }
+    if (filter == 'ADULT_TALK') {
+      visible = visible.where((x) => x.isAdult).toList();
+    }
 
     return ColoredBox(
       color: bgCream,
@@ -558,6 +562,11 @@ class _CallerHomeScreenState extends State<CallerHomeScreen> {
                   label: '👥 LGBTQ+',
                   isSelected: filter == 'LGBTQ',
                   onTap: () => setState(() => filter = 'LGBTQ'),
+                ),
+                _BadgePill(
+                  label: '🔞 18+ Adult',
+                  isSelected: filter == 'ADULT_TALK',
+                  onTap: () => setState(() => filter = 'ADULT_TALK'),
                 ),
                 _BadgePill(
                   label: '💰 Budget',

@@ -96,6 +96,7 @@ class ListenerCardModel {
   final bool chatAvailable;
   final bool audioAvailable;
   final bool videoAvailable;
+  final bool adultTalkAllowed;
 
   const ListenerCardModel({
     required this.id,
@@ -123,6 +124,7 @@ class ListenerCardModel {
     this.chatAvailable = true,
     this.audioAvailable = true,
     this.videoAvailable = true,
+    this.adultTalkAllowed = false,
   });
 
   bool get isOnline => presence == 'ONLINE';
@@ -132,6 +134,12 @@ class ListenerCardModel {
   bool get isBusyChat => (activeSessionType ?? '').toUpperCase().contains('CHAT');
   bool get isBusyAudio => isBusy && !isBusyVideo && !isBusyChat;
   String get busyLabel => isBusyVideo ? 'Busy in Video Call' : isBusyChat ? 'Busy in Chat' : 'Busy in Voice Call';
+  bool get isAdult =>
+      adultTalkAllowed ||
+      categories.any((c) {
+        final s = c.toLowerCase().trim();
+        return s == '18+ adult talk' || s == 'adult-talk' || s.contains('adult');
+      });
 
   ListenerCardModel copyWith({
     String? userId,
@@ -144,6 +152,7 @@ class ListenerCardModel {
     bool? chatAvailable,
     bool? audioAvailable,
     bool? videoAvailable,
+    bool? adultTalkAllowed,
   }) => ListenerCardModel(
         id: id,
         userId: userId ?? this.userId,
@@ -170,12 +179,19 @@ class ListenerCardModel {
         chatAvailable: chatAvailable ?? this.chatAvailable,
         audioAvailable: audioAvailable ?? this.audioAvailable,
         videoAvailable: videoAvailable ?? this.videoAvailable,
+        adultTalkAllowed: adultTalkAllowed ?? this.adultTalkAllowed,
       );
 
   factory ListenerCardModel.fromJson(Map<String, dynamic> j) {
     final audio = _num(j['audioRatePerMinute'] ?? j['ratePerMinute'], 0).toDouble();
     final video = _num(j['videoRatePerMinute'], audio > 0 ? audio * 1.5 : 0).toDouble();
     final chat = _num(j['chatRatePerMinute'], audio > 0 ? (audio * .6) : 0).toDouble();
+    final cats = _strings(j['categories']);
+    final bool isAdultVal = j['adultTalkAllowed'] == true ||
+        cats.any((c) {
+          final s = c.toLowerCase().trim();
+          return s == '18+ adult talk' || s == 'adult-talk' || s.contains('adult');
+        });
     return ListenerCardModel(
       id: '${j['id'] ?? ''}',
       userId: j['userId']?.toString(),
@@ -194,13 +210,14 @@ class ListenerCardModel {
       rating: _num(j['ratingAvg'], 0).toDouble(),
       reviewCount: _num(j['reviewCount']).toInt(),
       totalConsultations: _num(j['totalConsultations']).toInt(),
-      categories: _strings(j['categories']),
+      categories: cats,
       languages: _strings(j['languages']),
       gender: j['gender']?.toString(),
       hobbies: j['hobbies']?.toString(),
       chatAvailable: j['chatAvailable'] != false,
       audioAvailable: j['audioAvailable'] != false,
       videoAvailable: j['videoAvailable'] != false,
+      adultTalkAllowed: isAdultVal,
     );
   }
 }

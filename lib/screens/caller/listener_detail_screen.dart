@@ -272,6 +272,12 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
     final reviewCount = (expert['reviewCount'] as num?)?.toInt() ?? l.reviewCount;
     final sessions = (expert['totalConsultations'] as num?)?.toInt() ?? l.totalConsultations;
     final categories = _names(expert['categories']);
+    final isAdult = expert['adultTalkAllowed'] == true ||
+        l.isAdult ||
+        categories.any((c) {
+          final s = c.toLowerCase().trim();
+          return s == '18+ adult talk' || s == 'adult-talk' || s.contains('adult');
+        });
     final languages = _names(expert['languages']);
     final skills = _names(expert['skills']);
     final experience = (expert['experienceYears'] as num?)?.toInt();
@@ -519,6 +525,28 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
                               ),
                               const SizedBox(width: 6),
                               const Icon(Icons.verified_rounded, size: 20, color: Color(0xFFE05D44)),
+                              if (isAdult) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFFF1F2),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: const Color(0xFFFDA4AF),
+                                      width: 1.0,
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    '🔞 18+ Adult Talk',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFFE11D48),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                           const SizedBox(height: 4),

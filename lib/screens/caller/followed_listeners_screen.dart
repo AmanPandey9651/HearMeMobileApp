@@ -714,6 +714,28 @@ class _FollowedListenersScreenState extends State<FollowedListenersScreen> {
                                 size: 16,
                                 color: primaryOrange,
                               ),
+                              if (listener.isAdult) ...[
+                                const SizedBox(width: 5),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFFF1F2),
+                                    borderRadius: BorderRadius.circular(5),
+                                    border: Border.all(
+                                      color: const Color(0xFFFDA4AF),
+                                      width: 0.8,
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    '🔞 18+',
+                                    style: TextStyle(
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFFE11D48),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                           const SizedBox(height: 2),
