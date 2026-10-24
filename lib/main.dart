@@ -15,7 +15,15 @@ import 'widgets/global_call_host.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
-    await Firebase.initializeApp();
+    await Firebase.initializeApp(
+      options: const FirebaseOptions(
+        apiKey: 'AIzaSyDpiYOYzu7NGZKQHP1qLlRkkM9CcXvZ-eE',
+        appId: '1:972145849986:android:7e74ce33b40b3e98aea69b',
+        messagingSenderId: '972145849986',
+        projectId: 'feelback-536d4',
+        storageBucket: 'feelback-536d4.firebasestorage.app',
+      ),
+    );
   } catch (e) {
     debugPrint("Firebase init warning: $e");
   }

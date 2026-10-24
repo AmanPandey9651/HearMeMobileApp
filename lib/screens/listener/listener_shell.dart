@@ -67,27 +67,56 @@ class _ListenerShellState extends State<ListenerShell> {
 
 
 
+  final Set<String> _seenNudgeIds = <String>{};
+  bool _showingNudgeDialog = false;
+
   Future<void> _nudges() async {
-    if (!mounted) return;
+    if (!mounted || _showingNudgeDialog) return;
     try {
-      final rows = await context.read<AppController>().api.notifications(page: 0, size: 50);
+      final app = context.read<AppController>();
+      final presence = (app.expertProfile?['presence'] ?? app.expertProfile?['presenceStatus'] ?? '').toString().toUpperCase();
+      final isOnline = presence == 'ONLINE' || presence == 'BUSY_IN_CALL';
+
+      final rows = await app.api.notifications(page: 0, size: 50);
       Map<String, dynamic>? nudge;
+      final List<String> unreadNudgeIds = [];
       var unread = 0;
       for (final raw in rows) {
         if (raw is! Map) continue;
         final m = Map<String, dynamic>.from(raw);
         final isUnread = m['isRead'] != true && m['readAt'] == null;
-        if (isUnread) unread++;
-        if (nudge == null && isUnread && '${m['type'] ?? ''}'.toUpperCase() == 'CALLER_NUDGE') {
-          nudge = m;
+        if (isUnread) {
+          unread++;
+          final nType = '${m['type'] ?? ''}'.toUpperCase();
+          if (nType == 'CALLER_NUDGE') {
+            final nId = '${m['id'] ?? ''}';
+            if (nId.isNotEmpty) {
+              unreadNudgeIds.add(nId);
+              if (nudge == null && !_seenNudgeIds.contains(nId)) {
+                nudge = m;
+              }
+            }
+          }
         }
       }
       if (mounted && unreadCount != unread) setState(() => unreadCount = unread);
+
+      // If listener is already ONLINE, auto-mark all pending nudges as read and DO NOT show popup
+      if (isOnline) {
+        for (final nId in unreadNudgeIds) {
+          _seenNudgeIds.add(nId);
+          app.api.readNotification(nId).catchError((_) => <String, dynamic>{});
+        }
+        return;
+      }
+
       if (nudge == null || !mounted) return;
       final selectedNudge = nudge;
       final id = '${selectedNudge['id'] ?? ''}';
-      if (id.isEmpty || id == shownNudgeId) return;
-      shownNudgeId = id;
+      if (id.isEmpty || _seenNudgeIds.contains(id)) return;
+      _seenNudgeIds.add(id);
+
+      _showingNudgeDialog = true;
       final goOnline = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -105,17 +134,29 @@ class _ListenerShellState extends State<ListenerShell> {
           ],
         ),
       );
-      try {
-        await context.read<AppController>().api.readNotification(id);
-        if (goOnline == true) {
-          await context.read<AppController>().api.updatePresence('ONLINE');
-          if (mounted) {
-            setState(() => index = 0);
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('You are online now.')));
+      _showingNudgeDialog = false;
+
+      // Mark this nudge as read immediately
+      await app.api.readNotification(id).catchError((_) => <String, dynamic>{});
+
+      if (goOnline == true) {
+        // Also mark ALL other pending nudge notifications as read so they never pop up
+        for (final otherId in unreadNudgeIds) {
+          _seenNudgeIds.add(otherId);
+          if (otherId != id) {
+            app.api.readNotification(otherId).catchError((_) => <String, dynamic>{});
           }
         }
-      } catch (_) {}
-    } catch (_) {}
+        await app.api.updatePresence('ONLINE');
+        app.updatePresence('ONLINE');
+        if (mounted) {
+          setState(() => index = 0);
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('You are online now.')));
+        }
+      }
+    } catch (_) {
+      _showingNudgeDialog = false;
+    }
   }
 
   Future<void> _showIncoming(InstantSessionModel s) async {

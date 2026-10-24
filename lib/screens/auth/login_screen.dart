@@ -373,14 +373,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                 if (!_otpSent) {
                                   final fullNumber = mobile.startsWith('91') && mobile.length == 12 ? '+$mobile' : '+91${mobile.substring(mobile.length - 10)}';
                                   try {
-                                    try {
-                                      await FirebaseAuth.instance.setSettings(forceRecaptchaFlow: true);
-                                    } catch (_) {}
+                                    debugPrint('[DIAGNOSTIC] Invoking FirebaseAuth.verifyPhoneNumber for ' + fullNumber);
                                     await FirebaseAuth.instance.verifyPhoneNumber(
                                       phoneNumber: fullNumber,
-                                      timeout: const Duration(seconds: 30),
+                                      timeout: const Duration(seconds: 60),
                                       forceResendingToken: _resendToken,
                                       verificationCompleted: (PhoneAuthCredential credential) async {
+                                        debugPrint('[DIAGNOSTIC] verificationCompleted fired automatically.');
                                         try {
                                           final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
                                           final idToken = await userCred.user?.getIdToken();
@@ -388,53 +387,63 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                             await app.firebaseOtpLogin(idToken, mobile);
                                             if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
                                           }
-                                        } catch (_) {}
+                                        } catch (e) {
+                                          debugPrint('[DIAGNOSTIC] verificationCompleted error: ' + e.toString());
+                                        }
                                       },
-                                      verificationFailed: (FirebaseAuthException e) async {
-                                        try {
-                                          await app.api.sendOtp(mobile);
-                                          if (mounted) {
-                                            setState(() {
-                                              _verificationId = 'backend_direct';
-                                              _otpSent = true;
-                                            });
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(content: Text('OTP sent successfully.')),
-                                            );
-                                          }
-                                        } catch (backendErr) {
-                                          String msg = e.message ?? 'Phone verification failed.';
-                                          if (e.code == 'billing-not-enabled') {
-                                            msg = 'Firebase SMS requires Blaze billing plan. Please upgrade in Firebase Console or use test phone numbers.';
-                                          }
-                                          if (mounted) showError(context, msg);
+                                      verificationFailed: (FirebaseAuthException e) {
+                                        debugPrint('[DIAGNOSTIC] verificationFailed: code=' + e.code + ', message=' + (e.message ?? ''));
+                                        if (mounted) {
+                                          showDialog<void>(
+                                            context: context,
+                                            builder: (ctx) => AlertDialog(
+                                              title: const Text('Firebase: verificationFailed'),
+                                              content: SelectableText(
+                                                'Firebase Error Code:\n' + e.code + '\n\nMessage:\n' + (e.message ?? 'No message provided by Firebase.') + '\n\nPhone: ' + fullNumber,
+                                              ),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () => Navigator.pop(ctx),
+                                                  child: const Text('Dismiss'),
+                                                ),
+                                              ],
+                                            ),
+                                          );
                                         }
                                       },
                                       codeSent: (String verificationId, int? resendToken) {
+                                        debugPrint('[DIAGNOSTIC] codeSent: verificationId=' + verificationId);
                                         if (mounted) {
                                           setState(() {
                                             _verificationId = verificationId;
                                             _resendToken = resendToken;
                                             _otpSent = true;
                                           });
+                                          showDialog<void>(
+                                            context: context,
+                                            builder: (ctx) => AlertDialog(
+                                              title: const Text('Firebase: codeSent'),
+                                              content: SelectableText(
+                                                'Firebase accepted the SMS request for:\n' + fullNumber + '\n\nVerification ID:\n' + verificationId + '\n\nNow awaiting telecom carrier SMS delivery.',
+                                              ),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () => Navigator.pop(ctx),
+                                                  child: const Text('OK'),
+                                                ),
+                                              ],
+                                            ),
+                                          );
                                         }
                                       },
                                       codeAutoRetrievalTimeout: (String verificationId) {
+                                        debugPrint('[DIAGNOSTIC] codeAutoRetrievalTimeout: ' + verificationId);
                                         _verificationId = verificationId;
                                       },
                                     );
                                   } catch (e) {
-                                    try {
-                                      await app.api.sendOtp(mobile);
-                                      if (mounted) {
-                                        setState(() {
-                                          _verificationId = 'backend_direct';
-                                          _otpSent = true;
-                                        });
-                                      }
-                                    } catch (_) {
-                                      showError(context, e);
-                                    }
+                                    debugPrint('[DIAGNOSTIC] verifyPhoneNumber synchronous exception: ' + e.toString());
+                                    showError(context, e);
                                   }
                                 } else {
                                   final code = _otp.text.trim();
