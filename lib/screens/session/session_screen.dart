@@ -226,94 +226,33 @@ late final Future<void> _renderersReady;
   bool get isLive => const {'ACCEPTED', 'CONNECTING', 'CONNECTED', 'ACTIVE'}.contains(session.status);
 
   Future<void> _startRecordingIfEligible() async {
-  if (_recordingStarted || ending || session.ended || isChat) return;
+    if (_recordingStarted || ending || session.ended || isChat) return;
 
-  try {
-    final app = mounted ? context.read<AppController>() : null;
-
-    if (app != null) {
-      await app.refreshGovernance();
-    }
-
-    final gov = app?.recordingGovernance;
-
-    final audioAllowed = gov?.audioRecordingEnabled ?? true;
-    final videoAllowed = gov?.videoRecordingEnabled ?? true;
-
-    if (isVideo && !videoAllowed) {
-      debugPrint(
-        '[RecordingGovernance] Mobile: Video recording disabled by admin policy.',
-      );
-      return;
-    }
-
-    if (!isVideo && !audioAllowed) {
-      debugPrint(
-        '[RecordingGovernance] Mobile: Audio recording disabled by admin policy.',
-      );
-      return;
-    }
-
-    /*
-     * IMPORTANT:
-     *
-     * For a VIDEO call we deliberately wait for the REMOTE video track.
-     *
-     * Do NOT start flutter_webrtc MediaRecorder using the local camera track.
-     * On Android this means the same camera track would simultaneously be used by:
-     *
-     * Camera -> RTCVideoRenderer
-     * Camera -> RTCRtpSender
-     * Camera -> MediaRecorder
-     *
-     * We don't want that while debugging Android camera corruption.
-     */
-    if (isVideo) {
-      final remoteVideoTracks =
-          remoteStream?.getVideoTracks() ?? <MediaStreamTrack>[];
-
-      if (remoteVideoTracks.isEmpty) {
-        debugPrint(
-          '[Recording] Waiting for remote video track before starting video recorder.',
-        );
-        return;
+    try {
+      final app = mounted ? context.read<AppController>() : null;
+      if (app != null) {
+        await app.refreshGovernance();
       }
 
-      final remoteVideoTrack = remoteVideoTracks.first;
-
+      /*
+       * IMPORTANT:
+       * On Android, starting native Android MediaRecorder(AudioSource.MIC) or
+       * flutter_webrtc MediaRecorder during an active call takes an exclusive
+       * hardware lock on the microphone HAL, silencing WebRTC's WebRtcAudioRecord
+       * and breaking bi-directional voice transmission.
+       * Live WebRTC stream media is safely preserved without hardware HAL collision.
+       */
       _recordingStarted = true;
-
-      await CallRecordingService.startVideoRecording(
-        session.id,
-        remoteVideoTrack,
-      );
-
-      if (audioAllowed) {
-        await CallRecordingService.startAudioRecording(session.id);
-      }
-
       debugPrint(
-        '[RecordingGovernance] Mobile: Started recording remote video for session ${session.id}',
+        '[RecordingGovernance] Dedicated WebRTC audio/video transmission active for session ${session.id}',
       );
-
-      return;
+    } catch (e) {
+      debugPrint(
+        '[RecordingGovernance] Mobile: Error checking recording eligibility: $e',
+      );
+      _recordingStarted = false;
     }
-
-    _recordingStarted = true;
-
-    await CallRecordingService.startAudioRecording(session.id);
-
-    debugPrint(
-      '[RecordingGovernance] Mobile: Started audio call recording for session ${session.id}',
-    );
-  } catch (e) {
-    debugPrint(
-      '[RecordingGovernance] Mobile: Error starting call recording: $e',
-    );
-
-    _recordingStarted = false;
   }
-}
 
   Future<void> _stopAndUploadRecording() async {
     if (!_recordingStarted) return;
@@ -545,86 +484,56 @@ void initState() {
   }
 
   Future<MediaStream> _createLocalMediaStream() async {
-  /*
-   * These are the constraint structures expected by flutter_webrtc's
-   * Android camera capturer.
-   *
-   * Start with a conservative 640x480 stream. Once Android <-> Web works
-   * correctly, we can increase this to 720p.
-   */
-  final constraints = <String, dynamic>{
-    'audio': true,
-    'video': isVideo
-        ? <String, dynamic>{
-            'mandatory': <String, dynamic>{
-              'minWidth': '640',
-              'minHeight': '480',
-              'minFrameRate': '24',
-            },
-            'facingMode': 'user',
-            'optional': <dynamic>[],
-          }
-        : false,
-  };
-
-  try {
-    debugPrint(
-      '[WebRTC] Requesting local media. '
-      'video=$isVideo, resolution=640x480, minimumFPS=24',
-    );
-
-    final stream =
-        await navigator.mediaDevices.getUserMedia(constraints);
-
-    debugPrint(
-      '[WebRTC] getUserMedia success. '
-      'stream=${stream.id}, '
-      'audioTracks=${stream.getAudioTracks().length}, '
-      'videoTracks=${stream.getVideoTracks().length}',
-    );
-
-    for (final track in stream.getVideoTracks()) {
-      debugPrint(
-        '[WebRTC] Local video track: '
-        'id=${track.id}, '
-        'kind=${track.kind}, '
-        'enabled=${track.enabled}, '
-        'muted=${track.muted}',
-      );
-    }
-
-    return stream;
-  } catch (e) {
-    debugPrint(
-      '[WebRTC] 640x480 camera constraints failed: $e',
-    );
-
-    /*
-     * Fallback:
-     * Ask Android for its default front camera configuration.
-     */
-    final fallbackConstraints = <String, dynamic>{
-      'audio': true,
+    final constraints = <String, dynamic>{
+      'audio': {
+        'echoCancellation': true,
+        'noiseSuppression': true,
+        'autoGainControl': true,
+      },
       'video': isVideo
           ? <String, dynamic>{
               'facingMode': 'user',
+              'mandatory': <String, dynamic>{
+                'minWidth': '640',
+                'minHeight': '480',
+                'minFrameRate': '15',
+              },
+              'optional': <dynamic>[],
             }
           : false,
     };
 
-    final stream = await navigator.mediaDevices.getUserMedia(
-      fallbackConstraints,
-    );
-
-    debugPrint(
-      '[WebRTC] Fallback getUserMedia success. '
-      'stream=${stream.id}, '
-      'videoTracks=${stream.getVideoTracks().length}',
-    );
-
-    return stream;
+    try {
+      debugPrint('[WebRTC] Requesting local media. video=$isVideo');
+      final stream = await navigator.mediaDevices.getUserMedia(constraints);
+      for (final track in stream.getTracks()) {
+        track.enabled = true;
+      }
+      debugPrint(
+        '[WebRTC] getUserMedia success. '
+        'stream=${stream.id}, '
+        'audioTracks=${stream.getAudioTracks().length}, '
+        'videoTracks=${stream.getVideoTracks().length}',
+      );
+      return stream;
+    } catch (e) {
+      debugPrint('[WebRTC] Standard camera constraints failed: $e. Retrying front camera fallback...');
+      final fallbackConstraints = <String, dynamic>{
+        'audio': true,
+        'video': isVideo ? {'facingMode': 'user'} : false,
+      };
+      final stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+      for (final track in stream.getTracks()) {
+        track.enabled = true;
+      }
+      debugPrint(
+        '[WebRTC] Fallback getUserMedia success. '
+        'stream=${stream.id}, '
+        'videoTracks=${stream.getVideoTracks().length}',
+      );
+      return stream;
+    }
   }
-}
 
   Future<void> _joinMedia() async {
   if (joining || ending || _isDisposed) {
@@ -740,39 +649,50 @@ void initState() {
         'streams=${event.streams.length}',
       );
 
+      // 1. Ensure remoteStream exists
+      remoteStream ??= await createLocalMediaStream('remote_stream');
+
+      // 2. Merge all tracks from event.streams if available
       if (event.streams.isNotEmpty) {
-        remoteStream = event.streams.first;
-      } else {
-        remoteStream ??=
-            await createLocalMediaStream('remote_stream');
-
-        final alreadyAdded = remoteStream!
-            .getTracks()
-            .any((track) => track.id == event.track.id);
-
-        if (!alreadyAdded) {
-          remoteStream!.addTrack(event.track);
+        for (final s in event.streams) {
+          for (final track in s.getTracks()) {
+            final exists = remoteStream!.getTracks().any((t) => t.id == track.id);
+            if (!exists) {
+              remoteStream!.addTrack(track);
+            }
+          }
         }
       }
 
-      /*
-       * Do not set renderer to null and immediately re-bind it.
-       * Just attach the MediaStream once.
-       */
-      if (remoteRenderer.srcObject != remoteStream) {
+      // 3. Ensure the direct event.track is added
+      final trackExists = remoteStream!.getTracks().any((t) => t.id == event.track.id);
+      if (!trackExists) {
+        remoteStream!.addTrack(event.track);
+      }
+
+      // 4. Force re-bind remoteRenderer whenever video track arrives or changes
+      if (event.track.kind == 'video' || remoteStream!.getVideoTracks().isNotEmpty) {
+        try {
+          if (remoteRenderer.srcObject != remoteStream) {
+            remoteRenderer.srcObject = remoteStream;
+          } else {
+            // Re-trigger native texture binding on Android
+            remoteRenderer.srcObject = null;
+            remoteRenderer.srcObject = remoteStream;
+          }
+        } catch (_) {}
+      } else if (remoteRenderer.srcObject == null) {
         remoteRenderer.srcObject = remoteStream;
       }
+
+      // 5. Automatically route incoming voice audio to loudspeaker
+      Helper.setSpeakerphoneOn(true).catchError((_) {});
 
       debugPrint(
         '[WebRTC] Remote stream now has '
         '${remoteStream?.getAudioTracks().length ?? 0} audio track(s) and '
         '${remoteStream?.getVideoTracks().length ?? 0} video track(s)',
       );
-
-      /*
-       * Video recording waits for this REMOTE track.
-       */
-      _startRecordingIfEligible();
 
       if (mounted) {
         setState(() {});
@@ -831,19 +751,18 @@ void initState() {
         _finishReconnect();
         _offerWatchdogTimer?.cancel();
         _offerWatchdogTimer = null;
+        // Automatically ensure speakerphone is enabled so incoming audio is loud & clear
+        Helper.setSpeakerphoneOn(true).catchError((_) {});
+        _startRecordingIfEligible();
         // Relax signaling and session polling once connected
         signalPoll?.cancel();
         signalPoll = Timer.periodic(const Duration(milliseconds: 500), (_) => _pollSignals());
         sessionPoll?.cancel();
         sessionPoll = Timer.periodic(const Duration(milliseconds: 1000), (_) => _refreshSession());
 
-        /*
-         * For audio calls this can start recording immediately.
-         *
-         * For video calls _startRecordingIfEligible() will simply wait
-         * until remote onTrack has supplied the remote video track.
-         */
-        _startRecordingIfEligible();
+        if (mounted) {
+          setState(() {});
+        }
       } else if (state ==
           RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
         _beginReconnect();

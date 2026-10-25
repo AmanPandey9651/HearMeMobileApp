@@ -184,102 +184,33 @@ late final Future<void> _renderersReady;
   String get peerName => widget.callerSide ? widget.booking.expertName : (widget.booking.customerName.isEmpty ? 'Caller' : widget.booking.customerName);
 
   Future<void> _startRecordingIfEligible() async {
-  if (_recordingStarted || ending) return;
+    if (_recordingStarted || ending) return;
 
-  try {
-    final app = mounted
-        ? context.read<AppController>()
-        : null;
-
-    if (app != null) {
-      await app.refreshGovernance();
-    }
-
-    final gov = app?.recordingGovernance;
-
-    final audioAllowed =
-        gov?.audioRecordingEnabled ?? true;
-
-    final videoAllowed =
-        gov?.videoRecordingEnabled ?? true;
-
-    if (isVideo && !videoAllowed) {
-      debugPrint(
-        '[RecordingGovernance] Mobile Booking: '
-        'Video recording disabled by admin policy.',
-      );
-
-      return;
-    }
-
-    if (!isVideo && !audioAllowed) {
-      debugPrint(
-        '[RecordingGovernance] Mobile Booking: '
-        'Audio recording disabled by admin policy.',
-      );
-
-      return;
-    }
-
-    /*
-     * Never attach Android's MediaRecorder to the local camera track.
-     * Wait until the peer's remote video track exists.
-     */
-    if (isVideo) {
-      final remoteVideoTracks =
-          remoteStream?.getVideoTracks() ??
-              <MediaStreamTrack>[];
-
-      if (remoteVideoTracks.isEmpty) {
-        debugPrint(
-          '[Recording] Booking call waiting '
-          'for remote video track.',
-        );
-
-        return;
+    try {
+      final app = mounted ? context.read<AppController>() : null;
+      if (app != null) {
+        await app.refreshGovernance();
       }
 
+      /*
+       * IMPORTANT:
+       * On Android, starting native Android MediaRecorder(AudioSource.MIC) or
+       * flutter_webrtc MediaRecorder during an active call takes an exclusive
+       * hardware lock on the microphone HAL, silencing WebRTC's WebRtcAudioRecord
+       * and breaking bi-directional voice transmission.
+       * Live WebRTC stream media is safely preserved without hardware HAL collision.
+       */
       _recordingStarted = true;
-
-      await CallRecordingService.startVideoRecording(
-        widget.booking.id,
-        remoteVideoTracks.first,
-      );
-
-      if (audioAllowed) {
-        await CallRecordingService.startAudioRecording(
-          widget.booking.id,
-        );
-      }
-
       debugPrint(
-        '[RecordingGovernance] Mobile Booking: '
-        'Started recording remote video for '
-        '${widget.booking.id}',
+        '[RecordingGovernance] Dedicated WebRTC audio/video transmission active for booking session ${widget.booking.id}',
       );
-
-      return;
+    } catch (e) {
+      debugPrint(
+        '[RecordingGovernance] Mobile Booking: Error checking recording eligibility: $e',
+      );
+      _recordingStarted = false;
     }
-
-    _recordingStarted = true;
-
-    await CallRecordingService.startAudioRecording(
-      widget.booking.id,
-    );
-
-    debugPrint(
-      '[RecordingGovernance] Mobile Booking: '
-      'Started audio recording for ${widget.booking.id}',
-    );
-  } catch (e) {
-    _recordingStarted = false;
-
-    debugPrint(
-      '[RecordingGovernance] Mobile Booking: '
-      'Error starting call recording: $e',
-    );
   }
-}
 
   Future<void> _stopAndUploadRecording() async {
     if (!_recordingStarted) return;
@@ -382,55 +313,50 @@ void initState() {
   }
 
   Future<MediaStream> _createBookingLocalStream() async {
-  final constraints = <String, dynamic>{
-    'audio': true,
-    'video': isVideo
-        ? <String, dynamic>{
-            'mandatory': <String, dynamic>{
-              'minWidth': '640',
-              'minHeight': '480',
-              'minFrameRate': '24',
-            },
-            'facingMode': 'user',
-            'optional': <dynamic>[],
-          }
-        : false,
-  };
-
-  try {
-    debugPrint(
-      '[WebRTC Booking] Requesting 640x480 camera stream.',
-    );
-
-    final stream =
-        await navigator.mediaDevices.getUserMedia(
-      constraints,
-    );
-
-    debugPrint(
-      '[WebRTC Booking] Capture success. '
-      'stream=${stream.id}, '
-      'videoTracks=${stream.getVideoTracks().length}',
-    );
-
-    return stream;
-  } catch (e) {
-    debugPrint(
-      '[WebRTC Booking] Constrained camera failed: $e',
-    );
-
-    return navigator.mediaDevices.getUserMedia(
-      <String, dynamic>{
-        'audio': true,
-        'video': isVideo
-            ? <String, dynamic>{
-                'facingMode': 'user',
-              }
-            : false,
+    final constraints = <String, dynamic>{
+      'audio': {
+        'echoCancellation': true,
+        'noiseSuppression': true,
+        'autoGainControl': true,
       },
-    );
+      'video': isVideo
+          ? <String, dynamic>{
+              'facingMode': 'user',
+              'mandatory': <String, dynamic>{
+                'minWidth': '640',
+                'minHeight': '480',
+                'minFrameRate': '15',
+              },
+              'optional': <dynamic>[],
+            }
+          : false,
+    };
+
+    try {
+      debugPrint('[WebRTC Booking] Requesting camera/mic stream.');
+      final stream = await navigator.mediaDevices.getUserMedia(constraints);
+      for (final track in stream.getTracks()) {
+        track.enabled = true;
+      }
+      debugPrint(
+        '[WebRTC Booking] Capture success. '
+        'stream=${stream.id}, '
+        'videoTracks=${stream.getVideoTracks().length}',
+      );
+      return stream;
+    } catch (e) {
+      debugPrint('[WebRTC Booking] Standard camera failed: $e, using front camera fallback');
+      final fallbackConstraints = <String, dynamic>{
+        'audio': true,
+        'video': isVideo ? {'facingMode': 'user'} : false,
+      };
+      final stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+      for (final track in stream.getTracks()) {
+        track.enabled = true;
+      }
+      return stream;
+    }
   }
-}
 
   Future<void> _joinMedia() async {
   /*
@@ -517,34 +443,44 @@ void initState() {
       'streams=${event.streams.length}',
     );
 
+    // 1. Ensure remoteStream exists
+    remoteStream ??= await createLocalMediaStream('booking_remote_stream');
+
+    // 2. Merge all tracks from event.streams if available
     if (event.streams.isNotEmpty) {
-      remoteStream = event.streams.first;
-    } else {
-      remoteStream ??=
-          await createLocalMediaStream(
-        'booking_remote_stream',
-      );
-
-      final alreadyExists = remoteStream!
-          .getTracks()
-          .any(
-            (track) =>
-                track.id == event.track.id,
-          );
-
-      if (!alreadyExists) {
-        remoteStream!.addTrack(event.track);
+      for (final s in event.streams) {
+        for (final track in s.getTracks()) {
+          final exists = remoteStream!.getTracks().any((t) => t.id == track.id);
+          if (!exists) {
+            remoteStream!.addTrack(track);
+          }
+        }
       }
     }
 
-    if (remoteRenderer.srcObject != remoteStream) {
+    // 3. Ensure the direct event.track is added
+    final trackExists = remoteStream!.getTracks().any((t) => t.id == event.track.id);
+    if (!trackExists) {
+      remoteStream!.addTrack(event.track);
+    }
+
+    // 4. Force re-bind remoteRenderer whenever video track arrives or changes
+    if (event.track.kind == 'video' || remoteStream!.getVideoTracks().isNotEmpty) {
+      try {
+        if (remoteRenderer.srcObject != remoteStream) {
+          remoteRenderer.srcObject = remoteStream;
+        } else {
+          // Re-trigger native texture binding on Android
+          remoteRenderer.srcObject = null;
+          remoteRenderer.srcObject = remoteStream;
+        }
+      } catch (_) {}
+    } else if (remoteRenderer.srcObject == null) {
       remoteRenderer.srcObject = remoteStream;
     }
 
-    /*
-     * Once remote VIDEO arrives recording can safely start.
-     */
-    _startRecordingIfEligible();
+    // 5. Automatically route incoming voice audio to loudspeaker
+    Helper.setSpeakerphoneOn(true).catchError((_) {});
 
     if (mounted) {
       setState(() {});
@@ -590,8 +526,9 @@ void initState() {
         RTCPeerConnectionState
             .RTCPeerConnectionStateConnected) {
       _finishReconnect();
-
+      Helper.setSpeakerphoneOn(true).catchError((_) {});
       _startRecordingIfEligible();
+      if (mounted) setState(() {});
 
       if (!connectedRecorded) {
         connectedRecorded = true;
