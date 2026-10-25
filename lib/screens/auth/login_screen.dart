@@ -28,7 +28,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   bool _obscurePassword = true;
   bool _otpSent = false;
   String? _verificationId;
-  bool _busy = false;
+  bool _otpBusy = false;
+  bool _googleBusy = false;
+  bool _listenerBusy = false;
+  bool get _busy => _otpBusy || _googleBusy || _listenerBusy;
 
   WebViewController? _webAuthController;
   Completer<void>? _otpSentCompleter;
@@ -153,7 +156,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   }
 
   Future<void> _run(Future<void> Function() job) async {
-    setState(() => _busy = true);
+    setState(() => _otpBusy = true);
     try {
       await job();
       if (mounted && context.read<AppController>().user != null) {
@@ -161,11 +164,51 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         return;
       }
     } catch (e) {
-      if (mounted) {
-        showError(context, e);
-      }
+      if (mounted) showError(context, e);
     }
-    if (mounted) setState(() => _busy = false);
+    if (mounted) setState(() => _otpBusy = false);
+  }
+
+  Future<void> _runOtp(Future<void> Function() job) async {
+    setState(() => _otpBusy = true);
+    try {
+      await job();
+      if (mounted && context.read<AppController>().user != null) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+        return;
+      }
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+    if (mounted) setState(() => _otpBusy = false);
+  }
+
+  Future<void> _runGoogle(Future<void> Function() job) async {
+    setState(() => _googleBusy = true);
+    try {
+      await job();
+      if (mounted && context.read<AppController>().user != null) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+        return;
+      }
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+    if (mounted) setState(() => _googleBusy = false);
+  }
+
+  Future<void> _runListener(Future<void> Function() job) async {
+    setState(() => _listenerBusy = true);
+    try {
+      await job();
+      if (mounted && context.read<AppController>().user != null) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+        return;
+      }
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+    if (mounted) setState(() => _listenerBusy = false);
   }
 
   @override
@@ -547,7 +590,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                     child: TextButton.icon(
                       onPressed: (_busy || _resendCountdown > 0)
                           ? null
-                          : () => _run(() async {
+                          : () => _runOtp(() async {
                                 final mobile = _mobile.text.replaceAll(RegExp(r'\D'), '');
                                 final fullNumber = mobile.startsWith('91') && mobile.length == 12 ? '+$mobile' : '+91${mobile.substring(mobile.length - 10)}';
                                 _startResendCountdown(30);
@@ -608,7 +651,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       borderRadius: BorderRadius.circular(16),
                       onTap: _busy
                           ? null
-                          : () => _run(() async {
+                          : () => _runOtp(() async {
                                 final mobile = _mobile.text.replaceAll(RegExp(r'\D'), '');
                                 if (mobile.length < 10) throw Exception('Enter a valid mobile number.');
                                 if (!_otpSent) {
@@ -702,7 +745,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                               }),
                       child: Center(
                         child: Text(
-                          _busy ? 'Please wait…' : (_otpSent ? 'Verify OTP & Enter' : 'Send Verification OTP'),
+                          _otpBusy ? 'Please wait…' : (_otpSent ? 'Verify OTP & Enter' : 'Send Verification OTP'),
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w800,
@@ -761,16 +804,23 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             borderRadius: BorderRadius.circular(16),
             child: InkWell(
               borderRadius: BorderRadius.circular(16),
-              onTap: _busy ? null : () => _run(app.googleLogin),
+              onTap: _busy ? null : () => _runGoogle(app.googleLogin),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _GoogleGLogo(),
+                    if (_googleBusy)
+                      const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: primaryOrange),
+                      )
+                    else
+                      _GoogleGLogo(),
                     const SizedBox(width: 12),
                     Text(
-                      _busy ? 'Signing in with Google…' : 'Continue with Google',
+                      _googleBusy ? 'Signing in with Google…' : 'Continue with Google',
                       style: const TextStyle(
                         color: textDark,
                         fontWeight: FontWeight.w800,
@@ -1024,9 +1074,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                   color: Colors.transparent,
                   child: InkWell(
                     borderRadius: BorderRadius.circular(16),
-                    onTap: _busy ? null : () => _run(() => app.login(_email.text.trim(), _password.text)),
+                    onTap: _busy ? null : () => _runListener(() => app.login(_email.text.trim(), _password.text)),
                     child: Center(
-                      child: _busy
+                      child: _listenerBusy
                           ? const SizedBox(
                               width: 20,
                               height: 20,
