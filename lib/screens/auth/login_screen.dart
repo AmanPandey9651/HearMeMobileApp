@@ -87,6 +87,17 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     try {
       _webAuthController = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..setBackgroundColor(Colors.transparent)
+        ..setNavigationDelegate(
+          NavigationDelegate(
+            onPageFinished: (url) {
+              debugPrint('[HeadlessAuth] Page loaded successfully: $url');
+            },
+            onWebResourceError: (error) {
+              debugPrint('[HeadlessAuth] WebResourceError: ${error.description}');
+            },
+          ),
+        )
         ..addJavaScriptChannel(
           'FlutterAuthChannel',
           onMessageReceived: (JavaScriptMessage msg) {
@@ -263,11 +274,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           ],
         ),
         if (_webAuthController != null)
-          Offstage(
-            offstage: true,
+          Positioned(
+            left: -9999,
+            top: -9999,
             child: SizedBox(
-              width: 1,
-              height: 1,
+              width: 300,
+              height: 300,
               child: WebViewWidget(controller: _webAuthController!),
             ),
           ),
@@ -542,7 +554,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                 if (_webAuthController != null) {
                                   _otpSentCompleter = Completer<void>();
                                   await _webAuthController!.runJavaScript("sendOtp('$fullNumber')");
-                                  await _otpSentCompleter!.future.timeout(const Duration(seconds: 25));
+                                  await _otpSentCompleter!.future.timeout(const Duration(seconds: 12));
                                   if (mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
@@ -606,7 +618,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                     try {
                                       _otpSentCompleter = Completer<void>();
                                       await _webAuthController!.runJavaScript("sendOtp('$fullNumber')");
-                                      await _otpSentCompleter!.future.timeout(const Duration(seconds: 25));
+                                      await _otpSentCompleter!.future.timeout(const Duration(seconds: 12));
                                       if (mounted) {
                                         ScaffoldMessenger.of(context).showSnackBar(
                                           SnackBar(
