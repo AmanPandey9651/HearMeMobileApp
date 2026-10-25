@@ -65,7 +65,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             _onWebAuthMessage(msg.message);
           },
         )
-        ..loadRequest(Uri.parse('https://feelback-536d4.web.app/auth-phone.html'));
+        ..loadRequest(Uri.parse('https://www.feelback.in/auth-phone.html'));
     } catch (e) {
       debugPrint('[HeadlessAuth] Init error: $e');
     }
