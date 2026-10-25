@@ -33,6 +33,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   WebViewController? _webAuthController;
   Completer<void>? _otpSentCompleter;
   Completer<String>? _verifyCompleter;
+  int _resendCountdown = 0;
+  Timer? _resendTimer;
 
   static const Color bgCream = AppTheme.bgCream;
   static const Color borderWarm = AppTheme.borderWarm;
@@ -40,6 +42,23 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   static const Color secondaryOrange = AppTheme.secondaryOrange;
   static const Color textDark = AppTheme.textDark;
   static const Color textMuted = AppTheme.textMuted;
+
+  void _startResendCountdown([int seconds = 30]) {
+    _resendTimer?.cancel();
+    if (mounted) setState(() => _resendCountdown = seconds);
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_resendCountdown <= 1) {
+        timer.cancel();
+        setState(() => _resendCountdown = 0);
+      } else {
+        setState(() => _resendCountdown--);
+      }
+    });
+  }
 
   String _getFormattedMobile() {
     final digits = _mobile.text.replaceAll(RegExp(r'\D'), '');
@@ -89,6 +108,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         debugPrint('[HeadlessAuth] Ready');
       } else if (event == 'codeSent') {
         _verificationId = 'web_confirmation';
+        _startResendCountdown(30);
         if (mounted) {
           setState(() {
             _otpSent = true;
@@ -139,6 +159,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
   @override
   void dispose() {
+    _resendTimer?.cancel();
     _tabs.dispose();
     _email.dispose();
     _password.dispose();
@@ -458,8 +479,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                           onTap: _busy
                               ? null
                               : () {
+                                  _resendTimer?.cancel();
                                   setState(() {
                                     _otpSent = false;
+                                    _resendCountdown = 0;
                                     _otp.clear();
                                     _verificationId = null;
                                   });
@@ -510,11 +533,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton.icon(
-                      onPressed: _busy
+                      onPressed: (_busy || _resendCountdown > 0)
                           ? null
                           : () => _run(() async {
                                 final mobile = _mobile.text.replaceAll(RegExp(r'\D'), '');
                                 final fullNumber = mobile.startsWith('91') && mobile.length == 12 ? '+$mobile' : '+91${mobile.substring(mobile.length - 10)}';
+                                _startResendCountdown(30);
                                 if (_webAuthController != null) {
                                   _otpSentCompleter = Completer<void>();
                                   await _webAuthController!.runJavaScript("sendOtp('$fullNumber')");
@@ -529,10 +553,20 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                   }
                                 }
                               }),
-                      icon: const Icon(Icons.refresh_rounded, size: 14, color: primaryOrange),
-                      label: const Text(
-                        'Resend OTP',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: primaryOrange),
+                      icon: Icon(
+                        Icons.refresh_rounded,
+                        size: 14,
+                        color: _resendCountdown > 0 ? textMuted : primaryOrange,
+                      ),
+                      label: Text(
+                        _resendCountdown > 0
+                            ? 'Resend OTP in ${_resendCountdown}s'
+                            : 'Resend OTP',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: _resendCountdown > 0 ? textMuted : primaryOrange,
+                        ),
                       ),
                     ),
                   ),
@@ -605,6 +639,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                       showError(context, e.message ?? 'Verification failed.');
                                     },
                                     codeSent: (String verificationId, int? resendToken) {
+                                      _startResendCountdown(30);
                                       if (mounted) {
                                         setState(() {
                                           _verificationId = verificationId;
