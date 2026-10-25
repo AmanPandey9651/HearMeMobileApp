@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+import 'package:webview_flutter/webview_flutter.dart';
 import '../common/legal_policy_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -25,8 +28,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   bool _obscurePassword = true;
   bool _otpSent = false;
   String? _verificationId;
-  int? _resendToken;
   bool _busy = false;
+
+  WebViewController? _webAuthController;
+  Completer<void>? _otpSentCompleter;
+  Completer<String>? _verifyCompleter;
 
   static const Color bgCream = AppTheme.bgCream;
   static const Color borderWarm = AppTheme.borderWarm;
@@ -46,6 +52,64 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         context.read<AppController>().refreshAuthGovernance();
       }
     });
+    _initWebAuth();
+  }
+
+  void _initWebAuth() {
+    try {
+      _webAuthController = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..addJavaScriptChannel(
+          'FlutterAuthChannel',
+          onMessageReceived: (JavaScriptMessage msg) {
+            _onWebAuthMessage(msg.message);
+          },
+        )
+        ..loadRequest(Uri.parse('https://feelback-536d4.web.app/auth-phone.html'));
+    } catch (e) {
+      debugPrint('[HeadlessAuth] Init error: $e');
+    }
+  }
+
+  void _onWebAuthMessage(String raw) {
+    debugPrint('[HeadlessAuth] Message: $raw');
+    try {
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      final event = data['event'];
+      if (event == 'ready') {
+        debugPrint('[HeadlessAuth] Ready');
+      } else if (event == 'codeSent') {
+        _verificationId = 'web_confirmation';
+        if (mounted) {
+          setState(() {
+            _otpSent = true;
+          });
+        }
+        if (_otpSentCompleter != null && !_otpSentCompleter!.isCompleted) {
+          _otpSentCompleter!.complete();
+        }
+      } else if (event == 'verified') {
+        final idToken = data['idToken'] as String;
+        if (_verifyCompleter != null && !_verifyCompleter!.isCompleted) {
+          _verifyCompleter!.complete(idToken);
+        }
+      } else if (event == 'error') {
+        final msg = data['message'] ?? 'Phone verification failed';
+        if (_otpSentCompleter != null && !_otpSentCompleter!.isCompleted) {
+          _otpSentCompleter!.completeError(Exception(msg));
+        }
+        if (_verifyCompleter != null && !_verifyCompleter!.isCompleted) {
+          _verifyCompleter!.completeError(Exception(msg));
+        }
+      }
+    } catch (e) {
+      if (_otpSentCompleter != null && !_otpSentCompleter!.isCompleted) {
+        _otpSentCompleter!.completeError(e);
+      }
+      if (_verifyCompleter != null && !_verifyCompleter!.isCompleted) {
+        _verifyCompleter!.completeError(e);
+      }
+    }
   }
 
   Future<void> _run(Future<void> Function() job) async {
@@ -110,7 +174,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         centerTitle: true,
       ),
       body: SafeArea(
-        child: Column(
+        child: Stack(
+          children: [
+            Column(
           children: [
             const SizedBox(height: 12),
 
@@ -164,6 +230,17 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                 ],
               ),
             ),
+          ],
+        ),
+        if (_webAuthController != null)
+          Offstage(
+            offstage: true,
+            child: SizedBox(
+              width: 1,
+              height: 1,
+              child: WebViewWidget(controller: _webAuthController!),
+            ),
+          ),
           ],
         ),
       ),
@@ -372,115 +449,84 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                 if (mobile.length < 10) throw Exception('Enter a valid mobile number.');
                                 if (!_otpSent) {
                                   final fullNumber = mobile.startsWith('91') && mobile.length == 12 ? '+$mobile' : '+91${mobile.substring(mobile.length - 10)}';
-                                  try {
+                                  // Send OTP via invisible web engine (guaranteed Indian carrier DLT delivery)
+                                  if (_webAuthController != null) {
                                     try {
-                                      await FirebaseAuth.instance.setSettings(forceRecaptchaFlow: true);
-                                    } catch (e) {
-                                      debugPrint('[DIAGNOSTIC] setSettings error: ' + e.toString());
+                                      _otpSentCompleter = Completer<void>();
+                                      await _webAuthController!.runJavaScript("sendOtp('$fullNumber')");
+                                      await _otpSentCompleter!.future.timeout(const Duration(seconds: 25));
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Verification OTP sent successfully.')),
+                                        );
+                                      }
+                                      return;
+                                    } catch (webErr) {
+                                      debugPrint('[HeadlessAuth] Falling back to native: $webErr');
                                     }
-                                    debugPrint('[DIAGNOSTIC] Invoking FirebaseAuth.verifyPhoneNumber for ' + fullNumber);
-                                    await FirebaseAuth.instance.verifyPhoneNumber(
-                                      phoneNumber: fullNumber,
-                                      timeout: const Duration(seconds: 60),
-                                      forceResendingToken: _resendToken,
-                                      verificationCompleted: (PhoneAuthCredential credential) async {
-                                        debugPrint('[DIAGNOSTIC] verificationCompleted fired automatically.');
-                                        try {
-                                          final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
-                                          final idToken = await userCred.user?.getIdToken();
-                                          if (idToken != null) {
-                                            await app.firebaseOtpLogin(idToken, mobile);
-                                            if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
-                                          }
-                                        } catch (e) {
-                                          debugPrint('[DIAGNOSTIC] verificationCompleted error: ' + e.toString());
-                                        }
-                                      },
-                                      verificationFailed: (FirebaseAuthException e) {
-                                        debugPrint('[DIAGNOSTIC] verificationFailed: code=' + e.code + ', message=' + (e.message ?? ''));
-                                        if (mounted) {
-                                          showDialog<void>(
-                                            context: context,
-                                            builder: (ctx) => AlertDialog(
-                                              title: const Text('Firebase: verificationFailed'),
-                                              content: SelectableText(
-                                                'Firebase Error Code:\n' + e.code + '\n\nMessage:\n' + (e.message ?? 'No message provided by Firebase.') + '\n\nPhone: ' + fullNumber,
-                                              ),
-                                              actions: [
-                                                TextButton(
-                                                  onPressed: () => Navigator.pop(ctx),
-                                                  child: const Text('Dismiss'),
-                                                ),
-                                              ],
-                                            ),
-                                          );
-                                        }
-                                      },
-                                      codeSent: (String verificationId, int? resendToken) {
-                                        debugPrint('[DIAGNOSTIC] codeSent: verificationId=' + verificationId);
-                                        if (mounted) {
-                                          setState(() {
-                                            _verificationId = verificationId;
-                                            _resendToken = resendToken;
-                                            _otpSent = true;
-                                          });
-                                          showDialog<void>(
-                                            context: context,
-                                            builder: (ctx) => AlertDialog(
-                                              title: const Text('Firebase: codeSent'),
-                                              content: SelectableText(
-                                                'Firebase accepted the SMS request for:\n' + fullNumber + '\n\nVerification ID:\n' + verificationId + '\n\nNow awaiting telecom carrier SMS delivery.',
-                                              ),
-                                              actions: [
-                                                TextButton(
-                                                  onPressed: () => Navigator.pop(ctx),
-                                                  child: const Text('OK'),
-                                                ),
-                                              ],
-                                            ),
-                                          );
-                                        }
-                                      },
-                                      codeAutoRetrievalTimeout: (String verificationId) {
-                                        debugPrint('[DIAGNOSTIC] codeAutoRetrievalTimeout: ' + verificationId);
-                                        _verificationId = verificationId;
-                                      },
-                                    );
-                                  } catch (e) {
-                                    debugPrint('[DIAGNOSTIC] verifyPhoneNumber synchronous exception: ' + e.toString());
-                                    showError(context, e);
                                   }
+
+                                  // Native fallback if headless webview was unavailable
+                                  await FirebaseAuth.instance.verifyPhoneNumber(
+                                    phoneNumber: fullNumber,
+                                    timeout: const Duration(seconds: 60),
+                                    verificationCompleted: (PhoneAuthCredential credential) async {
+                                      try {
+                                        final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
+                                        final idToken = await userCred.user?.getIdToken();
+                                        if (idToken != null) {
+                                          await app.firebaseOtpLogin(idToken, mobile);
+                                          if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+                                        }
+                                      } catch (_) {}
+                                    },
+                                    verificationFailed: (FirebaseAuthException e) {
+                                      showError(context, e.message ?? 'Verification failed.');
+                                    },
+                                    codeSent: (String verificationId, int? resendToken) {
+                                      if (mounted) {
+                                        setState(() {
+                                          _verificationId = verificationId;
+                                          _otpSent = true;
+                                        });
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('OTP sent successfully.')),
+                                        );
+                                      }
+                                    },
+                                    codeAutoRetrievalTimeout: (String verificationId) {
+                                      _verificationId = verificationId;
+                                    },
+                                  );
                                 } else {
                                   final code = _otp.text.trim();
                                   if (code.isEmpty) throw Exception('Enter the OTP.');
 
-                                  if (_verificationId == 'backend_direct' || _verificationId == null) {
-                                    await app.verifyOtp(mobile, code);
-                                  } else {
-                                    try {
-                                      final credential = PhoneAuthProvider.credential(
-                                        verificationId: _verificationId!,
-                                        smsCode: code,
-                                      );
-                                      final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
-                                      final idToken = await userCred.user?.getIdToken();
-                                      if (idToken == null) throw Exception('Failed to obtain Firebase ID token.');
+                                  // 1. If headless runner dispatched OTP, verify via headless runner
+                                  if (_verificationId == 'web_confirmation' && _webAuthController != null) {
+                                    _verifyCompleter = Completer<String>();
+                                    await _webAuthController!.runJavaScript("verifyOtp('$code')");
+                                    final idToken = await _verifyCompleter!.future.timeout(const Duration(seconds: 20));
+                                    await app.firebaseOtpLogin(idToken, mobile);
+                                    return;
+                                  }
+
+                                  // 2. Native verification
+                                  if (_verificationId != null && _verificationId != 'backend_direct') {
+                                    final credential = PhoneAuthProvider.credential(
+                                      verificationId: _verificationId!,
+                                      smsCode: code,
+                                    );
+                                    final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
+                                    final idToken = await userCred.user?.getIdToken();
+                                    if (idToken != null) {
                                       await app.firebaseOtpLogin(idToken, mobile);
-                                    } catch (e) {
-                                      try {
-                                        await app.verifyOtp(mobile, code);
-                                      } catch (_) {
-                                        if (e is FirebaseAuthException) {
-                                          if (e.code == 'invalid-verification-code') {
-                                            throw Exception('Incorrect OTP. Please check the 6-digit code and try again.');
-                                          } else if (e.code == 'session-expired') {
-                                            throw Exception('OTP session expired. Please request a new code.');
-                                          }
-                                        }
-                                        rethrow;
-                                      }
+                                      return;
                                     }
                                   }
+
+                                  // 3. Backend fallback
+                                  await app.verifyOtp(mobile, code);
                                 }
                               }),
                       child: Center(
