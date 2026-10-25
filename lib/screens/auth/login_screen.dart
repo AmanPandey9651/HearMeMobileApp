@@ -41,6 +41,15 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   static const Color textDark = AppTheme.textDark;
   static const Color textMuted = AppTheme.textMuted;
 
+  String _getFormattedMobile() {
+    final digits = _mobile.text.replaceAll(RegExp(r'\D'), '');
+    final last10 = digits.length >= 10 ? digits.substring(digits.length - 10) : digits;
+    if (last10.length == 10) {
+      return '${last10.substring(0, 5)} ${last10.substring(5)}';
+    }
+    return last10;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -369,14 +378,18 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                 const SizedBox(height: 16),
                 TextField(
                   controller: _mobile,
+                  enabled: !_otpSent,
                   keyboardType: TextInputType.phone,
-                  style: const TextStyle(fontWeight: FontWeight.w700, color: textDark),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: _otpSent ? textMuted : textDark,
+                  ),
                   decoration: InputDecoration(
                     hintText: 'Mobile number',
                     hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontWeight: FontWeight.normal),
                     prefixIcon: const Icon(Icons.phone_rounded, color: primaryOrange, size: 20),
                     filled: true,
-                    fillColor: const Color(0xFFFFFBF7),
+                    fillColor: _otpSent ? const Color(0xFFF3F4F6) : const Color(0xFFFFFBF7),
                     contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
@@ -393,9 +406,84 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                   ),
                 ),
                 if (_otpSent) ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0FDF4),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFBBF7D0)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFDCFCE7),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.mark_email_read_rounded,
+                            size: 18,
+                            color: Color(0xFF16A34A),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'OTP sent to +91 ${_getFormattedMobile()}',
+                                style: const TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF15803D),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              const Text(
+                                'A 6-digit code has been sent to your mobile',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF166534),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        InkWell(
+                          onTap: _busy
+                              ? null
+                              : () {
+                                  setState(() {
+                                    _otpSent = false;
+                                    _otp.clear();
+                                    _verificationId = null;
+                                  });
+                                },
+                          borderRadius: BorderRadius.circular(8),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                            child: Text(
+                              'Change',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: primaryOrange,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
                   TextField(
                     controller: _otp,
+                    autofocus: true,
                     keyboardType: TextInputType.number,
                     style: const TextStyle(fontWeight: FontWeight.w700, color: textDark),
                     decoration: InputDecoration(
@@ -415,6 +503,36 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
                         borderSide: const BorderSide(color: primaryOrange, width: 1.5),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: _busy
+                          ? null
+                          : () => _run(() async {
+                                final mobile = _mobile.text.replaceAll(RegExp(r'\D'), '');
+                                final fullNumber = mobile.startsWith('91') && mobile.length == 12 ? '+$mobile' : '+91${mobile.substring(mobile.length - 10)}';
+                                if (_webAuthController != null) {
+                                  _otpSentCompleter = Completer<void>();
+                                  await _webAuthController!.runJavaScript("sendOtp('$fullNumber')");
+                                  await _otpSentCompleter!.future.timeout(const Duration(seconds: 25));
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('OTP resent to +91 ${_getFormattedMobile()}'),
+                                        backgroundColor: const Color(0xFF10B981),
+                                      ),
+                                    );
+                                  }
+                                }
+                              }),
+                      icon: const Icon(Icons.refresh_rounded, size: 14, color: primaryOrange),
+                      label: const Text(
+                        'Resend OTP',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: primaryOrange),
                       ),
                     ),
                   ),
@@ -457,7 +575,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                       await _otpSentCompleter!.future.timeout(const Duration(seconds: 25));
                                       if (mounted) {
                                         ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('Verification OTP sent successfully.')),
+                                          SnackBar(
+                                            content: Text('OTP sent to +91 ${_getFormattedMobile()}'),
+                                            backgroundColor: const Color(0xFF10B981),
+                                          ),
                                         );
                                       }
                                       return;
@@ -490,7 +611,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                           _otpSent = true;
                                         });
                                         ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('OTP sent successfully.')),
+                                          SnackBar(
+                                            content: Text('OTP sent to +91 ${_getFormattedMobile()}'),
+                                            backgroundColor: const Color(0xFF10B981),
+                                          ),
                                         );
                                       }
                                     },
