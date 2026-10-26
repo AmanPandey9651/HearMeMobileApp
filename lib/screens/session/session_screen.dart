@@ -15,6 +15,8 @@ import '../../services/call_recording_service.dart';
 import '../../widgets/call_pulse_avatar.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/in_call_mini_games.dart';
+import '../../widgets/in_call_gifting_sheet.dart';
+import '../caller/wallet_screen.dart';
 import '../../widgets/video_privacy_filter.dart';
 import '../../widgets/nudity_guard_overlay.dart';
 
@@ -3885,31 +3887,22 @@ void initState() {
 
   Future<void> _gift() async {
     try {
-      final gifts = await context.read<AppController>().api.gifts();
-      if (!mounted) return;
-      await showModalBottomSheet(
-        context: context,
-        builder: (ctx) => ListView(
-          shrinkWrap: true,
-          children: gifts.map((g) {
-            final m = Map<String, dynamic>.from(g);
-            return ListTile(
-              leading: Text('${m['emoji'] ?? '🎁'}', style: const TextStyle(fontSize: 30)),
-              title: Text('${m['name'] ?? 'Gift'}'),
-              subtitle: Text('₹${m['price'] ?? ''} • ${m['description'] ?? ''}'),
-              onTap: () async {
-                try {
-                  final sent = await context.read<AppController>().api.sendGift(session.id, '${m['id'] ?? m['giftType'] ?? m['name']}');
-                  await context.read<AppController>().api.sendSignal(session.id, {'type': 'gift_sent', 'gift': sent});
-                  if (ctx.mounted) Navigator.pop(ctx);
-                } catch (e) {
-                  if (ctx.mounted) showError(ctx, e);
-                }
-              },
-            );
-          }).toList(),
-        ),
+      final sent = await InCallGiftingSheet.show(
+        context,
+        sessionId: session.id,
+        listenerName: session.listenerName,
+        onRechargeRequested: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const WalletScreen()),
+          );
+        },
       );
+      if (sent != null && mounted) {
+        setState(() {
+          banner = '🎁 Gift sent: ${sent['giftEmoji'] ?? '🎁'} ${sent['giftName'] ?? 'Gift'} (₹${sent['amount'] ?? ''})';
+        });
+      }
     } catch (e) {
       if (mounted) showError(context, e);
     }

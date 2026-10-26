@@ -33,6 +33,7 @@ class _CallerHistoryScreenState extends State<CallerHistoryScreen> with SingleTi
   static const Color bgCream = AppTheme.bgCream;
   static const Color borderWarm = AppTheme.borderWarm;
   static const Color primaryOrange = AppTheme.primaryOrange;
+  // ignore: unused_field
   static const Color secondaryOrange = AppTheme.secondaryOrange;
   static const Color softPeach = AppTheme.softPeach;
   static const Color textDark = AppTheme.textDark;
@@ -330,7 +331,7 @@ class _CallerHistoryScreenState extends State<CallerHistoryScreen> with SingleTi
       );
     }
 
-    final activeCount = tabs.index == 0 ? filteredSessions.length : filteredBookings.length;
+    final activeCount = filteredSessions.length;
 
     return Scaffold(
       backgroundColor: bgCream,
@@ -404,35 +405,7 @@ class _CallerHistoryScreenState extends State<CallerHistoryScreen> with SingleTi
               ),
             ),
 
-            const SizedBox(height: 12),
 
-            // Segmented Tab Switcher matching Screenshot 3
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 18),
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF4ECE4),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _HistoryTabPill(
-                      label: 'Instant sessions',
-                      selected: tabs.index == 0,
-                      onTap: () => tabs.animateTo(0),
-                    ),
-                  ),
-                  Expanded(
-                    child: _HistoryTabPill(
-                      label: 'Scheduled / legacy',
-                      selected: tabs.index == 1,
-                      onTap: () => tabs.animateTo(1),
-                    ),
-                  ),
-                ],
-              ),
-            ),
 
             const SizedBox(height: 12),
 
@@ -489,22 +462,12 @@ class _CallerHistoryScreenState extends State<CallerHistoryScreen> with SingleTi
 
             const SizedBox(height: 6),
 
-            // Tab Views
+            // Instant Sessions List
             Expanded(
-              child: TabBarView(
-                controller: tabs,
-                children: [
-                  RefreshIndicator(
-                    color: primaryOrange,
-                    onRefresh: _load,
-                    child: _instantList(),
-                  ),
-                  RefreshIndicator(
-                    color: primaryOrange,
-                    onRefresh: _load,
-                    child: _bookingList(),
-                  ),
-                ],
+              child: RefreshIndicator(
+                color: primaryOrange,
+                onRefresh: _load,
+                child: _instantList(),
               ),
             ),
           ],
@@ -721,6 +684,7 @@ class _CallerHistoryScreenState extends State<CallerHistoryScreen> with SingleTi
   // ==========================================
   // SCHEDULED CONSULTATIONS LIST
   // ==========================================
+  // ignore: unused_element
   Widget _bookingList() {
     final rows = filteredBookings;
     if (rows.isEmpty) {
@@ -1263,6 +1227,7 @@ class _CallerHistoryScreenState extends State<CallerHistoryScreen> with SingleTi
   }
 }
 
+// ignore: unused_element
 class _HistoryTabPill extends StatelessWidget {
   final String label;
   final bool selected;
