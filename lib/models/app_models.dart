@@ -22,6 +22,7 @@ class AppUser {
   final String? avatarUrl;
   final String? gender;
   final String? hobbies;
+  final bool isTest;
 
   const AppUser({
     required this.id,
@@ -35,6 +36,7 @@ class AppUser {
     this.avatarUrl,
     this.gender,
     this.hobbies,
+    this.isTest = false,
   });
 
   bool get isListener => role == 'EXPERT';
@@ -51,6 +53,7 @@ class AppUser {
         avatarUrl: j['avatarUrl']?.toString(),
         gender: j['gender']?.toString(),
         hobbies: j['hobbies']?.toString(),
+        isTest: j['isTest'] == true || j['test'] == true,
       );
 
   Map<String, dynamic> toJson() => {
@@ -65,6 +68,7 @@ class AppUser {
         'avatarUrl': avatarUrl,
         'gender': gender,
         'hobbies': hobbies,
+        'isTest': isTest,
       };
 
   String encode() => jsonEncode(toJson());
@@ -97,6 +101,7 @@ class ListenerCardModel {
   final bool audioAvailable;
   final bool videoAvailable;
   final bool adultTalkAllowed;
+  final bool isTest;
 
   const ListenerCardModel({
     required this.id,
@@ -125,6 +130,7 @@ class ListenerCardModel {
     this.audioAvailable = true,
     this.videoAvailable = true,
     this.adultTalkAllowed = false,
+    this.isTest = false,
   });
 
   bool get isOnline => presence == 'ONLINE';
@@ -153,6 +159,7 @@ class ListenerCardModel {
     bool? audioAvailable,
     bool? videoAvailable,
     bool? adultTalkAllowed,
+    bool? isTest,
   }) => ListenerCardModel(
         id: id,
         userId: userId ?? this.userId,
@@ -180,6 +187,7 @@ class ListenerCardModel {
         audioAvailable: audioAvailable ?? this.audioAvailable,
         videoAvailable: videoAvailable ?? this.videoAvailable,
         adultTalkAllowed: adultTalkAllowed ?? this.adultTalkAllowed,
+        isTest: isTest ?? this.isTest,
       );
 
   factory ListenerCardModel.fromJson(Map<String, dynamic> j) {
@@ -218,6 +226,7 @@ class ListenerCardModel {
       audioAvailable: j['audioAvailable'] != false,
       videoAvailable: j['videoAvailable'] != false,
       adultTalkAllowed: isAdultVal,
+      isTest: j['isTest'] == true || j['test'] == true,
     );
   }
 }
@@ -254,6 +263,7 @@ class InstantSessionModel {
   final String? categorySlug;
   final String? notes;
   final bool promotionalBonusUsed;
+  final bool isTest;
 
   const InstantSessionModel({
     required this.id,
@@ -287,6 +297,7 @@ class InstantSessionModel {
     this.categorySlug,
     this.notes,
     this.promotionalBonusUsed = false,
+    this.isTest = false,
   });
 
   bool get isChat => type == 'CHAT';

@@ -241,6 +241,28 @@ class ListenerCardItem extends StatelessWidget {
                             size: 14,
                             color: Color(0xFFF95B3D),
                           ),
+                          if (listener.isTest) ...[
+                            const SizedBox(width: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFEF3C7),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: const Color(0xFFF59E0B),
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: const Text(
+                                '🧪 TEST',
+                                style: TextStyle(
+                                  fontSize: 8.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFFB45309),
+                                ),
+                              ),
+                            ),
+                          ],
                           if (listener.isAdult) ...[
                             const SizedBox(width: 4),
                             Container(

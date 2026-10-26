@@ -1837,6 +1837,25 @@ void initState() {
                                   letterSpacing: 0.4,
                                 ),
                               ),
+                              if (session.isTest) ...[
+                                const SizedBox(width: 5),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFEF3C7),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: const Color(0xFFF59E0B), width: 0.8),
+                                  ),
+                                  child: const Text(
+                                    '🧪 TEST CALL (FREE)',
+                                    style: TextStyle(
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFFB45309),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ],
