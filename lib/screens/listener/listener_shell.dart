@@ -187,6 +187,8 @@ class _ListenerShellState extends State<ListenerShell> {
           border: Border(top: BorderSide(color: Color(0xFFF1E6D8), width: 0.9)),
         ),
         child: NavigationBar(
+          height: 62,
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
           selectedIndex: index,
           backgroundColor: Colors.white,
           indicatorColor: const Color(0xFFFFECE5),

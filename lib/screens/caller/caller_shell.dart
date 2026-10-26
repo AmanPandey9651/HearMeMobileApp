@@ -242,6 +242,8 @@ class _CallerShellState extends State<CallerShell> {
           border: Border(top: BorderSide(color: borderWarm, width: 1.0)),
         ),
         child: NavigationBar(
+          height: 62,
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
           selectedIndex: index,
           backgroundColor: Colors.white,
           indicatorColor: softPeach,
