@@ -6,7 +6,6 @@ import '../../core/app_controller.dart';
 import '../../models/app_models.dart';
 import '../../widgets/common_widgets.dart';
 import 'listener_detail_screen.dart';
-import 'schedule_consultation_screen.dart';
 
 class FollowedListenersScreen extends StatefulWidget {
   const FollowedListenersScreen({super.key});
@@ -1089,22 +1088,23 @@ class _FollowedListenersScreenState extends State<FollowedListenersScreen> {
                     children: [
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ScheduleConsultationScreen(
-                                listener: listener,
-                                audioRate: listener.audioRate,
-                                videoRate: listener.videoRate,
-                              ),
+                          onPressed: isNudged ? null : () => _handleNudge(listener),
+                          icon: Icon(
+                            isNudged ? Icons.check_circle_rounded : Icons.notifications_active_rounded,
+                            size: 15,
+                            color: isNudged ? emeraldOnline : amberBusy,
+                          ),
+                          label: Text(
+                            isNudged ? 'Nudge Sent!' : 'Busy in Call • Nudge When Free',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: isNudged ? emeraldOnline : amberBusy,
                             ),
-                          ).then((_) => _load(silent: true)),
-                          icon: const Icon(Icons.calendar_month_rounded, size: 16),
-                          label: const Text('Schedule for Later', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5)),
+                          ),
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: primaryOrange,
-                            side: const BorderSide(color: Color(0xFFFCDFD5)),
-                            backgroundColor: const Color(0xFFFFF9F5),
+                            side: BorderSide(color: isNudged ? const Color(0xFFA7F3D0) : const Color(0xFFFDE68A)),
+                            backgroundColor: isNudged ? const Color(0xFFECFDF5) : const Color(0xFFFFFBEB),
                             padding: const EdgeInsets.symmetric(vertical: 10),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
@@ -1127,7 +1127,7 @@ class _FollowedListenersScreenState extends State<FollowedListenersScreen> {
                     ],
                   ),
                 ] else ...[
-                  // Offline State: Nudge + Schedule Buttons
+                  // Offline State: Nudge + Details Buttons
                   Row(
                     children: [
                       // Nudge when online button
@@ -1156,30 +1156,18 @@ class _FollowedListenersScreenState extends State<FollowedListenersScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
-
-                      // Schedule button
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ScheduleConsultationScreen(
-                                listener: listener,
-                                audioRate: listener.audioRate,
-                                videoRate: listener.videoRate,
-                              ),
-                            ),
-                          ).then((_) => _load(silent: true)),
-                          icon: const Icon(Icons.calendar_month_rounded, size: 15),
-                          label: const Text('Schedule', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: textDark,
-                            side: const BorderSide(color: borderWarm),
-                            backgroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
+                      OutlinedButton(
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => ListenerDetailScreen(listener: listener)),
+                        ).then((_) => _load(silent: true)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: textDark,
+                          side: const BorderSide(color: borderWarm),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
+                        child: const Text('Details ›', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
                       ),
                     ],
                   ),

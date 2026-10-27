@@ -630,20 +630,20 @@ class _CallerHomeScreenState extends State<CallerHomeScreen> {
             ),
           ),
 
-          const SizedBox(height: 6),
+          const SizedBox(height: 2),
 
-          // 4. Hero Banner Card ("You're Not Alone / Real People. Real Support.")
+          // 4. Compact Hero Banner Card ("You're Not Alone / Real People. Real Support.")
           HeroBannerCard(
             onChatTap: () => _quickMatchModality('CHAT'),
             onVoiceTap: () => _quickMatchModality('AUDIO_CALL'),
             onVideoTap: () => _quickMatchModality('VIDEO_CALL'),
           ),
 
-          const SizedBox(height: 6),
+          const SizedBox(height: 2),
 
           // 5. Section Header: "🟢 Available Compassionate Listeners" + "See All →"
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+            padding: const EdgeInsets.fromLTRB(14, 4, 14, 2),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
