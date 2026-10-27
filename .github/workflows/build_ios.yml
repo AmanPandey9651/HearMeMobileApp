@@ -18,12 +18,6 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Java for any Android tools
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'corretto'
-          java-version: '17'
-
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -33,8 +27,19 @@ jobs:
       - name: Print Flutter & Dart Version
         run: flutter --version
 
+      - name: Prepare Build Directories
+        run: |
+          mkdir -p build/ios/SourcePackages
+          flutter config --no-enable-swift-package-manager
+
       - name: Install Flutter Dependencies
         run: flutter pub get
+
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          pod install --repo-update
+          cd ..
 
       - name: Build iOS Application (No Codesign)
         run: |
