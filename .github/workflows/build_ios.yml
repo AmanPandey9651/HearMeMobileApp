@@ -13,6 +13,7 @@ jobs:
   build-ios:
     name: Build iOS IPA
     runs-on: macos-14
+    timeout-minutes: 20
 
     steps:
       - name: Checkout Repository
@@ -32,14 +33,8 @@ jobs:
           mkdir -p build/ios/SourcePackages
           flutter config --no-enable-swift-package-manager
 
-      - name: Install Flutter Dependencies
+      - name: Install Dependencies
         run: flutter pub get
-
-      - name: Install CocoaPods
-        run: |
-          cd ios
-          pod install --repo-update
-          cd ..
 
       - name: Build iOS Application (No Codesign)
         run: |
