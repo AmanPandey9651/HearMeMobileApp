@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../core/api_client.dart';
 
 class LegalPolicyScreen extends StatefulWidget {
   final int initialTab; // 0: Privacy Policy, 1: Terms of Service, 2: Refund & Cancellation
@@ -11,6 +12,7 @@ class LegalPolicyScreen extends StatefulWidget {
 
 class _LegalPolicyScreenState extends State<LegalPolicyScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  Map<String, dynamic>? _policiesData;
 
   static const Color bgCream = Color(0xFFFAF5EE);
   static const Color borderWarm = Color(0xFFF1E6D8);
@@ -22,6 +24,21 @@ class _LegalPolicyScreenState extends State<LegalPolicyScreen> with SingleTicker
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this, initialIndex: widget.initialTab);
+    _fetchPolicies();
+  }
+
+  void _fetchPolicies() async {
+    try {
+      final client = ApiClient();
+      final res = await client.get('/config/legal-policies');
+      if (res is Map && mounted) {
+        setState(() {
+          _policiesData = Map<String, dynamic>.from(res);
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to load dynamic policies: $e');
+    }
   }
 
   @override
@@ -38,6 +55,33 @@ class _LegalPolicyScreenState extends State<LegalPolicyScreen> with SingleTicker
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  IconData _resolveIcon(String? iconName) {
+    switch (iconName?.toLowerCase()) {
+      case 'lock': return Icons.lock_rounded;
+      case 'eye-off': case 'eye_off': return Icons.visibility_off_rounded;
+      case 'mic-off': case 'mic_off': return Icons.mic_off_rounded;
+      case 'trash': return Icons.delete_forever_rounded;
+      case 'alert': return Icons.warning_amber_rounded;
+      case 'clock': return Icons.schedule_rounded;
+      case 'refresh': return Icons.published_with_changes_rounded;
+      case 'dollar': return Icons.account_balance_wallet_rounded;
+      case 'scale': case 'gavel': return Icons.gavel_rounded;
+      case 'heart': return Icons.favorite_rounded;
+      case 'shield': default: return Icons.shield_rounded;
+    }
+  }
+
+  Color _resolveColor(String? hex, [Color fallback = primaryOrange]) {
+    if (hex == null || hex.isEmpty) return fallback;
+    try {
+      String cleanHex = hex.replaceAll('#', '');
+      if (cleanHex.length == 6) cleanHex = 'FF$cleanHex';
+      return Color(int.parse('0x$cleanHex'));
+    } catch (_) {
+      return fallback;
     }
   }
 
@@ -103,6 +147,39 @@ class _LegalPolicyScreenState extends State<LegalPolicyScreen> with SingleTicker
   // TAB 1: PRIVACY POLICY
   // -------------------------------------------------------------
   Widget _buildPrivacyTab() {
+    final policy = _policiesData?['privacyPolicy'];
+    final dynamicSections = policy != null && policy['sections'] is List ? policy['sections'] as List : null;
+
+    if (dynamicSections != null && dynamicSections.isNotEmpty) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
+        children: [
+          _buildPillHeader(
+            icon: Icons.shield_rounded,
+            badge: policy['badge'] ?? 'DPDP Act 2023 Compliant',
+            badgeColor: _resolveColor(policy['badgeColor'], const Color(0xFF10B981)),
+            title: policy['title'] ?? 'Privacy Policy & Zero-PII Declaration',
+            subtitle: policy['subtitle'] ?? 'Last updated: October 18, 2026 • FeelBack Technologies Inc.',
+          ),
+          const SizedBox(height: 16),
+          for (final sec in dynamicSections) ...[
+            _buildCard(
+              title: sec['title'] ?? '',
+              icon: _resolveIcon(sec['icon']),
+              iconColor: _resolveColor(sec['iconColor'], Colors.redAccent),
+              content: sec['content'] ?? '',
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (policy['grievance'] != null)
+            _buildDynamicGrievanceCard(Map<String, dynamic>.from(policy['grievance']))
+          else
+            _buildGrievanceCard(),
+        ],
+      );
+    }
+
+    // Default Fallback
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
       children: [
@@ -156,6 +233,39 @@ class _LegalPolicyScreenState extends State<LegalPolicyScreen> with SingleTicker
   // TAB 2: TERMS OF SERVICE
   // -------------------------------------------------------------
   Widget _buildTermsTab() {
+    final policy = _policiesData?['termsOfService'];
+    final dynamicSections = policy != null && policy['sections'] is List ? policy['sections'] as List : null;
+
+    if (dynamicSections != null && dynamicSections.isNotEmpty) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
+        children: [
+          _buildPillHeader(
+            icon: Icons.gavel_rounded,
+            badge: policy['badge'] ?? 'Legally Binding Agreement',
+            badgeColor: _resolveColor(policy['badgeColor'], const Color(0xFF6366F1)),
+            title: policy['title'] ?? 'Terms of Service & Community Rules',
+            subtitle: policy['subtitle'] ?? 'Jurisdiction: Prayagraj, Uttar Pradesh, India',
+          ),
+          const SizedBox(height: 16),
+          for (final sec in dynamicSections) ...[
+            _buildCard(
+              title: sec['title'] ?? '',
+              icon: _resolveIcon(sec['icon']),
+              iconColor: _resolveColor(sec['iconColor'], const Color(0xFF6366F1)),
+              content: sec['content'] ?? '',
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (policy['grievance'] != null)
+            _buildDynamicGrievanceCard(Map<String, dynamic>.from(policy['grievance']))
+          else
+            _buildGrievanceCard(),
+        ],
+      );
+    }
+
+    // Default Fallback
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
       children: [
@@ -168,74 +278,34 @@ class _LegalPolicyScreenState extends State<LegalPolicyScreen> with SingleTicker
         ),
         const SizedBox(height: 16),
 
-        // Urgent medical disclaimer
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFEF2F2),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFFCA5A5)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: const [
-                  Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 22),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'CRITICAL NOTICE: NOT A MEDICAL SERVICE',
-                      style: TextStyle(
-                        color: Color(0xFFDC2626),
-                        fontWeight: FontWeight.w900,
-                        fontSize: 13,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                'FeelBack is an emotional support and conversational venting platform. Peer listeners are NOT licensed doctors, psychologists, psychiatrists, or medical professionals. Sessions do not constitute medical advice or treatment.\n\n'
-                '🚨 If you or someone you know is in crisis or having thoughts of self-harm, please contact 24/7 National Emergency Helplines immediately:\n'
-                '• Tele-MANAS (Govt of India): 14416 (Toll-Free, 24/7)\n'
-                '• Vandrevala Foundation: +91 9999 666 555\n'
-                '• KIRAN Helpline: 1800-599-0019\n'
-                '• National Emergency: 112',
-                style: TextStyle(color: Color(0xFF991B1B), fontSize: 12.5, height: 1.5),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-
         _buildCard(
-          title: '1. Eligibility & Age Requirement',
-          icon: Icons.person_rounded,
-          iconColor: primaryOrange,
-          content: 'You must be at least 18 years of age to register or initiate calls on FeelBack. By continuing, you affirm you have the legal capacity to enter into this contract under the Indian Contract Act, 1872.',
+          title: '1. Peer Support Only — Not Therapy or Medical Advice',
+          icon: Icons.warning_amber_rounded,
+          iconColor: Colors.amber.shade800,
+          content: 'FeelBack is a platform connecting users with compassionate peer listeners for venting, emotional companionship, and daily conversation.\n\n'
+              '⚠️ IMPORTANT: Listeners on FeelBack are NOT licensed therapists, clinical psychologists, psychiatrists, medical doctors, or crisis emergency responders. If you are experiencing suicidal thoughts, self-harm impulses, or medical emergencies, please immediately call 112 or national emergency helplines.',
         ),
         const SizedBox(height: 12),
 
         _buildCard(
-          title: '2. Zero-Tolerance Prohibited Conduct',
+          title: '2. Zero Harassment & Prohibited Conduct',
           icon: Icons.block_rounded,
           iconColor: Colors.red,
-          content: 'The following conduct results in immediate, permanent ban and device blocking:\n'
-              '• Sexual harassment, nudity, or obscene verbal requests.\n'
-              '• Screen-recording or audio-tapping calls.\n'
-              '• Exchanging phone numbers, UPI IDs, or off-platform contact details.\n'
-              '• Hate speech, blackmail, extortion, or intimidation.',
+          content: 'To ensure a safe environment for everyone, the following conduct will lead to immediate account termination:\n'
+              '• No abusive, threatening, obscene, sexually explicit, or harassing language.\n'
+              '• No sharing or solicitation of external contact numbers, social media handles, or offline meetings.\n'
+              '• No financial solicitation or attempts to transact outside the FeelBack wallet.',
         ),
         const SizedBox(height: 12),
 
         _buildCard(
-          title: '3. Intermediary Status under Section 79',
-          icon: Icons.balance_rounded,
+          title: '3. Pay-Per-Minute Transparent Billing',
+          icon: Icons.account_balance_wallet_rounded,
           iconColor: const Color(0xFF10B981),
-          content: 'FeelBack acts purely as an intermediary communications platform under Section 79 of the Information Technology Act 2000. FeelBack is not liable for user-generated speech during transient calls.',
+          content: 'Calls are billed per minute from your prepaid wallet at the listener\'s posted rate.\n'
+              '• Billing begins only after call connection is established.\n'
+              '• A 60-second grace window applies: calls ended within 60 seconds are not charged.\n'
+              '• When your wallet balance depletes, the call automatically disconnects with zero negative balance.',
         ),
         const SizedBox(height: 12),
 
@@ -245,9 +315,42 @@ class _LegalPolicyScreenState extends State<LegalPolicyScreen> with SingleTicker
   }
 
   // -------------------------------------------------------------
-  // TAB 3: REFUND & CANCELLATION POLICY
+  // TAB 3: REFUND POLICY
   // -------------------------------------------------------------
   Widget _buildRefundTab() {
+    final policy = _policiesData?['refundPolicy'];
+    final dynamicSections = policy != null && policy['sections'] is List ? policy['sections'] as List : null;
+
+    if (dynamicSections != null && dynamicSections.isNotEmpty) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
+        children: [
+          _buildPillHeader(
+            icon: Icons.account_balance_wallet_rounded,
+            badge: policy['badge'] ?? 'Razorpay Gateway Compliant',
+            badgeColor: _resolveColor(policy['badgeColor'], const Color(0xFF10B981)),
+            title: policy['title'] ?? 'Refund, Cancellation & Billing Policy',
+            subtitle: policy['subtitle'] ?? 'Payment Aggregator: Razorpay Software Pvt. Ltd.',
+          ),
+          const SizedBox(height: 16),
+          for (final sec in dynamicSections) ...[
+            _buildCard(
+              title: sec['title'] ?? '',
+              icon: _resolveIcon(sec['icon']),
+              iconColor: _resolveColor(sec['iconColor'], const Color(0xFF0284C7)),
+              content: sec['content'] ?? '',
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (policy['grievance'] != null)
+            _buildDynamicGrievanceCard(Map<String, dynamic>.from(policy['grievance']))
+          else
+            _buildGrievanceCard(),
+        ],
+      );
+    }
+
+    // Default Fallback
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
       children: [
@@ -255,45 +358,34 @@ class _LegalPolicyScreenState extends State<LegalPolicyScreen> with SingleTicker
           icon: Icons.account_balance_wallet_rounded,
           badge: 'Razorpay Gateway Compliant',
           badgeColor: const Color(0xFF10B981),
-          title: 'Refund, Cancellation & Wallet Policy',
-          subtitle: 'Operated by FeelBack Technologies Inc.',
+          title: 'Refund, Cancellation & Billing Policy',
+          subtitle: 'Payment Aggregator: Razorpay Software Pvt. Ltd.',
         ),
         const SizedBox(height: 16),
 
         _buildCard(
-          title: '1. Prepaid Wallet Billing Architecture',
-          icon: Icons.payments_rounded,
-          iconColor: primaryOrange,
-          content: 'FeelBack operates on a transparent prepaid wallet model. Callers recharge their balance in INR via Razorpay (UPI, Cards, Netbanking). Calls are billed strictly per minute based on the listener\'s posted rate. When wallet balance reaches zero, the call ends automatically.',
-        ),
-        const SizedBox(height: 12),
-
-        _buildCard(
-          title: '2. 60-Second Call Drop Grace Period',
+          title: '1. 60-Second Automatic Call Drop Protection',
           icon: Icons.timer_rounded,
-          iconColor: const Color(0xFF10B981),
-          content: '✓ Automatic 60-Second Protection:\n'
-              'If a call disconnects within the first 60 seconds (due to network failure, connection drop, or accidental dial), ZERO balance is deducted, or any deducted minute is automatically credited back to your wallet balance immediately.',
+          iconColor: const Color(0xFF0284C7),
+          content: 'If a call drops or is disconnected within the first 60 seconds due to network fluctuation, bad audio, or wrong connection, you are charged ₹0. Any held amount is instantly released back to your wallet.',
         ),
         const SizedBox(height: 12),
 
         _buildCard(
-          title: '3. Unused Wallet Balance Refund',
-          icon: Icons.replay_rounded,
-          iconColor: const Color(0xFF3B82F6),
-          content: 'If you have deposited funds and have unspent wallet balance:\n'
-              '• You can request a 100% refund of unconsumed wallet funds within 14 days of recharge.\n'
-              '• Email feelback.help@gmail.com with your transaction ID or mobile number.\n'
-              '• Approved refunds are credited directly back to the original source (Bank/UPI/Card) within 5 to 7 business days via Razorpay.',
+          title: '2. Unspent Wallet Top-up Refunds',
+          icon: Icons.currency_rupee_rounded,
+          iconColor: const Color(0xFF16A34A),
+          content: 'Unspent funds in your FeelBack prepaid wallet can be refunded back to your original source of payment (UPI, Bank Account, Credit/Debit Card) upon request.\n\n'
+              '• Simply contact feelback.help@gmail.com with your registered account details.\n'
+              '• Refunds are processed through Razorpay payment gateway within 5 to 7 working days.',
         ),
         const SizedBox(height: 12),
 
         _buildCard(
-          title: '4. Non-Refundable Scenarios',
-          icon: Icons.cancel_outlined,
-          iconColor: Colors.grey,
-          content: '• Completed talk minutes cannot be refunded as the peer listener dedicated live time to listen to you.\n'
-              '• Accounts terminated for severe sexual harassment or abuse forfeit promotional balances.',
+          title: '3. Technical Glitches & Quality Disputes',
+          icon: Icons.support_agent_rounded,
+          iconColor: Colors.deepPurple,
+          content: 'In rare cases of call degradation (e.g. one-way audio, silent listener, or server drop), users can submit a ticket directly under Safety & Support screen within 24 hours. Once verified against our telemetry logs, the spent session minutes will be re-credited to your wallet.',
         ),
         const SizedBox(height: 12),
 
@@ -303,7 +395,7 @@ class _LegalPolicyScreenState extends State<LegalPolicyScreen> with SingleTicker
   }
 
   // -------------------------------------------------------------
-  // HELPER WIDGETS
+  // REUSABLE BUILDERS
   // -------------------------------------------------------------
   Widget _buildPillHeader({
     required IconData icon,
@@ -318,12 +410,8 @@ class _LegalPolicyScreenState extends State<LegalPolicyScreen> with SingleTicker
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: borderWarm),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
+        boxShadow: const [
+          BoxShadow(color: Color(0x05000000), blurRadius: 10, offset: Offset(0, 4)),
         ],
       ),
       child: Column(
@@ -343,7 +431,11 @@ class _LegalPolicyScreenState extends State<LegalPolicyScreen> with SingleTicker
                 const SizedBox(width: 6),
                 Text(
                   badge,
-                  style: TextStyle(color: badgeColor, fontWeight: FontWeight.w800, fontSize: 11),
+                  style: TextStyle(
+                    color: badgeColor,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 11.5,
+                  ),
                 ),
               ],
             ),
@@ -414,6 +506,50 @@ class _LegalPolicyScreenState extends State<LegalPolicyScreen> with SingleTicker
               color: Color(0xFF374151),
               fontSize: 13,
               height: 1.55,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDynamicGrievanceCard(Map<String, dynamic> grievance) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFBBF7D0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.verified_user_rounded, color: Color(0xFF16A34A), size: 18),
+              const SizedBox(width: 8),
+              Text(
+                grievance['title'] ?? 'Official Grievance Officer & Contact',
+                style: const TextStyle(
+                  color: Color(0xFF15803D),
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Entity: FeelBack Technologies Inc.\n'
+            'Officer: ${grievance['officerName'] ?? 'Aman Pandey'}\n'
+            'Address: ${grievance['address'] ?? 'Prayagraj, UP, India'}\n'
+            'Email: ${grievance['email'] ?? 'feelback.help@gmail.com'}\n'
+            'SLA: ${grievance['responseSla'] ?? 'Within 48 hours.'}',
+            style: const TextStyle(
+              color: Color(0xFF166534),
+              fontSize: 12.5,
+              height: 1.5,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],

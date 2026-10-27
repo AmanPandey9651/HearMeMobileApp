@@ -64,6 +64,9 @@ class ApiService {
   Future<Map<String, dynamic>> inactivityGovernance() async =>
       Map<String, dynamic>.from(await client.get('/config/inactivity-governance'));
 
+  Future<Map<String, dynamic>> legalPolicies() async =>
+      Map<String, dynamic>.from(await client.get('/config/legal-policies'));
+
   Future<AppUser> me() async => AppUser.fromJson(Map<String, dynamic>.from(await client.get('/auth/me')));
 
   Future<AppUser> updateUserProfile(Map<String, dynamic> data) async =>
