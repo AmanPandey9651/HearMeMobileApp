@@ -194,8 +194,13 @@ class AppController extends ChangeNotifier {
   Future<void> registerListener(Map<String, dynamic> data) async => _applyAuth(await api.registerListener(data));
 
   Future<void> googleLogin() async {
-    final clientId = AppConfig.googleServerClientId.trim();
-    final signIn = GoogleSignIn(serverClientId: clientId.isEmpty ? null : clientId);
+    final serverClientId = AppConfig.googleServerClientId.trim();
+    final signIn = GoogleSignIn(
+      clientId: defaultTargetPlatform == TargetPlatform.iOS
+          ? '972145849986-7afvc49iq0b6nu55a74qht473atgaaq3.apps.googleusercontent.com'
+          : null,
+      serverClientId: serverClientId.isEmpty ? null : serverClientId,
+    );
     try {
       final account = await signIn.signIn();
       if (account == null) return;
