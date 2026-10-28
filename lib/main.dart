@@ -15,25 +15,29 @@ import 'widgets/global_call_host.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  try {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
-      await Firebase.initializeApp();
-    } else {
-      await Firebase.initializeApp(
-        options: const FirebaseOptions(
-          apiKey: 'AIzaSyDpiYOYzu7NGZKQHP1qLlRkkM9CcXvZ-eE',
-          appId: '1:972145849986:android:7e74ce33b40b3e98aea69b',
-          messagingSenderId: '972145849986',
-          projectId: 'feelback-536d4',
-          storageBucket: 'feelback-536d4.firebasestorage.app',
-        ),
-      );
-    }
-  } catch (e) {
-    debugPrint("Firebase init warning: $e");
-  }
   await AppConfig.initialize();
   runApp(ChangeNotifierProvider(create: (_) => AppController()..bootstrap(), child: const FeelAgainApp()));
+
+  // Initialize Firebase asynchronously so any native exception never prevents app launch
+  Future.microtask(() async {
+    try {
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+        await Firebase.initializeApp();
+      } else {
+        await Firebase.initializeApp(
+          options: const FirebaseOptions(
+            apiKey: 'AIzaSyDpiYOYzu7NGZKQHP1qLlRkkM9CcXvZ-eE',
+            appId: '1:972145849986:android:7e74ce33b40b3e98aea69b',
+            messagingSenderId: '972145849986',
+            projectId: 'feelback-536d4',
+            storageBucket: 'feelback-536d4.firebasestorage.app',
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Firebase init warning: $e');
+    }
+  });
 }
 
 /// Backwards compatibility alias
