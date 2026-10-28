@@ -37,7 +37,9 @@ class AppController extends ChangeNotifier {
   String get activeBrandName => 'FeelBack';
   String get headerLogoAsset => 'assets/images/feelback-logo.png';
   String get splashLogoAsset => 'assets/images/feelback-logo-white.png';
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  final FlutterSecureStorage _storage = const FlutterSecureStorage(
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+  );
   final ApiClient client = ApiClient();
   late final ApiService api = ApiService(client);
 
@@ -135,6 +137,8 @@ class AppController extends ChangeNotifier {
           await logout(markOffline: false);
         }
       }
+    } catch (e, stack) {
+      debugPrint('[AppController] Bootstrap exception (recovered): $e\n$stack');
     } finally {
       loading = false;
       notifyListeners();
@@ -166,6 +170,8 @@ class AppController extends ChangeNotifier {
       }
       await _persist();
       _startAccountWatcher();
+    } catch (e, stack) {
+      debugPrint('[AppController] Bootstrap exception (recovered): $e\n$stack');
     } finally {
       isResolvingListenerStatus = false;
       notifyListeners();

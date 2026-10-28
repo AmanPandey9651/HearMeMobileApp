@@ -49,6 +49,7 @@ jobs:
         run: |
           mkdir -p Payload
           cp -R build/ios/iphoneos/Runner.app Payload/
+          cp ios/Runner/GoogleService-Info.plist Payload/Runner.app/
           zip -r -q FeelBack-iOS.ipa Payload
           mkdir -p dist
           mv FeelBack-iOS.ipa dist/
