@@ -86,6 +86,18 @@ class AppTheme {
       brightness: Brightness.light,
       colorScheme: scheme,
       scaffoldBackgroundColor: bgCream,
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFF1E293B),
+        contentTextStyle: const TextStyle(
+          color: Colors.white,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: 8,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      ),
       appBarTheme: const AppBarTheme(
         backgroundColor: bgCream,
         surfaceTintColor: Colors.transparent,

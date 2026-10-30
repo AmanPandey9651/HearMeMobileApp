@@ -179,6 +179,15 @@ String sanitizeErrorMessage(Object error) {
   if (lower.contains('minimum recharge amount') || lower.contains('less that 50') || lower.contains('less than 50')) {
     return 'Minimum recharge amount is ₹50.';
   }
+  if (lower.contains('minimum withdrawal') || lower.contains('minimum withdrawal is')) {
+    return 'Minimum withdrawal amount is ₹50.00.';
+  }
+  if (lower.contains('exceeds your available') || lower.contains('exceeds available balance')) {
+    return 'Withdrawal amount exceeds your available balance.';
+  }
+  if (lower.contains('valid upi') || lower.contains('upi vpa')) {
+    return 'Please enter a valid UPI ID (e.g. name@okhdfcbank or 9876543210@paytm).';
+  }
   if (lower.contains('network_error') || lower.contains('failed host lookup') || lower.contains('socketexception')) {
     return 'Network connection issue. Please check your internet connection.';
   }

@@ -172,107 +172,346 @@ class _ListenerEarningsScreenState extends State<ListenerEarningsScreen> {
     final amount = TextEditingController();
     final vpa = TextEditingController();
     final notes = TextEditingController();
+    bool isSubmitting = false;
+
+    final totalBalance = (wallet?.totalBalance ?? 0).toDouble();
+
     await showDialog<void>(
       context: getSafeNavigatorContext(context),
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        backgroundColor: Colors.white,
-        title: const Row(
-          children: [
-            Icon(Icons.account_balance_outlined, color: primaryOrange, size: 22),
-            SizedBox(width: 8),
-            Text('UPI Withdrawal', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textDark)),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Available balance: ${wallet?.formattedBalance ?? '₹0.00'}',
-                  style: const TextStyle(fontWeight: FontWeight.w600, color: textMuted, fontSize: 13)),
-              const SizedBox(height: 14),
-              TextField(
-                controller: amount,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                style: const TextStyle(fontWeight: FontWeight.bold, color: textDark),
-                decoration: InputDecoration(
-                  labelText: 'Amount (minimum ₹50)',
-                  prefixText: '₹ ',
-                  prefixStyle: const TextStyle(fontWeight: FontWeight.bold, color: primaryOrange),
-                  filled: true,
-                  fillColor: const Color(0xFFFFFBF7),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: borderWarm)),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: borderWarm)),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: primaryOrange)),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) {
+          final amtVal = double.tryParse(amount.text.trim()) ?? 0;
+          final isBelowMin = amount.text.trim().isNotEmpty && amtVal < 50;
+          final exceedsBalance = amtVal > totalBalance;
+          final vpaVal = vpa.text.trim();
+          final isVpaFormatIssue = vpaVal.isNotEmpty && (!vpaVal.contains('@') || vpaVal.startsWith('@') || vpaVal.endsWith('@'));
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+            backgroundColor: Colors.white,
+            titlePadding: const EdgeInsets.fromLTRB(22, 22, 22, 8),
+            contentPadding: const EdgeInsets.fromLTRB(22, 8, 22, 16),
+            actionsPadding: const EdgeInsets.fromLTRB(22, 0, 22, 18),
+            title: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: primaryOrange.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.account_balance_outlined, color: primaryOrange, size: 22),
                 ),
+                const SizedBox(width: 12),
+                const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'UPI Withdrawal',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: textDark),
+                    ),
+                    Text(
+                      'Direct transfer to your bank account',
+                      style: TextStyle(fontSize: 11.5, color: textMuted, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Available balance pill card
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0FDF4),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFBBF7D0)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 26,
+                              height: 26,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: const Color(0xFF10B981).withValues(alpha: 0.16),
+                              ),
+                              child: const Icon(Icons.wallet_rounded, color: Color(0xFF10B981), size: 15),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Available to Withdraw',
+                              style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF166534), fontSize: 12),
+                            ),
+                          ],
+                        ),
+                        InkWell(
+                          onTap: totalBalance >= 50
+                              ? () {
+                                  amount.text = totalBalance.toStringAsFixed(totalBalance.truncateToDouble() == totalBalance ? 0 : 2);
+                                  setModalState(() {});
+                                }
+                              : null,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Row(
+                            children: [
+                              Text(
+                                wallet?.formattedBalance ?? '₹0.00',
+                                style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF15803D), fontSize: 14),
+                              ),
+                              if (totalBalance >= 50) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: primaryOrange.withValues(alpha: 0.14),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Text(
+                                    'MAX',
+                                    style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: primaryOrange),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Amount input
+                  TextField(
+                    controller: amount,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    style: const TextStyle(fontWeight: FontWeight.w800, color: textDark, fontSize: 16),
+                    onChanged: (_) => setModalState(() {}),
+                    decoration: InputDecoration(
+                      labelText: 'Amount (minimum ₹50)',
+                      labelStyle: TextStyle(
+                        color: (isBelowMin || exceedsBalance) ? Colors.redAccent : textMuted,
+                        fontSize: 13,
+                      ),
+                      prefixText: '₹ ',
+                      prefixStyle: const TextStyle(fontWeight: FontWeight.w800, color: primaryOrange, fontSize: 16),
+                      filled: true,
+                      fillColor: const Color(0xFFFFFBF7),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: borderWarm)),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: (isBelowMin || exceedsBalance) ? Colors.redAccent : borderWarm),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: (isBelowMin || exceedsBalance) ? Colors.redAccent : primaryOrange, width: 1.5),
+                      ),
+                    ),
+                  ),
+                  if (isBelowMin) ...[
+                    const SizedBox(height: 6),
+                    const Row(
+                      children: [
+                        Icon(Icons.error_outline_rounded, size: 14, color: Colors.redAccent),
+                        SizedBox(width: 4),
+                        Text(
+                          'Minimum withdrawal is ₹50.00',
+                          style: TextStyle(fontSize: 11.5, color: Colors.redAccent, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ] else if (exceedsBalance) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        const Icon(Icons.error_outline_rounded, size: 14, color: Colors.redAccent),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Amount exceeds available balance (${wallet?.formattedBalance ?? '₹0.00'})',
+                          style: const TextStyle(fontSize: 11.5, color: Colors.redAccent, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+
+                  // Quick Chips
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [50, 100, 200, 500].map((amt) {
+                      final isSelected = amount.text.trim() == '$amt';
+                      return InkWell(
+                        borderRadius: BorderRadius.circular(18),
+                        onTap: () {
+                          amount.text = '$amt';
+                          setModalState(() {});
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: isSelected ? primaryOrange : softPeach,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: isSelected ? primaryOrange : const Color(0xFFFCDFD5)),
+                          ),
+                          child: Text(
+                            '₹$amt',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: isSelected ? Colors.white : primaryOrange,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // UPI VPA input
+                  TextField(
+                    controller: vpa,
+                    style: const TextStyle(fontWeight: FontWeight.w700, color: textDark, fontSize: 14.5),
+                    onChanged: (_) => setModalState(() {}),
+                    decoration: InputDecoration(
+                      labelText: 'UPI ID / VPA',
+                      hintText: 'e.g. 9876543210@paytm or name@okaxis',
+                      prefixIcon: const Icon(Icons.alternate_email_rounded, size: 19, color: textMuted),
+                      filled: true,
+                      fillColor: const Color(0xFFFFFBF7),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: borderWarm)),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: isVpaFormatIssue ? Colors.orangeAccent : borderWarm),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: isVpaFormatIssue ? Colors.orangeAccent : primaryOrange, width: 1.5),
+                      ),
+                    ),
+                  ),
+                  if (isVpaFormatIssue) ...[
+                    const SizedBox(height: 6),
+                    const Row(
+                      children: [
+                        Icon(Icons.info_outline_rounded, size: 14, color: Colors.orangeAccent),
+                        SizedBox(width: 4),
+                        Text(
+                          'Include your provider handle (e.g. @okhdfcbank, @paytm)',
+                          style: TextStyle(fontSize: 11, color: Colors.orangeAccent, fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+
+                  // Notes input
+                  TextField(
+                    controller: notes,
+                    style: const TextStyle(color: textDark, fontSize: 13.5),
+                    decoration: InputDecoration(
+                      labelText: 'Notes (optional)',
+                      prefixIcon: const Icon(Icons.edit_note_rounded, size: 20, color: textMuted),
+                      filled: true,
+                      fillColor: const Color(0xFFFFFBF7),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: borderWarm)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: borderWarm)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: primaryOrange)),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: vpa,
-                style: const TextStyle(fontWeight: FontWeight.bold, color: textDark),
-                decoration: InputDecoration(
-                  labelText: 'UPI ID / VPA',
-                  hintText: 'e.g. 9876543210@paytm or name@okaxis',
-                  filled: true,
-                  fillColor: const Color(0xFFFFFBF7),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: borderWarm)),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: borderWarm)),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: primaryOrange)),
-                ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel', style: TextStyle(color: textMuted, fontWeight: FontWeight.bold)),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: notes,
-                decoration: InputDecoration(
-                  labelText: 'Notes (optional)',
-                  filled: true,
-                  fillColor: const Color(0xFFFFFBF7),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: borderWarm)),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: borderWarm)),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: primaryOrange)),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: primaryOrange,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 ),
+                onPressed: isSubmitting
+                    ? null
+                    : () async {
+                        final value = double.tryParse(amount.text.trim()) ?? 0;
+                        final vpaClean = vpa.text.trim();
+
+                        if (value < 50) {
+                          showNotice(
+                            ctx,
+                            title: 'Minimum Withdrawal',
+                            message: 'Minimum withdrawal amount is ₹50.00.',
+                            isWarning: true,
+                          );
+                          return;
+                        }
+                        if (value > totalBalance) {
+                          showNotice(
+                            ctx,
+                            title: 'Insufficient Balance',
+                            message: 'Entered amount exceeds your available balance (${wallet?.formattedBalance ?? '₹0.00'}).',
+                            isWarning: true,
+                          );
+                          return;
+                        }
+                        if (!RegExp(r'^[A-Za-z0-9._-]{2,256}@[A-Za-z0-9.-]{2,64}$').hasMatch(vpaClean)) {
+                          showNotice(
+                            ctx,
+                            title: 'Invalid UPI ID',
+                            message: 'Please enter a valid UPI handle (e.g. name@okhdfcbank or 9876543210@paytm).',
+                            isWarning: true,
+                          );
+                          return;
+                        }
+
+                        setModalState(() => isSubmitting = true);
+                        try {
+                          final result = await context.read<AppController>().api.requestPayout(
+                                value,
+                                vpaClean,
+                                notes: notes.text.trim(),
+                              );
+                          if (ctx.mounted) {
+                            Navigator.pop(ctx);
+                            showSuccess(
+                              context,
+                              'Payout of ₹${result['amount'] ?? value} requested to ${result['destinationVpa'] ?? vpaClean}.',
+                              title: 'Withdrawal Requested 🎉',
+                            );
+                          }
+                          await _load();
+                        } catch (e) {
+                          if (ctx.mounted) {
+                            setModalState(() => isSubmitting = false);
+                            showError(ctx, e, title: 'Withdrawal Failed');
+                          }
+                        }
+                      },
+                child: isSubmitting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Withdraw Now', style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: textMuted, fontWeight: FontWeight.bold)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryOrange,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: () async {
-              try {
-                final value = double.tryParse(amount.text.trim()) ?? 0;
-                if (value < 50) throw Exception('Minimum withdrawal is ₹50.00.');
-                if (value > (wallet?.totalBalance ?? 0)) throw Exception('Amount exceeds your available balance.');
-                if (!RegExp(r'^[A-Za-z0-9._-]{2,256}@[A-Za-z0-9.-]{2,64}$').hasMatch(vpa.text.trim())) {
-                  throw Exception('Enter a valid UPI VPA, for example name@okhdfcbank.');
-                }
-                final result = await context.read<AppController>().api.requestPayout(value, vpa.text.trim(), notes: notes.text.trim());
-                if (ctx.mounted) {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Payout ₹${result['amount'] ?? value} requested to ${result['destinationVpa'] ?? vpa.text.trim()}.'),
-                      backgroundColor: const Color(0xFF10B981),
-                    ),
-                  );
-                }
-                await _load();
-              } catch (e) {
-                if (ctx.mounted) showError(ctx, e);
-              }
-            },
-            child: const Text('Withdraw Now', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
+          );
+        },
       ),
     );
     amount.dispose();
