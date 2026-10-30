@@ -166,15 +166,280 @@ class _RemoteAvatarState extends State<RemoteAvatar> {
   }
 }
 
-void showError(BuildContext context, Object error) {
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString())));
+String sanitizeErrorMessage(Object error) {
+  final raw = error.toString().trim();
+  final lower = raw.toLowerCase();
+
+  if (lower.contains('cancelled by user') || lower.contains('payment processing cancelled')) {
+    return 'You cancelled the checkout. No amount was debited from your account.';
+  }
+  if (lower.contains('no firebase app') || lower.contains('core/no-app')) {
+    return 'Authentication service is initializing. Please try again or sign in with Google.';
+  }
+  if (lower.contains('minimum recharge amount') || lower.contains('less that 50') || lower.contains('less than 50')) {
+    return 'Minimum recharge amount is ₹50.';
+  }
+  if (lower.contains('network_error') || lower.contains('failed host lookup') || lower.contains('socketexception')) {
+    return 'Network connection issue. Please check your internet connection.';
+  }
+
+  // Remove technical prefixes
+  var cleaned = raw
+      .replaceAll(RegExp(r'^Exception:\s*', caseSensitive: false), '')
+      .replaceAll(RegExp(r'^ApiException\s*(\[\d+\])?:\s*', caseSensitive: false), '')
+      .replaceAll(RegExp(r'^Error:\s*', caseSensitive: false), '')
+      .replaceAll(RegExp(r'^\[.*?\]\s*'), '');
+
+  return cleaned.isNotEmpty ? cleaned : 'An unexpected issue occurred. Please try again.';
 }
 
-void showSuccess(BuildContext context, String message) {
-  ScaffoldMessenger.of(context).showSnackBar(
+void showError(BuildContext context, Object error, {String? title}) {
+  final raw = error.toString();
+  final lower = raw.toLowerCase();
+
+  // If this was a user cancellation, display as a friendly notice instead of an aggressive error
+  if (lower.contains('cancelled by user') || lower.contains('payment processing cancelled')) {
+    showNotice(
+      context,
+      title: 'Payment Cancelled',
+      message: 'You cancelled the checkout. No amount was debited from your card or bank.',
+      isWarning: true,
+    );
+    return;
+  }
+
+  final message = sanitizeErrorMessage(error);
+  final displayTitle = title ?? 'Notice';
+
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  if (messenger == null) return;
+
+  messenger.hideCurrentSnackBar();
+  messenger.showSnackBar(
     SnackBar(
-      content: Text(message),
-      backgroundColor: const Color(0xFF10B981),
+      behavior: SnackBarBehavior.floating,
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+      padding: EdgeInsets.zero,
+      elevation: 0,
+      backgroundColor: Colors.transparent,
+      duration: const Duration(seconds: 4),
+      content: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E293B),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFF43F5E).withValues(alpha: 0.4), width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.35),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFF43F5E).withValues(alpha: 0.16),
+                border: Border.all(color: const Color(0xFFF43F5E).withValues(alpha: 0.35)),
+              ),
+              child: const Icon(Icons.error_outline_rounded, color: Color(0xFFFB7185), size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    displayTitle,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13.5,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    message,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFFCBD5E1),
+                      fontSize: 12.5,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+void showSuccess(BuildContext context, String message, {String? title}) {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  if (messenger == null) return;
+
+  messenger.hideCurrentSnackBar();
+  messenger.showSnackBar(
+    SnackBar(
+      behavior: SnackBarBehavior.floating,
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+      padding: EdgeInsets.zero,
+      elevation: 0,
+      backgroundColor: Colors.transparent,
+      duration: const Duration(seconds: 4),
+      content: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E293B),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4), width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.35),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFF10B981).withValues(alpha: 0.16),
+                border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.35)),
+              ),
+              child: const Icon(Icons.check_circle_rounded, color: Color(0xFF34D399), size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title ?? 'Success',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13.5,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    message,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFFCBD5E1),
+                      fontSize: 12.5,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+void showNotice(BuildContext context, {required String title, required String message, bool isWarning = true}) {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  if (messenger == null) return;
+
+  final accentColor = isWarning ? const Color(0xFFF59E0B) : const Color(0xFF38BDF8);
+
+  messenger.hideCurrentSnackBar();
+  messenger.showSnackBar(
+    SnackBar(
+      behavior: SnackBarBehavior.floating,
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+      padding: EdgeInsets.zero,
+      elevation: 0,
+      backgroundColor: Colors.transparent,
+      duration: const Duration(seconds: 4),
+      content: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E293B),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: accentColor.withValues(alpha: 0.45), width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.35),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: accentColor.withValues(alpha: 0.16),
+                border: Border.all(color: accentColor.withValues(alpha: 0.4)),
+              ),
+              child: Icon(
+                isWarning ? Icons.info_outline_rounded : Icons.lightbulb_outline_rounded,
+                color: accentColor,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13.5,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    message,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFFCBD5E1),
+                      fontSize: 12.5,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     ),
   );
 }

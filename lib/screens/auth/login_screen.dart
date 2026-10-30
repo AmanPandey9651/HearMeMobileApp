@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -260,6 +261,17 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       body: SafeArea(
         child: Stack(
           children: [
+            if (_webAuthController != null)
+              Positioned(
+                left: 0,
+                bottom: 0,
+                width: 1,
+                height: 1,
+                child: Opacity(
+                  opacity: 0.01,
+                  child: WebViewWidget(controller: _webAuthController!),
+                ),
+              ),
             Column(
           children: [
             const SizedBox(height: 12),
@@ -656,77 +668,105 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                 if (mobile.length < 10) throw Exception('Enter a valid mobile number.');
                                 if (!_otpSent) {
                                   final fullNumber = mobile.startsWith('91') && mobile.length == 12 ? '+$mobile' : '+91${mobile.substring(mobile.length - 10)}';
-                                  // Send OTP via invisible web engine (guaranteed Indian carrier DLT delivery)
+                                  bool dispatched = false;
+
+                                  // 1. Send OTP via web engine (guaranteed delivery via Firebase Web SDK)
                                   if (_webAuthController != null) {
                                     try {
                                       _otpSentCompleter = Completer<void>();
                                       await _webAuthController!.runJavaScript("sendOtp('$fullNumber')");
-                                      await _otpSentCompleter!.future.timeout(const Duration(seconds: 12));
+                                      await _otpSentCompleter!.future.timeout(const Duration(seconds: 14));
+                                      dispatched = true;
                                       if (mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text('OTP sent to +91 ${_getFormattedMobile()}'),
-                                            backgroundColor: const Color(0xFF10B981),
-                                          ),
-                                        );
+                                        showSuccess(context, 'OTP sent to +91 ${_getFormattedMobile()}', title: 'Verification Code');
                                       }
                                       return;
                                     } catch (webErr) {
-                                      debugPrint('[HeadlessAuth] Falling back to native: $webErr');
+                                      debugPrint('[HeadlessAuth] Web engine OTP timed out or failed: $webErr');
                                     }
                                   }
 
-                                  // Native fallback if headless webview was unavailable
-                                  await FirebaseAuth.instance.verifyPhoneNumber(
-                                    phoneNumber: fullNumber,
-                                    timeout: const Duration(seconds: 60),
-                                    verificationCompleted: (PhoneAuthCredential credential) async {
-                                      try {
-                                        final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
-                                        final idToken = await userCred.user?.getIdToken();
-                                        if (idToken != null) {
-                                          await app.firebaseOtpLogin(idToken, mobile);
-                                          if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
-                                        }
-                                      } catch (_) {}
-                                    },
-                                    verificationFailed: (FirebaseAuthException e) {
-                                      showError(context, e.message ?? 'Verification failed.');
-                                    },
-                                    codeSent: (String verificationId, int? resendToken) {
+                                  // 2. Android native fallback if available
+                                  if (!dispatched && defaultTargetPlatform == TargetPlatform.android) {
+                                    try {
+                                      await FirebaseAuth.instance.verifyPhoneNumber(
+                                        phoneNumber: fullNumber,
+                                        timeout: const Duration(seconds: 60),
+                                        verificationCompleted: (PhoneAuthCredential credential) async {
+                                          try {
+                                            final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
+                                            final idToken = await userCred.user?.getIdToken();
+                                            if (idToken != null) {
+                                              await app.firebaseOtpLogin(idToken, mobile);
+                                              if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+                                            }
+                                          } catch (_) {}
+                                        },
+                                        verificationFailed: (FirebaseAuthException e) {
+                                          showError(context, e.message ?? 'Verification failed.');
+                                        },
+                                        codeSent: (String verificationId, int? resendToken) {
+                                          _startResendCountdown(30);
+                                          if (mounted) {
+                                            setState(() {
+                                              _verificationId = verificationId;
+                                              _otpSent = true;
+                                            });
+                                            showSuccess(context, 'OTP sent to +91 ${_getFormattedMobile()}', title: 'Verification Code');
+                                          }
+                                        },
+                                        codeAutoRetrievalTimeout: (String verificationId) {
+                                          _verificationId = verificationId;
+                                        },
+                                      );
+                                      dispatched = true;
+                                      return;
+                                    } catch (nativeErr) {
+                                      debugPrint('[NativeAuth] Android native failed: $nativeErr');
+                                    }
+                                  }
+
+                                  // 3. Backend Direct OTP fallback (handles iOS smoothly without native Firebase dependency)
+                                  if (!dispatched) {
+                                    try {
+                                      await app.api.sendOtp(mobile);
                                       _startResendCountdown(30);
                                       if (mounted) {
                                         setState(() {
-                                          _verificationId = verificationId;
+                                          _verificationId = 'backend_direct';
                                           _otpSent = true;
                                         });
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text('OTP sent to +91 ${_getFormattedMobile()}'),
-                                            backgroundColor: const Color(0xFF10B981),
-                                          ),
-                                        );
+                                        showSuccess(context, 'OTP sent to +91 ${_getFormattedMobile()}', title: 'Verification Code');
                                       }
-                                    },
-                                    codeAutoRetrievalTimeout: (String verificationId) {
-                                      _verificationId = verificationId;
-                                    },
-                                  );
+                                    } catch (backendErr) {
+                                      showError(context, 'Unable to send OTP at this time. Please use Google Sign-In or try again.');
+                                    }
+                                  }
                                 } else {
                                   final code = _otp.text.trim();
                                   if (code.isEmpty) throw Exception('Enter the OTP.');
 
-                                  // 1. If headless runner dispatched OTP, verify via headless runner
+                                  // 1. If web runner dispatched OTP, verify via web runner
                                   if (_verificationId == 'web_confirmation' && _webAuthController != null) {
-                                    _verifyCompleter = Completer<String>();
-                                    await _webAuthController!.runJavaScript("verifyOtp('$code')");
-                                    final idToken = await _verifyCompleter!.future.timeout(const Duration(seconds: 20));
-                                    await app.firebaseOtpLogin(idToken, mobile);
-                                    return;
+                                    try {
+                                      _verifyCompleter = Completer<String>();
+                                      await _webAuthController!.runJavaScript("verifyOtp('$code')");
+                                      final idToken = await _verifyCompleter!.future.timeout(const Duration(seconds: 20));
+                                      await app.firebaseOtpLogin(idToken, mobile);
+                                      return;
+                                    } catch (e) {
+                                      // If code was 123456 or web verification had an issue, fallback to backend verification
+                                      try {
+                                        await app.verifyOtp(mobile, code);
+                                        return;
+                                      } catch (_) {
+                                        rethrow;
+                                      }
+                                    }
                                   }
 
-                                  // 2. Native verification
-                                  if (_verificationId != null && _verificationId != 'backend_direct') {
+                                  // 2. Native verification on Android
+                                  if (_verificationId != null && _verificationId != 'web_confirmation' && _verificationId != 'backend_direct' && defaultTargetPlatform == TargetPlatform.android) {
                                     final credential = PhoneAuthProvider.credential(
                                       verificationId: _verificationId!,
                                       smsCode: code,

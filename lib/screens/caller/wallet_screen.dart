@@ -102,56 +102,176 @@ class _WalletScreenState extends State<WalletScreen> {
     final c = TextEditingController(text: '100');
     final amount = await showDialog<double>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Recharge Wallet', style: TextStyle(fontWeight: FontWeight.bold, color: textDark)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Select or enter amount in INR (minimum ₹10):',
-              style: TextStyle(fontSize: 12.5, color: textMuted),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final currentVal = double.tryParse(c.text.trim()) ?? 0;
+          final isBelowMin = c.text.trim().isNotEmpty && currentVal < 50;
+
+          return AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+            titlePadding: const EdgeInsets.fromLTRB(22, 20, 22, 8),
+            contentPadding: const EdgeInsets.fromLTRB(22, 8, 22, 16),
+            actionsPadding: const EdgeInsets.fromLTRB(22, 0, 22, 18),
+            title: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: primaryOrange.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.account_balance_wallet_rounded, color: primaryOrange, size: 20),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Recharge Wallet',
+                  style: TextStyle(fontWeight: FontWeight.w800, color: textDark, fontSize: 18),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: c,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(fontWeight: FontWeight.bold, color: textDark),
-              decoration: const InputDecoration(
-                prefixText: '₹ ',
-                prefixStyle: TextStyle(fontWeight: FontWeight.bold, color: textDark),
-                labelText: 'Amount',
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Select or enter amount in INR (minimum ₹50):',
+                    style: TextStyle(fontSize: 12.5, color: textMuted),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: c,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    style: const TextStyle(fontWeight: FontWeight.w800, color: textDark, fontSize: 18),
+                    onChanged: (_) => setDialogState(() {}),
+                    decoration: InputDecoration(
+                      prefixText: '₹ ',
+                      prefixStyle: const TextStyle(fontWeight: FontWeight.w800, color: primaryOrange, fontSize: 18),
+                      labelText: 'Amount (Min ₹50)',
+                      labelStyle: TextStyle(color: isBelowMin ? Colors.redAccent : textMuted, fontSize: 13),
+                      filled: true,
+                      fillColor: bgCream,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: borderWarm)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: isBelowMin ? Colors.redAccent : borderWarm)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: isBelowMin ? Colors.redAccent : primaryOrange, width: 1.5)),
+                    ),
+                  ),
+                  if (isBelowMin) ...[
+                    const SizedBox(height: 6),
+                    const Row(
+                      children: [
+                        Icon(Icons.error_outline_rounded, size: 14, color: Colors.redAccent),
+                        SizedBox(width: 4),
+                        Text(
+                          'Minimum recharge amount is ₹50',
+                          style: TextStyle(fontSize: 11.5, color: Colors.redAccent, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [50, 100, 200, 500, 1000].map((amt) {
+                      final isSelected = c.text.trim() == '$amt';
+                      return InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () {
+                          c.text = '$amt';
+                          setDialogState(() {});
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: isSelected ? primaryOrange : softPeach,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: isSelected ? primaryOrange : const Color(0xFFFCDFD5)),
+                          ),
+                          child: Text(
+                            '₹$amt',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: isSelected ? Colors.white : primaryOrange,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0FDF4),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFBBF7D0)),
+                    ),
+                    child: const Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.public_rounded, size: 16, color: Color(0xFF16A34A)),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'International & Indian cards accepted. Foreign bank accounts are automatically charged in your local currency.',
+                            style: TextStyle(fontSize: 11, color: Color(0xFF15803D), height: 1.3),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              children: [50, 100, 200, 500].map((amt) {
-                return ActionChip(
-                  label: Text('₹$amt'),
-                  backgroundColor: softPeach,
-                  side: const BorderSide(color: Color(0xFFFCDFD5)),
-                  labelStyle: const TextStyle(fontWeight: FontWeight.bold, color: primaryOrange, fontSize: 12),
-                  onPressed: () => c.text = '$amt',
-                );
-              }).toList(),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: textMuted))),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, double.tryParse(c.text)),
-            style: FilledButton.styleFrom(backgroundColor: primaryOrange),
-            child: const Text('Continue to Pay'),
-          ),
-        ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel', style: TextStyle(color: textMuted, fontWeight: FontWeight.w600)),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final entered = double.tryParse(c.text.trim());
+                  if (entered == null || entered < 50) {
+                    showNotice(
+                      ctx,
+                      title: 'Minimum Recharge is ₹50',
+                      message: 'Please enter ₹50 or more to proceed with payment.',
+                      isWarning: true,
+                    );
+                    return;
+                  }
+                  Navigator.pop(ctx, entered);
+                },
+                style: FilledButton.styleFrom(
+                  backgroundColor: primaryOrange,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                ),
+                child: const Text('Continue to Pay', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            ],
+          );
+        },
       ),
     );
     c.dispose();
-    if (amount == null || amount < 10) return;
+    if (amount == null) return;
+    if (amount < 50) {
+      if (mounted) {
+        showNotice(
+          context,
+          title: 'Minimum Recharge is ₹50',
+          message: 'Please enter ₹50 or more to proceed.',
+          isWarning: true,
+        );
+      }
+      return;
+    }
     try {
       final order = await context.read<AppController>().api.createRecharge(amount);
       pendingOrder = order;
@@ -185,13 +305,7 @@ class _WalletScreenState extends State<WalletScreen> {
       });
       await _load();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🎉 Recharge successful! Balance updated.'),
-            backgroundColor: Color(0xFF10B981),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        showSuccess(context, 'Recharge successful! Balance updated.', title: 'Payment Received');
       }
     } catch (e) {
       if (mounted) showError(context, e);
@@ -199,7 +313,23 @@ class _WalletScreenState extends State<WalletScreen> {
   }
 
   void _failure(PaymentFailureResponse r) {
-    if (mounted) showError(context, r.message ?? 'Payment failed');
+    if (!mounted) return;
+    final msg = r.message ?? '';
+    final lower = msg.toLowerCase();
+    if (lower.contains('cancelled') || lower.contains('processing cancelled') || r.code == Razorpay.PAYMENT_CANCELLED) {
+      showNotice(
+        context,
+        title: 'Payment Cancelled',
+        message: 'You cancelled the checkout. No amount was debited from your card or bank.',
+        isWarning: true,
+      );
+    } else {
+      showError(
+        context,
+        msg.isNotEmpty ? msg : 'Payment could not be completed. Please try again.',
+        title: 'Payment Failed',
+      );
+    }
   }
 
   String _fmt(dynamic raw) {
