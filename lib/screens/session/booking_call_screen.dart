@@ -358,22 +358,80 @@ void initState() {
     }
   }
 
+    Future<void> _checkAndPromptPermissions(bool isVideo) async {
+    final permissions = <Permission>[
+      Permission.microphone,
+      if (isVideo) Permission.camera,
+    ];
+
+    Map<Permission, PermissionStatus> statuses = {};
+    try {
+      statuses = await permissions.request();
+    } catch (e) {
+      debugPrint('[Permissions] request error: $e');
+    }
+
+    final hasDenied = statuses.values.any((s) => !s.isGranted);
+    if (hasDenied) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF97316).withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.perm_device_information_rounded, color: Color(0xFFF97316), size: 22),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text('Permission Required', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ),
+            content: Text(
+              isVideo
+                  ? 'Microphone and camera permissions are required to start the video call.\n\nPlease grant permission in Settings to continue.'
+                  : 'Microphone permission is required to start the audio call.\n\nPlease grant permission in Settings to continue.',
+              style: const TextStyle(fontSize: 13.5, height: 1.4),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFF97316),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  openAppSettings();
+                },
+                child: const Text('Open Settings', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+        );
+      }
+      throw Exception(
+        'Microphone${isVideo ? ' and camera' : ''} permission is required.',
+      );
+    }
+  }
+
   Future<void> _joinMedia() async {
   /*
    * Permissions
    */
-  final permissions = <Permission>[
-    Permission.microphone,
-    if (isVideo) Permission.camera,
-  ];
-
-  final result = await permissions.request();
-
-  if (result.values.any((status) => !status.isGranted)) {
-    throw Exception(
-      'Microphone${isVideo ? ' and camera' : ''} permission is required.',
-    );
-  }
+  await _checkAndPromptPermissions(isVideo);
 
   /*
    * Wait for renderer surfaces.
