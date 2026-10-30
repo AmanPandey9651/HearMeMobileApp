@@ -123,11 +123,12 @@ class AINeuralVisionClassifier {
     double zSexy = -1.8 + (midSkin * 3.8) + (overallSkinRatio * 2.5) - (midEdge * 1.8);
     double zNeutral = 1.0 + (midEdge * 3.2) - (midSkin * 3.5) - (lowerSkin * 4.0);
 
-    // Face suppression (normal conversation)
-    if (upperSkin > 0.25 && midSkin < 0.20 && lowerSkin < 0.15) {
-      zNeutral += 3.5;
-      zPorn -= 2.5;
-      zSexy -= 2.0;
+    // 🛡️ Normal conversation & portrait face protection:
+    // If face is present in upper frame and no lower body exposure, strongly suppress false alarms
+    if (upperSkin > 0.15 && lowerSkin < 0.22) {
+      zNeutral += 4.5;
+      zPorn -= 4.0;
+      zSexy -= 3.0;
     }
 
     // Softmax Head
@@ -141,7 +142,8 @@ class AINeuralVisionClassifier {
     final pSexy = expSexy / sumExp;
     final pNeutral = expNeutral / sumExp;
 
-    final isNude = pPorn >= 0.38 || (pPorn + pSexy >= 0.62) || (midSkin >= 0.42 && lowerSkin >= 0.35);
+    // Strict criteria: require genuine high probability or massive lower body exposure
+    final isNude = pPorn >= 0.75 || (pPorn + pSexy >= 0.85 && lowerSkin >= 0.35) || (midSkin >= 0.55 && lowerSkin >= 0.45);
 
     String label = 'NEUTRAL';
     if (pPorn >= pSexy && pPorn >= pNeutral) {
