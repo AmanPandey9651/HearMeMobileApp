@@ -527,12 +527,18 @@ class _ListenerHistoryScreenState extends State<ListenerHistoryScreen> {
                         const SizedBox(height: 6),
                         ...gifts.map((g) {
                           final gm = Map<String, dynamic>.from(g as Map);
+                          final emoji = gm['giftEmoji'] ?? '🎁';
+                          final name = gm['giftName'] ?? gm['giftType'] ?? 'Gift';
+                          final earned = (gm['netEarnings'] as num?)?.toDouble()
+                              ?? (gm['grossAmount'] as num?)?.toDouble()
+                              ?? (gm['coins'] as num?)?.toDouble()
+                              ?? 0.0;
                           return ListTile(
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            leading: const Text('🎁', style: TextStyle(fontSize: 20)),
-                            title: Text('${gm['giftName'] ?? 'Gift'}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                            trailing: Text('+₹${(gm['coins'] as num?)?.toDouble().toStringAsFixed(2) ?? '0.00'}',
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              leading: Text('$emoji', style: const TextStyle(fontSize: 20)),
+                              title: Text('$name', style: const TextStyle(fontWeight: FontWeight.bold)),
+                              trailing: Text('+₹${earned.toStringAsFixed(2)}',
                                 style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold)),
                           );
                         }),
