@@ -156,20 +156,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     }
   }
 
-  Future<void> _run(Future<void> Function() job) async {
-    setState(() => _otpBusy = true);
-    try {
-      await job();
-      if (mounted && context.read<AppController>().user != null) {
-        Navigator.of(context).popUntil((route) => route.isFirst);
-        return;
-      }
-    } catch (e) {
-      if (mounted) showError(context, e);
-    }
-    if (mounted) setState(() => _otpBusy = false);
-  }
-
   Future<void> _runOtp(Future<void> Function() job) async {
     setState(() => _otpBusy = true);
     try {
@@ -670,24 +656,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                   final fullNumber = mobile.startsWith('91') && mobile.length == 12 ? '+$mobile' : '+91${mobile.substring(mobile.length - 10)}';
                                   bool dispatched = false;
 
-                                  // 1. Send OTP via web engine (guaranteed delivery via Firebase Web SDK)
-                                  if (_webAuthController != null) {
-                                    try {
-                                      _otpSentCompleter = Completer<void>();
-                                      await _webAuthController!.runJavaScript("sendOtp('$fullNumber')");
-                                      await _otpSentCompleter!.future.timeout(const Duration(seconds: 14));
-                                      dispatched = true;
-                                      if (mounted) {
-                                        showSuccess(context, 'OTP sent to +91 ${_getFormattedMobile()}', title: 'Verification Code');
-                                      }
-                                      return;
-                                    } catch (webErr) {
-                                      debugPrint('[HeadlessAuth] Web engine OTP timed out or failed: $webErr');
-                                    }
-                                  }
-
-                                  // 2. Android native fallback if available
-                                  if (!dispatched && defaultTargetPlatform == TargetPlatform.android) {
+                                  // 1. Android Native Fast-Path via Play Integrity (Instant: 1-2 seconds)
+                                  if (defaultTargetPlatform == TargetPlatform.android) {
                                     try {
                                       await FirebaseAuth.instance.verifyPhoneNumber(
                                         phoneNumber: fullNumber,
@@ -703,6 +673,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                           } catch (_) {}
                                         },
                                         verificationFailed: (FirebaseAuthException e) {
+                                          debugPrint('[NativeAuth] Verification failed: ${e.message}');
                                           showError(context, e.message ?? 'Verification failed.');
                                         },
                                         codeSent: (String verificationId, int? resendToken) {
@@ -722,11 +693,27 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                       dispatched = true;
                                       return;
                                     } catch (nativeErr) {
-                                      debugPrint('[NativeAuth] Android native failed: $nativeErr');
+                                      debugPrint('[NativeAuth] Android native failed, falling back to webview: $nativeErr');
                                     }
                                   }
 
-                                  // 3. Backend Direct OTP fallback (handles iOS smoothly without native Firebase dependency)
+                                  // 2. Web engine fallback (iOS or devices without Play Services)
+                                  if (!dispatched && _webAuthController != null) {
+                                    try {
+                                      _otpSentCompleter = Completer<void>();
+                                      await _webAuthController!.runJavaScript("sendOtp('$fullNumber')");
+                                      await _otpSentCompleter!.future.timeout(const Duration(seconds: 14));
+                                      dispatched = true;
+                                      if (mounted) {
+                                        showSuccess(context, 'OTP sent to +91 ${_getFormattedMobile()}', title: 'Verification Code');
+                                      }
+                                      return;
+                                    } catch (webErr) {
+                                      debugPrint('[HeadlessAuth] Web engine OTP timed out or failed: $webErr');
+                                    }
+                                  }
+
+ // 3. Backend Direct OTP fallback (handles iOS smoothly without native Firebase dependency)
                                   if (!dispatched) {
                                     try {
                                       await app.api.sendOtp(mobile);
