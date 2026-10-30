@@ -508,18 +508,18 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                'OTP sent to +91 ${_getFormattedMobile()}',
-                                style: const TextStyle(
+                              const Text(
+                                'OTP sent successfully',
+                                style: TextStyle(
                                   fontSize: 13.5,
                                   fontWeight: FontWeight.w700,
                                   color: Color(0xFF15803D),
                                 ),
                               ),
                               const SizedBox(height: 2),
-                              const Text(
-                                'A 6-digit code has been sent to your mobile',
-                                style: TextStyle(
+                              Text(
+                                'Enter 6-digit code sent to +91 ${_getFormattedMobile()}',
+                                style: const TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w500,
                                   color: Color(0xFF166534),
@@ -597,12 +597,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                   await _webAuthController!.runJavaScript("sendOtp('$fullNumber')");
                                   await _otpSentCompleter!.future.timeout(const Duration(seconds: 12));
                                   if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('OTP resent to +91 ${_getFormattedMobile()}'),
-                                        backgroundColor: const Color(0xFF10B981),
-                                      ),
-                                    );
+                                    showSuccess(context, 'OTP resent successfully');
                                   }
                                 }
                               }),
@@ -683,7 +678,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                               _verificationId = verificationId;
                                               _otpSent = true;
                                             });
-                                            showSuccess(context, 'OTP sent to +91 ${_getFormattedMobile()}', title: 'Verification Code');
+                                            showSuccess(context, 'OTP sent successfully');
                                           }
                                         },
                                         codeAutoRetrievalTimeout: (String verificationId) {
@@ -705,7 +700,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                       await _otpSentCompleter!.future.timeout(const Duration(seconds: 14));
                                       dispatched = true;
                                       if (mounted) {
-                                        showSuccess(context, 'OTP sent to +91 ${_getFormattedMobile()}', title: 'Verification Code');
+                                        showSuccess(context, 'OTP sent successfully');
                                       }
                                       return;
                                     } catch (webErr) {
@@ -723,7 +718,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                           _verificationId = 'backend_direct';
                                           _otpSent = true;
                                         });
-                                        showSuccess(context, 'OTP sent to +91 ${_getFormattedMobile()}', title: 'Verification Code');
+                                        showSuccess(context, 'OTP sent successfully');
                                       }
                                     } catch (backendErr) {
                                       showError(context, 'Unable to send OTP at this time. Please use Google Sign-In or try again.');
