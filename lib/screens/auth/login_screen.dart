@@ -26,6 +26,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   final _password = TextEditingController();
   final _mobile = TextEditingController();
   final _otp = TextEditingController();
+  final _referralCode = TextEditingController();
+  bool _showReferralInput = false;
   bool _obscurePassword = true;
   bool _otpSent = false;
   String? _verificationId;
@@ -206,6 +208,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     _password.dispose();
     _mobile.dispose();
     _otp.dispose();
+    _referralCode.dispose();
     super.dispose();
   }
 
@@ -337,89 +340,89 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 30),
       children: [
-        // 1. Hero Card: Sleek, compact peach gradient card with glowing shield & value pills
+        // 1. Hero Card: Ultra-compact, slim peach gradient badge (~44px height)
         Container(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 14),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(14),
             gradient: const LinearGradient(
-              colors: [Color(0xFFFFF2EB), Color(0xFFFFE6D8)],
+              colors: [Color(0xFFFFF4EE), Color(0xFFFFE8DC)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
             border: Border.all(color: const Color(0xFFFCDFD5)),
             boxShadow: [
               BoxShadow(
-                color: primaryOrange.withValues(alpha: 0.08),
-                blurRadius: 10,
+                color: primaryOrange.withValues(alpha: 0.06),
+                blurRadius: 6,
                 offset: const Offset(0, 2),
               ),
             ],
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+          child: Row(
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: const LinearGradient(
-                        colors: [primaryOrange, secondaryOrange],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: primaryOrange.withValues(alpha: 0.28),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: const Center(
-                      child: Icon(Icons.shield_rounded, size: 22, color: Colors.white),
-                    ),
+              Container(
+                width: 32,
+                height: 32,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [primaryOrange, secondaryOrange],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          'Talk Anonymously',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: textDark,
-                            letterSpacing: -0.2,
-                          ),
-                        ),
-                        SizedBox(height: 2),
-                        Text(
-                          'Caller identity stays 100% private. No real names or numbers shared.',
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            height: 1.3,
-                            color: textMuted,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                ),
+                child: const Center(
+                  child: Icon(Icons.shield_rounded, size: 17, color: Colors.white),
+                ),
               ),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: const [
-                  _MiniFeaturePill(icon: Icons.lock_outline_rounded, text: 'Encrypted'),
-                  _MiniFeaturePill(icon: Icons.visibility_off_outlined, text: 'No PII'),
-                  _MiniFeaturePill(icon: Icons.bolt_rounded, text: 'Instant'),
-                ],
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Text(
+                      'Talk Anonymously • 100% Private',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: textDark,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    Text(
+                      'No real names or numbers shared. End-to-end encrypted.',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        color: textMuted,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: borderWarm),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.lock_rounded, size: 10, color: primaryOrange),
+                    SizedBox(width: 3),
+                    Text(
+                      'Instant',
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: textDark),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -485,6 +488,76 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                     ),
                   ),
                 ),
+                if (!_otpSent) ...[
+                  const SizedBox(height: 12),
+                  InkWell(
+                    onTap: () => setState(() => _showReferralInput = !_showReferralInput),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.card_giftcard_rounded, size: 15, color: Color(0xFF10B981)),
+                          const SizedBox(width: 6),
+                          Text(
+                            _showReferralInput ? 'Referral Code (Optional):' : 'Have an invite code? (Get ₹20 Coins)',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF10B981),
+                            ),
+                          ),
+                          const Spacer(),
+                          Icon(
+                            _showReferralInput ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                            size: 16,
+                            color: const Color(0xFF10B981),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (_showReferralInput) ...[
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _referralCode,
+                      textCapitalization: TextCapitalization.characters,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: textDark,
+                        letterSpacing: 1.2,
+                        fontSize: 13.5,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'e.g. FEEL9K8X',
+                        hintStyle: const TextStyle(color: Color(0xFF9CA3AF), letterSpacing: 0.5, fontWeight: FontWeight.normal, fontSize: 13),
+                        prefixIcon: const Icon(Icons.tag_rounded, color: primaryOrange, size: 18),
+                        suffixIcon: _referralCode.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear_rounded, size: 16, color: Color(0xFF9CA3AF)),
+                                onPressed: () => setState(() => _referralCode.clear()),
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: const Color(0xFFFFFBF7),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: borderWarm),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: borderWarm),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFF10B981), width: 1.5),
+                        ),
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                  ],
+                ],
                 if (_otpSent) ...[
                   const SizedBox(height: 14),
                   Container(
