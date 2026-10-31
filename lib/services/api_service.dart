@@ -218,6 +218,11 @@ class ApiService {
   Future<List<dynamic>> walletTransactions({int page = 0, int size = 50}) async => _content(await client.get('/wallet/transactions', query: {'page': page, 'size': size}));
   Future<Map<String, dynamic>> createRecharge(double amount) async => Map<String, dynamic>.from(await client.post('/wallet/recharge/create-order', body: {'amount': amount}));
   Future<WalletModel> verifyRecharge(Map<String, dynamic> data) async => WalletModel.fromJson(Map<String, dynamic>.from(await client.post('/wallet/recharge/verify', body: data)));
+  Future<Map<String, dynamic>> estimateCoupon(String code, double amount) async =>
+      Map<String, dynamic>.from(await client.post('/wallet/coupons/estimate', body: {'code': code, 'rechargeAmount': amount}));
+
+  Future<void> updateFcmToken(String token) async =>
+      client.post('/notifications/fcm-token', body: {'token': token});
 
   Future<AnonymousProfileModel> anonymousProfile() async =>
       AnonymousProfileModel.fromJson(Map<String, dynamic>.from(await client.get('/user/anonymous-profile')));

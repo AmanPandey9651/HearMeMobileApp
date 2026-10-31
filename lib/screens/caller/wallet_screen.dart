@@ -24,11 +24,11 @@ class _WalletScreenState extends State<WalletScreen> {
   final search = TextEditingController();
   String type = 'ALL';
   String date = 'ALL';
+  String? _appliedCouponCode;
 
   static const Color bgCream = AppTheme.bgCream;
   static const Color borderWarm = AppTheme.borderWarm;
   static const Color primaryOrange = AppTheme.primaryOrange;
-  static const Color secondaryOrange = AppTheme.secondaryOrange;
   static const Color softPeach = AppTheme.softPeach;
   static const Color textDark = AppTheme.textDark;
   static const Color textMuted = AppTheme.textMuted;
@@ -100,6 +100,11 @@ class _WalletScreenState extends State<WalletScreen> {
 
   Future<void> _recharge() async {
     final c = TextEditingController(text: '100');
+    final couponCtrl = TextEditingController();
+    Map<String, dynamic>? appliedCoupon;
+    bool isCheckingCoupon = false;
+    String? couponFeedback;
+    bool isCouponError = false;
     final amount = await showDialog<double>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -204,6 +209,153 @@ class _WalletScreenState extends State<WalletScreen> {
                     }).toList(),
                   ),
                   const SizedBox(height: 14),
+
+                  // Promo / Coupon Code Section
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFFBF7),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: borderWarm),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(Icons.local_offer_outlined, size: 15, color: primaryOrange),
+                                SizedBox(width: 6),
+                                Text(
+                                  'HAVE A PROMO CODE?',
+                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: textDark, letterSpacing: 0.5),
+                                ),
+                              ],
+                            ),
+                            if (appliedCoupon != null)
+                              InkWell(
+                                onTap: () {
+                                  appliedCoupon = null;
+                                  couponCtrl.clear();
+                                  couponFeedback = null;
+                                  setDialogState(() {});
+                                },
+                                child: const Text(
+                                  'Remove',
+                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.redAccent),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: couponCtrl,
+                                enabled: appliedCoupon == null,
+                                textCapitalization: TextCapitalization.characters,
+                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, letterSpacing: 1),
+                                decoration: InputDecoration(
+                                  hintText: 'e.g. WELCOME50',
+                                  hintStyle: const TextStyle(color: textMuted, fontSize: 12, fontWeight: FontWeight.normal),
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: borderWarm)),
+                                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: borderWarm)),
+                                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: primaryOrange)),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            InkWell(
+                              onTap: (isCheckingCoupon || couponCtrl.text.trim().isEmpty || appliedCoupon != null)
+                                  ? null
+                                  : () async {
+                                      final code = couponCtrl.text.trim().toUpperCase();
+                                      final amt = double.tryParse(c.text.trim()) ?? 100;
+                                      setDialogState(() => isCheckingCoupon = true);
+                                      try {
+                                        final res = await context.read<AppController>().api.estimateCoupon(code, amt);
+                                        if (res['valid'] == true) {
+                                          appliedCoupon = res;
+                                          isCouponError = false;
+                                          couponFeedback = res['message'] ?? 'Promo applied successfully!';
+                                        } else {
+                                          appliedCoupon = null;
+                                          isCouponError = true;
+                                          couponFeedback = res['message'] ?? 'Invalid coupon code';
+                                        }
+                                      } catch (err) {
+                                        appliedCoupon = null;
+                                        isCouponError = true;
+                                        couponFeedback = err.toString();
+                                      } finally {
+                                        setDialogState(() => isCheckingCoupon = false);
+                                      }
+                                    },
+                              borderRadius: BorderRadius.circular(10),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: appliedCoupon != null ? const Color(0xFF16A34A) : primaryOrange,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: isCheckingCoupon
+                                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                    : Text(
+                                        appliedCoupon != null ? '✓ Applied' : 'Apply',
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
+                                      ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (couponFeedback != null) ...[
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Icon(
+                                isCouponError ? Icons.error_outline_rounded : Icons.check_circle_rounded,
+                                size: 13,
+                                color: isCouponError ? Colors.redAccent : const Color(0xFF16A34A),
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  couponFeedback!,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: isCouponError ? Colors.redAccent : const Color(0xFF16A34A),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        if (appliedCoupon != null && appliedCoupon!['valid'] == true) ...[
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF0FDF4),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '🎉 Extra bonus coins: +₹${appliedCoupon!['bonusCoins'] ?? 0}! Total: ₹${appliedCoupon!['effectiveCoinsReceived'] ?? c.text}',
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF15803D)),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
@@ -245,6 +397,9 @@ class _WalletScreenState extends State<WalletScreen> {
                     );
                     return;
                   }
+                  _appliedCouponCode = (appliedCoupon != null && appliedCoupon!['valid'] == true)
+                      ? '${appliedCoupon!['code']}'
+                      : null;
                   Navigator.pop(ctx, entered);
                 },
                 style: FilledButton.styleFrom(
@@ -260,6 +415,7 @@ class _WalletScreenState extends State<WalletScreen> {
       ),
     );
     c.dispose();
+    couponCtrl.dispose();
     if (amount == null) return;
     if (amount < 50) {
       if (mounted) {
@@ -302,6 +458,7 @@ class _WalletScreenState extends State<WalletScreen> {
         'razorpayPaymentId': r.paymentId,
         'razorpaySignature': r.signature,
         'amount': (order['amount'] as num).toDouble(),
+        if (_appliedCouponCode != null) 'couponCode': _appliedCouponCode,
       });
       await _load();
       if (mounted) {
