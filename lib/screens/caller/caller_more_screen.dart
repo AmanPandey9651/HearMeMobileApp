@@ -217,91 +217,223 @@ class CallerMoreScreen extends StatelessWidget {
   void _showAppLockConfigDialog(BuildContext context) {
     final lockService = context.read<AppLockService>();
     final pinController = TextEditingController();
+    bool obscurePin = true;
 
     showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocalState) {
           final isEnabled = lockService.isLockEnabled;
-          return AlertDialog(
+          return Dialog(
             backgroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-            title: const Row(
-              children: [
-                Icon(Icons.security_rounded, color: AppTheme.primaryOrange, size: 24),
-                SizedBox(width: 10),
-                Text('App Lock & Privacy', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: AppTheme.textDark)),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  activeTrackColor: AppTheme.primaryOrange,
-                  title: const Text('Require 4-digit PIN', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                  subtitle: const Text('Locks FeelBack whenever app goes to background', style: TextStyle(fontSize: 11.5)),
-                  value: isEnabled,
-                  onChanged: (val) async {
-                    if (val) {
-                      if (pinController.text.trim().length != 4) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Please enter a 4-digit PIN below first!')),
-                        );
-                        return;
-                      }
-                      await lockService.setPin(pinController.text.trim());
-                    } else {
-                      await lockService.setLockEnabled(false);
-                    }
-                    setLocalState(() {});
-                  },
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: pinController,
-                  keyboardType: TextInputType.number,
-                  maxLength: 4,
-                  obscureText: true,
-                  style: const TextStyle(letterSpacing: 4, fontWeight: FontWeight.w800, fontSize: 16),
-                  decoration: InputDecoration(
-                    labelText: 'Set 4-Digit Security PIN',
-                    hintText: '••••',
-                    counterText: '',
-                    filled: true,
-                    fillColor: AppTheme.bgCream,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppTheme.borderWarm)),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppTheme.borderWarm)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+            insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Header with Badge
+                  Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF0EC),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: const Color(0xFFFED7AA), width: 1.2),
+                        ),
+                        child: const Icon(Icons.shield_rounded, color: AppTheme.primaryOrange, size: 24),
+                      ),
+                      const SizedBox(width: 14),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'App Lock & Privacy',
+                              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: AppTheme.textDark),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Protect your chats and calls',
+                              style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                  const SizedBox(height: 18),
+
+                  // Switch Container
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFAF5EE),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFF1E6D8)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Require 4-Digit PIN',
+                                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5, color: AppTheme.textDark),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Locks FeelBack on app switch',
+                                style: TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: isEnabled,
+                          activeTrackColor: AppTheme.primaryOrange,
+                          activeThumbColor: Colors.white,
+                          onChanged: (val) async {
+                            if (val) {
+                              if (pinController.text.trim().length != 4) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Please enter a 4-digit PIN below first!'),
+                                    backgroundColor: Color(0xFFEF4444),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                                return;
+                              }
+                              await lockService.setPin(pinController.text.trim());
+                            } else {
+                              await lockService.setLockEnabled(false);
+                            }
+                            setLocalState(() {});
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // PIN Input Field
+                  TextField(
+                    controller: pinController,
+                    keyboardType: TextInputType.number,
+                    maxLength: 4,
+                    obscureText: obscurePin,
+                    style: const TextStyle(
+                      letterSpacing: 8,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 18,
+                      color: AppTheme.textDark,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Set 4-Digit Security PIN',
+                      labelStyle: const TextStyle(fontSize: 13, color: AppTheme.textMuted, letterSpacing: 0),
+                      hintText: '••••',
+                      counterText: '',
+                      filled: true,
+                      fillColor: Colors.white,
+                      prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppTheme.primaryOrange, size: 20),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          obscurePin ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                          color: AppTheme.textMuted,
+                          size: 20,
+                        ),
+                        onPressed: () => setLocalState(() => obscurePin = !obscurePin),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppTheme.borderWarm)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppTheme.borderWarm)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppTheme.primaryOrange, width: 1.8)),
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+
+                  // Action Buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 13),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            side: const BorderSide(color: AppTheme.borderWarm),
+                          ),
+                          child: const Text('Cancel', style: TextStyle(color: AppTheme.textMuted, fontWeight: FontWeight.w700)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(14),
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFFF6A00), Color(0xFFF95B3D)],
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppTheme.primaryOrange.withValues(alpha: 0.3),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
+                              padding: const EdgeInsets.symmetric(vertical: 13),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            ),
+                            onPressed: () async {
+                              if (pinController.text.trim().length == 4) {
+                                await lockService.setPin(pinController.text.trim());
+                                if (ctx.mounted) {
+                                  Navigator.pop(ctx);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Row(
+                                        children: [
+                                          Icon(Icons.check_circle_rounded, color: Colors.white),
+                                          SizedBox(width: 10),
+                                          Text('4-Digit Security PIN saved successfully!'),
+                                        ],
+                                      ),
+                                      backgroundColor: Color(0xFF10B981),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                }
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('PIN must be exactly 4 digits!'),
+                                    backgroundColor: Color(0xFFEF4444),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
+                            },
+                            child: const Text('Save PIN', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Close', style: TextStyle(color: AppTheme.textMuted, fontWeight: FontWeight.w700)),
-              ),
-              FilledButton(
-                style: FilledButton.styleFrom(backgroundColor: AppTheme.primaryOrange),
-                onPressed: () async {
-                  if (pinController.text.trim().length == 4) {
-                    await lockService.setPin(pinController.text.trim());
-                    if (ctx.mounted) {
-                      Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('4-Digit Security PIN saved successfully!')),
-                      );
-                    }
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('PIN must be exactly 4 digits!')),
-                    );
-                  }
-                },
-                child: const Text('Save PIN', style: TextStyle(fontWeight: FontWeight.w700)),
-              ),
-            ],
           );
         },
       ),
