@@ -172,6 +172,7 @@ class _ListenerEarningsScreenState extends State<ListenerEarningsScreen> {
     final amount = TextEditingController();
     final vpa = TextEditingController();
     final notes = TextEditingController();
+    final pan = TextEditingController();
     bool isSubmitting = false;
 
     final totalBalance = (wallet?.totalBalance ?? 0).toDouble();
@@ -381,7 +382,10 @@ class _ListenerEarningsScreenState extends State<ListenerEarningsScreen> {
                   Builder(
                     builder: (context) {
                       final user = context.read<AppController>().user;
-                      final hasPan = user?.idType?.toUpperCase() == 'PAN' && (user?.idNumber?.trim().isNotEmpty ?? false);
+                      final hasExistingPan = user?.idType?.toUpperCase() == 'PAN' && (user?.idNumber?.trim().isNotEmpty ?? false);
+                      final enteredPan = pan.text.trim().toUpperCase();
+                      final hasValidEnteredPan = RegExp(r'^[A-Z]{5}[0-9]{4}[A-Z]$').hasMatch(enteredPan);
+                      final hasPan = hasExistingPan || hasValidEnteredPan;
                       final tdsRate = hasPan ? 1.0 : 20.0;
                       final val = double.tryParse(amount.text.trim()) ?? 0.0;
                       final tdsAmt = (val * tdsRate) / 100.0;
@@ -441,6 +445,38 @@ class _ListenerEarningsScreenState extends State<ListenerEarningsScreen> {
                       );
                     },
                   ),
+                  if (!(context.read<AppController>().user?.idType?.toUpperCase() == 'PAN' && (context.read<AppController>().user?.idNumber?.trim().isNotEmpty ?? false))) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: pan,
+                      maxLength: 10,
+                      textCapitalization: TextCapitalization.characters,
+                      style: const TextStyle(fontWeight: FontWeight.w700, color: textDark, fontSize: 14.5, letterSpacing: 1.2),
+                      onChanged: (_) => setModalState(() {}),
+                      decoration: InputDecoration(
+                        labelText: 'PAN Card Number (Optional)',
+                        hintText: 'e.g. ABCDE1234F',
+                        helperText: RegExp(r'^[A-Z]{5}[0-9]{4}[A-Z]$').hasMatch(pan.text.trim().toUpperCase())
+                            ? '✓ Valid PAN format. 1% TDS applied & saved to profile.'
+                            : 'Enter PAN to automatically reduce TDS from 20% to 1%.',
+                        helperStyle: TextStyle(
+                          color: RegExp(r'^[A-Z]{5}[0-9]{4}[A-Z]$').hasMatch(pan.text.trim().toUpperCase())
+                              ? const Color(0xFF16A34A)
+                              : textMuted,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 11,
+                        ),
+                        prefixIcon: const Icon(Icons.badge_rounded, size: 20, color: primaryOrange),
+                        counterText: '',
+                        filled: true,
+                        fillColor: const Color(0xFFFFFBF7),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: borderWarm)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: borderWarm)),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: primaryOrange, width: 1.5)),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 14),
 
                   // UPI VPA input
@@ -546,10 +582,12 @@ class _ListenerEarningsScreenState extends State<ListenerEarningsScreen> {
 
                         setModalState(() => isSubmitting = true);
                         try {
+                          final panTrimmed = pan.text.trim().toUpperCase();
                           final result = await context.read<AppController>().api.requestPayout(
                                 value,
                                 vpaClean,
                                 notes: notes.text.trim(),
+                                panNumber: panTrimmed.isNotEmpty ? panTrimmed : null,
                               );
                           if (ctx.mounted) {
                             Navigator.pop(ctx);
@@ -583,6 +621,7 @@ class _ListenerEarningsScreenState extends State<ListenerEarningsScreen> {
     amount.dispose();
     vpa.dispose();
     notes.dispose();
+    pan.dispose();
   }
 
   String _fmt(dynamic raw) {
