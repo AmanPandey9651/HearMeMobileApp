@@ -1,3 +1,6 @@
+import '../common/refer_and_earn_screen.dart';
+import '../../widgets/share_app_sheet.dart';
+import '../../services/app_lock_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -134,6 +137,33 @@ class CallerMoreScreen extends StatelessWidget {
           ),
           const SizedBox(height: 10),
 
+          // Refer & Earn
+          _MenuItemTile(
+            icon: Icons.card_giftcard_rounded,
+            title: 'Refer & Earn',
+            trailingBadge: 'Earn ₹20',
+            onTap: () {
+              final nav = TalkStrangersApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
+              nav.push(MaterialPageRoute(builder: (_) => const ReferAndEarnScreen()));
+            },
+          ),
+          const SizedBox(height: 10),
+
+          // Share App
+          _MenuItemTile(
+            icon: Icons.share_rounded,
+            title: 'Share App with Friends',
+            onTap: () => showShareAppSheet(context),
+          ),
+          const SizedBox(height: 10),
+
+          // App Lock & Security PIN
+          _MenuItemTile(
+            icon: Icons.lock_outline_rounded,
+            title: 'App Lock & Security PIN',
+            onTap: () => _showAppLockConfigDialog(context),
+          ),
+          const SizedBox(height: 10),
           _MenuItemTile(
             icon: Icons.notifications_none_rounded,
             title: 'Notifications',
@@ -183,6 +213,101 @@ class CallerMoreScreen extends StatelessWidget {
       ),
     );
   }
+
+  void _showAppLockConfigDialog(BuildContext context) {
+    final lockService = context.read<AppLockService>();
+    final pinController = TextEditingController();
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocalState) {
+          final isEnabled = lockService.isLockEnabled;
+          return AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+            title: const Row(
+              children: [
+                Icon(Icons.security_rounded, color: AppTheme.primaryOrange, size: 24),
+                SizedBox(width: 10),
+                Text('App Lock & Privacy', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: AppTheme.textDark)),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  activeTrackColor: AppTheme.primaryOrange,
+                  title: const Text('Require 4-digit PIN', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                  subtitle: const Text('Locks FeelBack whenever app goes to background', style: TextStyle(fontSize: 11.5)),
+                  value: isEnabled,
+                  onChanged: (val) async {
+                    if (val) {
+                      if (pinController.text.trim().length != 4) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please enter a 4-digit PIN below first!')),
+                        );
+                        return;
+                      }
+                      await lockService.setPin(pinController.text.trim());
+                    } else {
+                      await lockService.setLockEnabled(false);
+                    }
+                    setLocalState(() {});
+                  },
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: pinController,
+                  keyboardType: TextInputType.number,
+                  maxLength: 4,
+                  obscureText: true,
+                  style: const TextStyle(letterSpacing: 4, fontWeight: FontWeight.w800, fontSize: 16),
+                  decoration: InputDecoration(
+                    labelText: 'Set 4-Digit Security PIN',
+                    hintText: '••••',
+                    counterText: '',
+                    filled: true,
+                    fillColor: AppTheme.bgCream,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppTheme.borderWarm)),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppTheme.borderWarm)),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Close', style: TextStyle(color: AppTheme.textMuted, fontWeight: FontWeight.w700)),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: AppTheme.primaryOrange),
+                onPressed: () async {
+                  if (pinController.text.trim().length == 4) {
+                    await lockService.setPin(pinController.text.trim());
+                    if (ctx.mounted) {
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('4-Digit Security PIN saved successfully!')),
+                      );
+                    }
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('PIN must be exactly 4 digits!')),
+                    );
+                  }
+                },
+                child: const Text('Save PIN', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
 }
 
 class _MenuActionCard extends StatelessWidget {
@@ -259,11 +384,13 @@ class _MenuActionCard extends StatelessWidget {
 class _MenuItemTile extends StatelessWidget {
   final IconData icon;
   final String title;
+  final String? trailingBadge;
   final VoidCallback onTap;
 
   const _MenuItemTile({
     required this.icon,
     required this.title,
+    this.trailingBadge,
     required this.onTap,
   });
 
@@ -303,6 +430,25 @@ class _MenuItemTile extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (trailingBadge != null) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7ED),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFFDBA74)),
+                    ),
+                    child: Text(
+                      trailingBadge!,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.primaryOrange,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 const Icon(Icons.chevron_right_rounded, color: AppTheme.primaryOrange, size: 22),
               ],
             ),

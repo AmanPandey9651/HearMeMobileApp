@@ -479,4 +479,13 @@ class ApiService {
       if (snapshotData != null) 'snapshotData': snapshotData,
     });
   }
+
+  Future<Map<String, dynamic>> getReferralSummary() async =>
+      Map<String, dynamic>.from(await client.get('/referrals/me'));
+
+  Future<Map<String, dynamic>> validateReferralCode(String code) async =>
+      Map<String, dynamic>.from(await client.post('/referrals/validate', body: {'referralCode': code}));
+
+  Future<Map<String, dynamic>> applyReferralCode(String code) async =>
+      Map<String, dynamic>.from(await client.post('/referrals/apply', body: {'referralCode': code}));
 }

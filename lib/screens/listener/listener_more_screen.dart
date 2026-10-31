@@ -1,3 +1,4 @@
+import '../common/refer_and_earn_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -339,6 +340,66 @@ class _ListenerMoreScreenState extends State<ListenerMoreScreen> {
                       ],
                     ),
                   ),
+                  const SizedBox(height: 14),
+
+                  // Refer & Earn Banner Card for Listener
+                  InkWell(
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: () {
+                      final nav = TalkStrangersApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
+                      nav.push(MaterialPageRoute(builder: (_) => const ReferAndEarnScreen()));
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.12),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: primaryOrange.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.card_giftcard_rounded, color: primaryOrange, size: 22),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text('Refer & Earn', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                                    SizedBox(width: 8),
+                                    Text('₹20 Bonus', style: TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.w800, fontSize: 11)),
+                                  ],
+                                ),
+                                SizedBox(height: 2),
+                                Text('Invite callers & peers to earn bonus coins', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5)),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right_rounded, color: primaryOrange, size: 22),
+                        ],
+                      ),
+                    ),
+                  ),
+
                   const SizedBox(height: 14),
 
                   // 2. Consultation Rates Card (Relocated from homepage)

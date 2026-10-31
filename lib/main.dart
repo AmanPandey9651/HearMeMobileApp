@@ -1,3 +1,5 @@
+import 'services/app_lock_service.dart';
+import 'widgets/app_lock_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -33,25 +35,76 @@ void main() async {
     }
   }
 
-  runApp(ChangeNotifierProvider(create: (_) => AppController()..bootstrap(), child: const FeelAgainApp()));
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AppController()..bootstrap()),
+        ChangeNotifierProvider(create: (_) => AppLockService()..init()),
+      ],
+      child: const FeelAgainApp(),
+    ),
+  );
 }
 typedef TalkStrangersApp = FeelAgainApp;
 typedef FeelBackApp = FeelAgainApp;
 
-class FeelAgainApp extends StatelessWidget {
+class FeelAgainApp extends StatefulWidget {
   static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
   const FeelAgainApp({super.key});
 
   @override
+  State<FeelAgainApp> createState() => _FeelAgainAppState();
+}
+
+class _FeelAgainAppState extends State<FeelAgainApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      if (mounted) {
+        context.read<AppLockService>().lockApp();
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final app = context.watch<AppController>();
+    final lockService = context.watch<AppLockService>();
+
     return MaterialApp(
-      navigatorKey: navigatorKey,
+      navigatorKey: FeelAgainApp.navigatorKey,
       debugShowCheckedModeBanner: false,
       title: app.activeBrandName,
       theme: AppTheme.light,
-      builder: (context, child) => GlobalCallHost(child: child ?? const SizedBox.shrink()),
+      builder: (ctx, child) {
+        final content = GlobalCallHost(child: child ?? const SizedBox.shrink());
+        if (lockService.isLockEnabled && !lockService.isUnlocked) {
+          return Stack(
+            children: [
+              content,
+              Positioned.fill(
+                child: AppLockScreen(
+                  onUnlocked: () => lockService.unlock(),
+                ),
+              ),
+            ],
+          );
+        }
+        return content;
+      },
       home: const InactivityGuard(child: RootGate()),
     );
   }
