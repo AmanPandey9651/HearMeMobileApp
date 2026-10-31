@@ -67,6 +67,18 @@ class ApiService {
   Future<Map<String, dynamic>> legalPolicies() async =>
       Map<String, dynamic>.from(await client.get('/config/legal-policies'));
 
+  Future<Map<String, dynamic>> completeOnboarding({
+    required bool acceptTerms,
+    String? referralCode,
+  }) async {
+    final body = <String, dynamic>{
+      'acceptTerms': acceptTerms,
+      if (referralCode != null && referralCode.trim().isNotEmpty)
+        'referralCode': referralCode.trim(),
+    };
+    return Map<String, dynamic>.from(await client.post('/auth/onboarding', body: body));
+  }
+
   Future<AppUser> me() async => AppUser.fromJson(Map<String, dynamic>.from(await client.get('/auth/me')));
 
   Future<AppUser> updateUserProfile(Map<String, dynamic> data) async =>

@@ -26,6 +26,9 @@ class AppUser {
   final String? idNumber;
   final bool idVerified;
   final bool isTest;
+  final bool termsAccepted;
+  final String? referralCode;
+  final String? referredByCode;
 
   const AppUser({
     required this.id,
@@ -43,6 +46,9 @@ class AppUser {
     this.idNumber,
     this.idVerified = false,
     this.isTest = false,
+    this.termsAccepted = false,
+    this.referralCode,
+    this.referredByCode,
   });
 
   bool get isListener => role == 'EXPERT';
@@ -63,6 +69,9 @@ class AppUser {
         idNumber: j['idNumber']?.toString(),
         idVerified: j['idVerified'] == true,
         isTest: j['isTest'] == true || j['test'] == true,
+        termsAccepted: j['termsAccepted'] == true,
+        referralCode: j['referralCode']?.toString(),
+        referredByCode: j['referredByCode']?.toString(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -81,6 +90,9 @@ class AppUser {
         'idNumber': idNumber,
         'idVerified': idVerified,
         'isTest': isTest,
+        'termsAccepted': termsAccepted,
+        'referralCode': referralCode,
+        'referredByCode': referredByCode,
       };
 
   String encode() => jsonEncode(toJson());
@@ -114,6 +126,9 @@ class ListenerCardModel {
   final bool videoAvailable;
   final bool adultTalkAllowed;
   final bool isTest;
+  final bool termsAccepted;
+  final String? referralCode;
+  final String? referredByCode;
 
   const ListenerCardModel({
     required this.id,
@@ -143,6 +158,9 @@ class ListenerCardModel {
     this.videoAvailable = true,
     this.adultTalkAllowed = false,
     this.isTest = false,
+    this.termsAccepted = false,
+    this.referralCode,
+    this.referredByCode,
   });
 
   bool get isOnline => presence == 'ONLINE';
@@ -276,6 +294,9 @@ class InstantSessionModel {
   final String? notes;
   final bool promotionalBonusUsed;
   final bool isTest;
+  final bool termsAccepted;
+  final String? referralCode;
+  final String? referredByCode;
 
   const InstantSessionModel({
     required this.id,
@@ -310,6 +331,9 @@ class InstantSessionModel {
     this.notes,
     this.promotionalBonusUsed = false,
     this.isTest = false,
+    this.termsAccepted = false,
+    this.referralCode,
+    this.referredByCode,
   });
 
   bool get isChat => type == 'CHAT';

@@ -368,6 +368,28 @@ class AppController extends ChangeNotifier {
     super.dispose();
   }
 
+  Future<Map<String, dynamic>> completeOnboarding({
+    required bool acceptTerms,
+    String? referralCode,
+  }) async {
+    try {
+      final res = await api.completeOnboarding(
+        acceptTerms: acceptTerms,
+        referralCode: referralCode,
+      );
+      if (res['user'] != null && res['user'] is Map) {
+        user = AppUser.fromJson(Map<String, dynamic>.from(res['user'] as Map));
+        await _storage.write(key: _userKey, value: user!.encode());
+        notifyListeners();
+      }
+      return res;
+    } catch (e) {
+      lastError = e.toString();
+      notifyListeners();
+      rethrow;
+    }
+  }
+
   Future<void> logout({bool markOffline = true}) async {
     await PrivacyPlatform.setSecure(false);
     if (markOffline && user?.isListener == true && client.token != null) {

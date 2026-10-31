@@ -141,6 +141,12 @@ class _RootGateState extends State<RootGate> {
     }
 
     if (app.user == null) return const PublicHomeScreen();
+
+    // First time login terms acceptance and referral onboarding
+    if (!app.user!.termsAccepted) {
+      return const FirstTimeOnboardingScreen();
+    }
+
     if (app.user!.isListener) {
       if (app.isListenerVerified) {
         return const ListenerShell();
