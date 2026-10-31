@@ -202,7 +202,199 @@ String sanitizeErrorMessage(Object error) {
   return cleaned.isNotEmpty ? cleaned : 'An unexpected issue occurred. Please try again.';
 }
 
+
+/// Elegant in-form alert banner displayed directly inside modal dialogs,
+/// bottom sheets, and form cards rather than behind them on the scaffold.
+class FormErrorBanner extends StatelessWidget {
+  final String? message;
+  final VoidCallback? onDismiss;
+  final EdgeInsetsGeometry margin;
+  final bool isWarning;
+
+  const FormErrorBanner({
+    super.key,
+    required this.message,
+    this.onDismiss,
+    this.margin = const EdgeInsets.only(bottom: 14),
+    this.isWarning = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (message == null || message!.trim().isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final bgGradient = isWarning
+        ? const LinearGradient(
+            colors: [Color(0xFFFFFBEB), Color(0xFFFEF3C7)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          )
+        : const LinearGradient(
+            colors: [Color(0xFFFEF2F2), Color(0xFFFFF1F2)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          );
+
+    final borderColor = isWarning ? const Color(0xFFFCD34D) : const Color(0xFFFCA5A5);
+    final iconColor = isWarning ? const Color(0xFFD97706) : const Color(0xFFE11D48);
+    final iconBgColor = isWarning ? const Color(0xFFF59E0B).withValues(alpha: 0.16) : const Color(0xFFF43F5E).withValues(alpha: 0.14);
+    final textColor = isWarning ? const Color(0xFF92400E) : const Color(0xFF9F1239);
+
+    return Container(
+      margin: margin,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        gradient: bgGradient,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: (isWarning ? const Color(0xFFD97706) : const Color(0xFFE11D48)).withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: iconBgColor,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isWarning ? Icons.warning_amber_rounded : Icons.error_outline_rounded,
+              color: iconColor,
+              size: 17,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                message!,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  height: 1.35,
+                  letterSpacing: -0.1,
+                ),
+              ),
+            ),
+          ),
+          if (onDismiss != null)
+            GestureDetector(
+              onTap: onDismiss,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 6, top: 2),
+                child: Icon(Icons.close_rounded, size: 16, color: textColor.withValues(alpha: 0.7)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+
+void _showOverlayToast(
+  BuildContext context, {
+  required String title,
+  required String message,
+  required Color accentColor,
+  required IconData icon,
+}) {
+  final overlay = Overlay.maybeOf(context, rootOverlay: true);
+  if (overlay == null) return;
+
+  late OverlayEntry entry;
+  entry = OverlayEntry(
+    builder: (ctx) => Positioned(
+      top: MediaQuery.of(ctx).padding.top + 16,
+      left: 16,
+      right: 16,
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: accentColor.withValues(alpha: 0.5), width: 1.2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.45),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: accentColor.withValues(alpha: 0.16),
+                  border: Border.all(color: accentColor.withValues(alpha: 0.35)),
+                ),
+                child: Icon(icon, color: accentColor, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13.5,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      message,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFFCBD5E1),
+                        fontSize: 12,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+
+  overlay.insert(entry);
+  Future.delayed(const Duration(seconds: 4), () {
+    if (entry.mounted) {
+      entry.remove();
+    }
+  });
+}
+
 void showError(BuildContext context, Object error, {String? title}) {
+
   final raw = error.toString();
   final lower = raw.toLowerCase();
 
@@ -219,6 +411,17 @@ void showError(BuildContext context, Object error, {String? title}) {
 
   final message = sanitizeErrorMessage(error);
   final displayTitle = title ?? 'Notice';
+
+  if (ModalRoute.of(context) is PopupRoute) {
+    _showOverlayToast(
+      context,
+      title: displayTitle,
+      message: message,
+      accentColor: const Color(0xFFFB7185),
+      icon: Icons.error_outline_rounded,
+    );
+    return;
+  }
 
   final messenger = ScaffoldMessenger.maybeOf(context);
   if (messenger == null) return;

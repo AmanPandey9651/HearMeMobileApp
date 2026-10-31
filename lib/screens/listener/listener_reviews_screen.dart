@@ -73,60 +73,80 @@ class _ListenerReviewsScreenState extends State<ListenerReviewsScreen> {
 
   Future<void> _respond(Map<String, dynamic> m) async {
     final c = TextEditingController(text: '${m['expertResponse'] ?? ''}');
+    String? formError;
     await showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Respond to review', style: TextStyle(fontWeight: FontWeight.w800, color: textDark)),
-        content: TextField(
-          controller: c,
-          minLines: 3,
-          maxLines: 6,
-          decoration: InputDecoration(
-            hintText: 'Write a thoughtful public response...',
-            filled: true,
-            fillColor: bgCream,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: borderWarm),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: borderWarm),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: primaryOrange, width: 1.5),
-            ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Respond to review', style: TextStyle(fontWeight: FontWeight.w800, color: textDark)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (formError != null)
+                FormErrorBanner(
+                  message: formError,
+                  onDismiss: () => setLocal(() => formError = null),
+                ),
+              TextField(
+                controller: c,
+                minLines: 3,
+                maxLines: 6,
+                onChanged: (_) {
+                  if (formError != null) setLocal(() => formError = null);
+                },
+                decoration: InputDecoration(
+                  hintText: 'Write a thoughtful public response...',
+                  filled: true,
+                  fillColor: bgCream,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: borderWarm),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: borderWarm),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: primaryOrange, width: 1.5),
+                  ),
+                ),
+              ),
+            ],
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel', style: TextStyle(color: textMuted, fontWeight: FontWeight.w600)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryOrange,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              ),
+              onPressed: () async {
+                try {
+                  if (c.text.trim().isEmpty) {
+                    setLocal(() => formError = 'Enter a response first.');
+                    return;
+                  }
+                  setLocal(() => formError = null);
+                  await context.read<AppController>().api.respondToReview('${m['id']}', c.text.trim());
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  await _load();
+                } catch (e) {
+                  if (ctx.mounted) setLocal(() => formError = sanitizeErrorMessage(e));
+                }
+              },
+              child: const Text('Post response', style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: textMuted, fontWeight: FontWeight.w600)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryOrange,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-            ),
-            onPressed: () async {
-              try {
-                if (c.text.trim().isEmpty) throw Exception('Enter a response first.');
-                await context.read<AppController>().api.respondToReview('${m['id']}', c.text.trim());
-                if (ctx.mounted) Navigator.pop(ctx);
-                await _load();
-              } catch (e) {
-                if (ctx.mounted) showError(ctx, e);
-              }
-            },
-            child: const Text('Post response', style: TextStyle(fontWeight: FontWeight.w700)),
-          ),
-        ],
       ),
     );
     c.dispose();

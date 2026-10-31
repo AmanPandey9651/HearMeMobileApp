@@ -105,6 +105,7 @@ class _WalletScreenState extends State<WalletScreen> {
     bool isCheckingCoupon = false;
     String? couponFeedback;
     bool isCouponError = false;
+    String? formError;
     final amount = await showDialog<double>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -141,6 +142,12 @@ class _WalletScreenState extends State<WalletScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (formError != null)
+                    FormErrorBanner(
+                      message: formError,
+                      isWarning: true,
+                      onDismiss: () => setDialogState(() => formError = null),
+                    ),
                   const Text(
                     'Select or enter amount in INR (minimum ₹50):',
                     style: TextStyle(fontSize: 12.5, color: textMuted),
@@ -150,7 +157,7 @@ class _WalletScreenState extends State<WalletScreen> {
                     controller: c,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     style: const TextStyle(fontWeight: FontWeight.w800, color: textDark, fontSize: 18),
-                    onChanged: (_) => setDialogState(() {}),
+                    onChanged: (_) => setDialogState(() { formError = null; }),
                     decoration: InputDecoration(
                       prefixText: '₹ ',
                       prefixStyle: const TextStyle(fontWeight: FontWeight.w800, color: primaryOrange, fontSize: 18),
@@ -187,7 +194,7 @@ class _WalletScreenState extends State<WalletScreen> {
                         borderRadius: BorderRadius.circular(20),
                         onTap: () {
                           c.text = '$amt';
-                          setDialogState(() {});
+                          setDialogState(() { formError = null; });
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
@@ -389,12 +396,9 @@ class _WalletScreenState extends State<WalletScreen> {
                 onPressed: () {
                   final entered = double.tryParse(c.text.trim());
                   if (entered == null || entered < 50) {
-                    showNotice(
-                      ctx,
-                      title: 'Minimum Recharge is ₹50',
-                      message: 'Please enter ₹50 or more to proceed with payment.',
-                      isWarning: true,
-                    );
+                    setDialogState(() {
+                      formError = 'Minimum recharge amount is ₹50. Please enter ₹50 or more.';
+                    });
                     return;
                   }
                   _appliedCouponCode = (appliedCoupon != null && appliedCoupon!['valid'] == true)

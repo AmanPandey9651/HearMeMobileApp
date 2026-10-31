@@ -174,6 +174,8 @@ class _ListenerEarningsScreenState extends State<ListenerEarningsScreen> {
     final notes = TextEditingController();
     final pan = TextEditingController();
     bool isSubmitting = false;
+    String? formError;
+    bool isWarningError = false;
 
     final totalBalance = (wallet?.totalBalance ?? 0).toDouble();
 
@@ -225,6 +227,12 @@ class _ListenerEarningsScreenState extends State<ListenerEarningsScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (formError != null)
+                    FormErrorBanner(
+                      message: formError,
+                      isWarning: isWarningError,
+                      onDismiss: () => setModalState(() => formError = null),
+                    ),
                   // Available balance pill card
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -295,7 +303,7 @@ class _ListenerEarningsScreenState extends State<ListenerEarningsScreen> {
                     controller: amount,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     style: const TextStyle(fontWeight: FontWeight.w800, color: textDark, fontSize: 16),
-                    onChanged: (_) => setModalState(() {}),
+                    onChanged: (_) => setModalState(() { formError = null; }),
                     decoration: InputDecoration(
                       labelText: 'Amount (minimum ₹50)',
                       labelStyle: TextStyle(
@@ -452,7 +460,7 @@ class _ListenerEarningsScreenState extends State<ListenerEarningsScreen> {
                       maxLength: 10,
                       textCapitalization: TextCapitalization.characters,
                       style: const TextStyle(fontWeight: FontWeight.w700, color: textDark, fontSize: 14.5, letterSpacing: 1.2),
-                      onChanged: (_) => setModalState(() {}),
+                      onChanged: (_) => setModalState(() { formError = null; }),
                       decoration: InputDecoration(
                         labelText: 'PAN Card Number (Optional)',
                         hintText: 'e.g. ABCDE1234F',
@@ -483,7 +491,7 @@ class _ListenerEarningsScreenState extends State<ListenerEarningsScreen> {
                   TextField(
                     controller: vpa,
                     style: const TextStyle(fontWeight: FontWeight.w700, color: textDark, fontSize: 14.5),
-                    onChanged: (_) => setModalState(() {}),
+                    onChanged: (_) => setModalState(() { formError = null; }),
                     decoration: InputDecoration(
                       labelText: 'UPI ID / VPA',
                       hintText: 'e.g. 9876543210@paytm or name@okaxis',
@@ -553,36 +561,41 @@ class _ListenerEarningsScreenState extends State<ListenerEarningsScreen> {
                         final vpaClean = vpa.text.trim();
 
                         if (value < 50) {
-                          showNotice(
-                            ctx,
-                            title: 'Minimum Withdrawal',
-                            message: 'Minimum withdrawal amount is ₹50.00.',
-                            isWarning: true,
-                          );
+                          setModalState(() {
+                            formError = 'Minimum withdrawal amount is ₹50.00.';
+                            isWarningError = true;
+                          });
                           return;
                         }
                         if (value > totalBalance) {
-                          showNotice(
-                            ctx,
-                            title: 'Insufficient Balance',
-                            message: 'Entered amount exceeds your available balance (${wallet?.formattedBalance ?? '₹0.00'}).',
-                            isWarning: true,
-                          );
+                          setModalState(() {
+                            formError = 'Entered amount exceeds your available balance (${wallet?.formattedBalance ?? '₹0.00'}).';
+                            isWarningError = true;
+                          });
                           return;
                         }
                         if (!RegExp(r'^[A-Za-z0-9._-]{2,256}@[A-Za-z0-9.-]{2,64}$').hasMatch(vpaClean)) {
-                          showNotice(
-                            ctx,
-                            title: 'Invalid UPI ID',
-                            message: 'Please enter a valid UPI handle (e.g. name@okhdfcbank or 9876543210@paytm).',
-                            isWarning: true,
-                          );
+                          setModalState(() {
+                            formError = 'Please enter a valid UPI handle (e.g. name@okhdfcbank or 9876543210@paytm).';
+                            isWarningError = true;
+                          });
                           return;
                         }
 
-                        setModalState(() => isSubmitting = true);
+                        final panTrimmed = pan.text.trim().toUpperCase();
+                        if (panTrimmed.isNotEmpty && !RegExp(r'^[A-Z]{5}[0-9]{4}[A-Z]$').hasMatch(panTrimmed)) {
+                          setModalState(() {
+                            formError = 'Invalid PAN format. Please enter a 10-character PAN (e.g. ABCDE1234F) or leave blank.';
+                            isWarningError = true;
+                          });
+                          return;
+                        }
+
+                        setModalState(() {
+                          isSubmitting = true;
+                          formError = null;
+                        });
                         try {
-                          final panTrimmed = pan.text.trim().toUpperCase();
                           final result = await context.read<AppController>().api.requestPayout(
                                 value,
                                 vpaClean,
@@ -600,8 +613,11 @@ class _ListenerEarningsScreenState extends State<ListenerEarningsScreen> {
                           await _load();
                         } catch (e) {
                           if (ctx.mounted) {
-                            setModalState(() => isSubmitting = false);
-                            showError(ctx, e, title: 'Withdrawal Failed');
+                            setModalState(() {
+                              isSubmitting = false;
+                              formError = sanitizeErrorMessage(e);
+                              isWarningError = false;
+                            });
                           }
                         }
                       },

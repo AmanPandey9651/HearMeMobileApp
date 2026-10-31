@@ -136,6 +136,7 @@ class _SafetySupportScreenState extends State<SafetySupportScreen> {
     final email = TextEditingController(text: context.read<AppController>().user?.email ?? '');
     String category = 'CALL_QUALITY';
 
+    String? formError;
     await showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -147,6 +148,11 @@ class _SafetySupportScreenState extends State<SafetySupportScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (formError != null)
+                  FormErrorBanner(
+                    message: formError,
+                    onDismiss: () => setLocal(() => formError = null),
+                  ),
                 DropdownButtonFormField<String>(
                   initialValue: category,
                   items: const ['CALL_QUALITY', 'BILLING', 'LISTENER_BEHAVIOR', 'TECHNICAL', 'FEEDBACK', 'OTHER']
@@ -215,13 +221,14 @@ class _SafetySupportScreenState extends State<SafetySupportScreen> {
               onPressed: () async {
                 final mail = email.text.trim();
                 if (subject.text.trim().isEmpty || message.text.trim().isEmpty) {
-                  showError(ctx, 'Please provide a subject and detailed message.');
+                  setLocal(() => formError = 'Please provide a subject and detailed message.');
                   return;
                 }
                 if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(mail)) {
-                  showError(ctx, 'Enter a valid contact email.');
+                  setLocal(() => formError = 'Enter a valid contact email.');
                   return;
                 }
+                setLocal(() => formError = null);
                 try {
                   await context.read<AppController>().api.submitInquiry({
                     'subject': subject.text.trim(),
@@ -232,7 +239,9 @@ class _SafetySupportScreenState extends State<SafetySupportScreen> {
                   if (ctx.mounted) Navigator.pop(ctx);
                   await _load();
                 } catch (e) {
-                  if (ctx.mounted) showError(ctx, e);
+                  if (ctx.mounted) {
+                    setLocal(() => formError = sanitizeErrorMessage(e));
+                  }
                 }
               },
               child: const Text('Submit', style: TextStyle(fontWeight: FontWeight.w700)),
