@@ -899,14 +899,45 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
 
 
-        // Support Contact Button
+        // Support Contact Pill Button
         Center(
-          child: TextButton.icon(
-            onPressed: _busy ? null : () => _publicContact(context, app),
-            icon: const Icon(Icons.headset_mic_rounded, size: 16, color: primaryOrange),
-            label: const Text(
-              'Need help? Contact Us & Safety Support',
-              style: TextStyle(color: primaryOrange, fontWeight: FontWeight.w700, fontSize: 13),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: borderWarm),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: _busy ? null : () => _publicContact(context, app),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.help_outline_rounded, size: 15, color: textDark),
+                      SizedBox(width: 7),
+                      Text(
+                        'Need help? Contact FeelBack Support',
+                        style: TextStyle(
+                          color: textDark,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
         ),
