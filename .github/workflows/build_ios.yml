@@ -47,15 +47,39 @@ jobs:
           CODE_SIGNING_REQUIRED: "NO"
           CODE_SIGNING_ALLOWED: "NO"
         run: |
-          flutter build ios --release --no-codesign
+          flutter build ios --release --no-codesign || {
+            echo "Flutter CLI halted at codesign step. Proceeding with direct xcodebuild..."
+            xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -configuration Release -destination 'generic/platform=iOS' -derivedDataPath build/ios CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+          }
 
       - name: Package Runner.app into .ipa
         run: |
           mkdir -p Payload
-          cp -R build/ios/iphoneos/Runner.app Payload/
+          APP_PATH=""
+          if [ -d "build/ios/iphoneos/Runner.app" ]; then
+            APP_PATH="build/ios/iphoneos/Runner.app"
+          elif [ -d "build/ios/Build/Products/Release-iphoneos/Runner.app" ]; then
+            APP_PATH="build/ios/Build/Products/Release-iphoneos/Runner.app"
+          fi
+
+          if [ -z "$APP_PATH" ]; then
+            echo "Searching for Runner.app..."
+            APP_PATH=$(find build/ios -name "Runner.app" -type d | head -n 1)
+          fi
+
+          if [ -z "$APP_PATH" ] || [ ! -d "$APP_PATH" ]; then
+            echo "Error: Runner.app not found in build directory!"
+            find build -maxdepth 5
+            exit 1
+          fi
+
+          echo "Found Runner.app at: $APP_PATH"
+          echo "Packaging into FeelBack-iOS.ipa..."
+          cp -R "$APP_PATH" Payload/
           zip -r -q FeelBack-iOS.ipa Payload
           mkdir -p dist
           mv FeelBack-iOS.ipa dist/
+          echo "FeelBack-iOS.ipa successfully created!" 
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
