@@ -73,7 +73,7 @@ class HeroBannerCard extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'Real People • Real Support',
+                  '🎁 1st Call Free • Real Support',
                   style: TextStyle(
                     fontSize: 10.5,
                     fontWeight: FontWeight.w700,
