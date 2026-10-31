@@ -19,6 +19,7 @@ import '../../widgets/in_call_gifting_sheet.dart';
 import '../caller/wallet_screen.dart';
 import '../../widgets/video_privacy_filter.dart';
 import '../../widgets/nudity_guard_overlay.dart';
+import '../../services/in_call_voice_safety_service.dart';
 
 class SessionScreen extends StatefulWidget {
   final InstantSessionModel initialSession;
@@ -333,6 +334,18 @@ void initState() {
 
   _startPolling();
   _privacyAlerts.start(_onPrivacyAlert);
+
+  if (!isChat) {
+    InCallVoiceSafetyService.instance.startMonitoring(
+      sessionId: session.id,
+      apiClient: context.read<AppController>().client,
+      onLeakageDetected: (warning) {
+        if (mounted) {
+          setState(() => banner = warning);
+        }
+      },
+    );
+  }
 
   // Sub-second connection: join media immediately if already live on mount
   if (isLive && !isChat && pc == null && !joining) {
@@ -1523,6 +1536,7 @@ void initState() {
     reconnectTimer = null;
     _offerWatchdogTimer?.cancel();
     _offerWatchdogTimer = null;
+    InCallVoiceSafetyService.instance.stopMonitoring();
     _privacyAlerts.stop();
 
     // Immediately detach renderers and stop local hardware tracks
@@ -2172,6 +2186,51 @@ void initState() {
     );
   }
 
+
+  /// Floating watermark badge notifying users that contact & bank account sharing is prohibited
+  Widget _buildSafetyDeterrenceStrip({bool isVideo = false}) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        color: isVideo ? const Color(0xFF0F172A).withValues(alpha: 0.85) : const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isVideo ? const Color(0xFF334155) : const Color(0xFFFDBA74),
+          width: 0.8,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.shield_outlined, color: isVideo ? const Color(0xFFF59E0B) : const Color(0xFFEA580C), size: 13),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              'Calls monitored • Off-platform contact or bank/UPI sharing strictly prohibited',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: isVideo ? const Color(0xFFE2E8F0) : const Color(0xFF9A3412),
+                letterSpacing: -0.1,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Floating notification banner for reconnection/security alerts
   Widget _buildTopBanner() {
     if (banner == null) return const SizedBox.shrink();
@@ -2238,6 +2297,9 @@ void initState() {
 
                 // Floating Banner if any
                 if (banner != null) _buildTopBanner(),
+
+                // Safety Off-Platform Deterrence Strip
+                _buildSafetyDeterrenceStrip(isVideo: false),
 
                 const Spacer(flex: 2),
 
@@ -2933,6 +2995,14 @@ void initState() {
                 right: 136,
                 child: _buildTopBanner(),
               ),
+
+            // Safety Off-Platform Deterrence Strip
+            Positioned(
+              top: topPadding + (banner != null ? 116 : 62),
+              left: 16,
+              right: 136,
+              child: _buildSafetyDeterrenceStrip(isVideo: true),
+            ),
 
             // 5. Floating Bottom Controls Dock (Firmly positioned at the bottom)
             Positioned(

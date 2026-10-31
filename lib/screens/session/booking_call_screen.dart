@@ -15,6 +15,7 @@ import '../../widgets/common_widgets.dart';
 import '../../widgets/in_call_mini_games.dart';
 import '../../widgets/video_privacy_filter.dart';
 import '../../widgets/nudity_guard_overlay.dart';
+import '../../services/in_call_voice_safety_service.dart';
 
 /// WebRTC room used by the legacy/scheduled booking flow that still exists in
 /// CustomerBookingsPage on the web client. Billing and call state remain
@@ -260,6 +261,18 @@ void initState() {
     context.read<AppController>().enterActiveSession();
 
     registeredActiveSession = true;
+
+    if (!isVideo) {
+      InCallVoiceSafetyService.instance.startMonitoring(
+        sessionId: widget.booking.id,
+        apiClient: context.read<AppController>().client,
+        onLeakageDetected: (warning) {
+          if (mounted) {
+            setState(() => banner = warning);
+          }
+        },
+      );
+    }
 
     _bootstrap();
   });
@@ -877,6 +890,7 @@ void initState() {
     signalPoll?.cancel();
     statusPoll?.cancel();
     reconnectTimer?.cancel();
+    InCallVoiceSafetyService.instance.stopMonitoring();
     _privacyAlerts.stop();
     try { localRenderer.srcObject = null; } catch (_) {}
     try { remoteRenderer.srcObject = null; } catch (_) {}
@@ -1005,8 +1019,42 @@ void initState() {
             : Column(children: [
                 if (banner != null)
                   MaterialBanner(content: Text(banner!), actions: [TextButton(onPressed: () => setState(() => banner = null), child: const Text('Dismiss'))]),
+                _buildSafetyDeterrenceStrip(),
                 Expanded(child: _callBody(elapsed)),
               ]),
+      ),
+    );
+  }
+
+  Widget _buildSafetyDeterrenceStrip() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFFDBA74), width: 0.8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: const [
+          Icon(Icons.shield_outlined, color: Color(0xFFEA580C), size: 13),
+          SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              'Calls monitored • Off-platform contact or bank/UPI sharing strictly prohibited',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF9A3412),
+                letterSpacing: -0.1,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
