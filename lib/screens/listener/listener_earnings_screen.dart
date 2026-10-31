@@ -375,6 +375,72 @@ class _ListenerEarningsScreenState extends State<ListenerEarningsScreen> {
                       );
                     }).toList(),
                   ),
+                  const SizedBox(height: 12),
+
+                  // TDS & Net Payout Summary Card
+                  Builder(
+                    builder: (context) {
+                      final user = context.read<AppController>().user;
+                      final hasPan = user?.idType?.toUpperCase() == 'PAN' && (user?.idNumber?.trim().isNotEmpty ?? false);
+                      final tdsRate = hasPan ? 1.0 : 20.0;
+                      final val = double.tryParse(amount.text.trim()) ?? 0.0;
+                      final tdsAmt = (val * tdsRate) / 100.0;
+                      final netPay = val > tdsAmt ? val - tdsAmt : 0.0;
+
+                      return Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFFBF7),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: borderWarm),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('Gross Amount:', style: TextStyle(fontSize: 12, color: textMuted, fontWeight: FontWeight.w500)),
+                                Text('₹${val.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: textDark)),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'TDS (${hasPan ? "1% Sec 194-O" : "20% Sec 206AA"}):',
+                                  style: TextStyle(fontSize: 12, color: hasPan ? const Color(0xFFD97706) : Colors.redAccent, fontWeight: FontWeight.w600),
+                                ),
+                                Text(
+                                  '- ₹${tdsAmt.toStringAsFixed(2)}',
+                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: hasPan ? const Color(0xFFD97706) : Colors.redAccent),
+                                ),
+                              ],
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 6),
+                              child: Divider(height: 1, thickness: 0.8, color: borderWarm),
+                            ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('Net Transferred to UPI:', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF16A34A))),
+                                Text('₹${netPay.toStringAsFixed(2)}', style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: Color(0xFF16A34A))),
+                              ],
+                            ),
+                            if (!hasPan) ...[
+                              const SizedBox(height: 6),
+                              const Text(
+                                '⚠️ Link PAN card in profile to reduce TDS from 20% to 1%.',
+                                style: TextStyle(fontSize: 10.5, color: Colors.redAccent, fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                   const SizedBox(height: 14),
 
                   // UPI VPA input
@@ -489,7 +555,7 @@ class _ListenerEarningsScreenState extends State<ListenerEarningsScreen> {
                             Navigator.pop(ctx);
                             showSuccess(
                               context,
-                              'Payout of ₹${result['amount'] ?? value} requested to ${result['destinationVpa'] ?? vpaClean}.',
+                              'Payout requested: Net ₹${result['netDisbursedAmount'] ?? result['amount'] ?? value} (TDS ₹${result['tdsAmount'] ?? 0}) to ${result['destinationVpa'] ?? vpaClean}.',
                               title: 'Withdrawal Requested 🎉',
                             );
                           }

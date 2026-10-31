@@ -356,6 +356,9 @@ class ApiService {
   }
 
   Future<List<dynamic>> payoutHistory() async => _content(await client.get('/listener/payouts'));
+  Future<Map<String, dynamic>> getTdsEstimate(double amount) async =>
+      Map<String, dynamic>.from(await client.get('/listener/payouts/tds-estimate', query: {'amount': amount.toString()}));
+
   Future<Map<String, dynamic>> requestPayout(double amount, String vpa, {String? notes}) async => Map<String, dynamic>.from(await client.post('/listener/payouts/request-upi', body: {'amount': amount, 'vpa': vpa, if (notes != null) 'notes': notes}));
 
   Future<List<dynamic>> expertReviews(String expertId, {int page = 0, int size = 50}) async => _content(await client.get('/reviews/expert/$expertId', query: {'page': page, 'size': size}));

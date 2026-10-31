@@ -22,6 +22,9 @@ class AppUser {
   final String? avatarUrl;
   final String? gender;
   final String? hobbies;
+  final String? idType;
+  final String? idNumber;
+  final bool idVerified;
   final bool isTest;
 
   const AppUser({
@@ -36,6 +39,9 @@ class AppUser {
     this.avatarUrl,
     this.gender,
     this.hobbies,
+    this.idType,
+    this.idNumber,
+    this.idVerified = false,
     this.isTest = false,
   });
 
@@ -53,6 +59,9 @@ class AppUser {
         avatarUrl: j['avatarUrl']?.toString(),
         gender: j['gender']?.toString(),
         hobbies: j['hobbies']?.toString(),
+        idType: j['idType']?.toString(),
+        idNumber: j['idNumber']?.toString(),
+        idVerified: j['idVerified'] == true,
         isTest: j['isTest'] == true || j['test'] == true,
       );
 
@@ -68,6 +77,9 @@ class AppUser {
         'avatarUrl': avatarUrl,
         'gender': gender,
         'hobbies': hobbies,
+        'idType': idType,
+        'idNumber': idNumber,
+        'idVerified': idVerified,
         'isTest': isTest,
       };
 
