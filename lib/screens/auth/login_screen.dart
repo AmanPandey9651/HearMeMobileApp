@@ -337,11 +337,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 30),
       children: [
-        // 1. Hero Card: Soft peach gradient, glowing shield badge, 3 value pills
+        // 1. Hero Card: Sleek, compact peach gradient card with glowing shield & value pills
         Container(
-          padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 20),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(18),
             gradient: const LinearGradient(
               colors: [Color(0xFFFFF2EB), Color(0xFFFFE6D8)],
               begin: Alignment.topLeft,
@@ -350,68 +350,74 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             border: Border.all(color: const Color(0xFFFCDFD5)),
             boxShadow: [
               BoxShadow(
-                color: primaryOrange.withValues(alpha: 0.1),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
+                color: primaryOrange.withValues(alpha: 0.08),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
               ),
             ],
           ),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // Glowing shield icon container
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [primaryOrange, secondaryOrange],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: primaryOrange.withValues(alpha: 0.35),
-                      blurRadius: 18,
-                      spreadRadius: 2,
-                    ),
-                  ],
-                ),
-                child: const Center(
-                  child: Icon(Icons.shield_rounded, size: 36, color: Colors.white),
-                ),
-              ),
-              const SizedBox(height: 14),
-              const Text(
-                'Talk Anonymously',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: textDark,
-                  letterSpacing: -0.3,
-                ),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Your public caller identity stays 100% private. No real names or numbers are ever shared.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  height: 1.4,
-                  color: textMuted,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // 3 Value Pills matching screenshot
               Row(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: const LinearGradient(
+                        colors: [primaryOrange, secondaryOrange],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: primaryOrange.withValues(alpha: 0.28),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Center(
+                      child: Icon(Icons.shield_rounded, size: 22, color: Colors.white),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text(
+                          'Talk Anonymously',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: textDark,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Caller identity stays 100% private. No real names or numbers shared.',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            height: 1.3,
+                            color: textMuted,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: const [
                   _MiniFeaturePill(icon: Icons.lock_outline_rounded, text: 'Encrypted'),
-                  const SizedBox(width: 8),
                   _MiniFeaturePill(icon: Icons.visibility_off_outlined, text: 'No PII'),
-                  const SizedBox(width: 8),
                   _MiniFeaturePill(icon: Icons.bolt_rounded, text: 'Instant'),
                 ],
               ),
