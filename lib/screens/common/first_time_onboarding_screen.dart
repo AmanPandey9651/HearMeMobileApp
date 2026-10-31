@@ -89,6 +89,10 @@ class _FirstTimeOnboardingScreenState extends State<FirstTimeOnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppController>();
+    // Safety: If somehow navigated to by a listener or non-customer, don't show customer onboarding
+    if (app.user != null && app.user!.role != 'CUSTOMER') {
+      return const SizedBox.shrink();
+    }
     final userName = app.user?.fullName.isNotEmpty == true ? app.user!.fullName : 'Friend';
 
     return PopScope(
@@ -116,7 +120,7 @@ class _FirstTimeOnboardingScreenState extends State<FirstTimeOnboardingScreen> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFFF95B3D).withOpacity(0.35),
+                          color: const Color(0xFFF95B3D).withValues(alpha: 0.35),
                           blurRadius: 24,
                           offset: const Offset(0, 8),
                         ),
@@ -148,7 +152,7 @@ class _FirstTimeOnboardingScreenState extends State<FirstTimeOnboardingScreen> {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.white.withOpacity(0.7),
+                    color: Colors.white.withValues(alpha: 0.7),
                     height: 1.45,
                   ),
                 ),
@@ -160,9 +164,9 @@ class _FirstTimeOnboardingScreenState extends State<FirstTimeOnboardingScreen> {
                     margin: const EdgeInsets.only(bottom: 20),
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFEF4444).withOpacity(0.12),
+                      color: const Color(0xFFEF4444).withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.4)),
+                      border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.4)),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -190,7 +194,7 @@ class _FirstTimeOnboardingScreenState extends State<FirstTimeOnboardingScreen> {
                   decoration: BoxDecoration(
                     color: const Color(0xFF1E293B),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.white.withOpacity(0.08)),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -200,7 +204,7 @@ class _FirstTimeOnboardingScreenState extends State<FirstTimeOnboardingScreen> {
                           Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF10B981).withOpacity(0.15),
+                              color: const Color(0xFF10B981).withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: const Icon(
@@ -247,7 +251,7 @@ class _FirstTimeOnboardingScreenState extends State<FirstTimeOnboardingScreen> {
                         decoration: InputDecoration(
                           hintText: 'e.g. FEEL9K8X',
                           hintStyle: TextStyle(
-                            color: Colors.white.withOpacity(0.3),
+                            color: Colors.white.withValues(alpha: 0.3),
                             letterSpacing: 1.0,
                           ),
                           filled: true,
@@ -265,11 +269,11 @@ class _FirstTimeOnboardingScreenState extends State<FirstTimeOnboardingScreen> {
                               : null,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+                            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+                            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
@@ -291,8 +295,8 @@ class _FirstTimeOnboardingScreenState extends State<FirstTimeOnboardingScreen> {
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color: _acceptedTerms
-                          ? const Color(0xFFF95B3D).withOpacity(0.6)
-                          : Colors.white.withOpacity(0.08),
+                          ? const Color(0xFFF95B3D).withValues(alpha: 0.6)
+                          : Colors.white.withValues(alpha: 0.08),
                     ),
                   ),
                   child: Column(
@@ -308,7 +312,7 @@ class _FirstTimeOnboardingScreenState extends State<FirstTimeOnboardingScreen> {
                               checkColor: Colors.white,
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
                               side: BorderSide(
-                                color: Colors.white.withOpacity(0.4),
+                                color: Colors.white.withValues(alpha: 0.4),
                                 width: 1.5,
                               ),
                               onChanged: (val) {
@@ -337,7 +341,7 @@ class _FirstTimeOnboardingScreenState extends State<FirstTimeOnboardingScreen> {
                                 Text(
                                   'By checking this box, you confirm that you are at least 18 years old and agree to adhere to our community safety rules.',
                                   style: TextStyle(
-                                    color: Colors.white.withOpacity(0.6),
+                                    color: Colors.white.withValues(alpha: 0.6),
                                     fontSize: 12,
                                     height: 1.4,
                                   ),
@@ -407,11 +411,11 @@ class _FirstTimeOnboardingScreenState extends State<FirstTimeOnboardingScreen> {
                   onPressed: (_acceptedTerms && !_isLoading) ? _submitOnboarding : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFF95B3D),
-                    disabledBackgroundColor: const Color(0xFFF95B3D).withOpacity(0.35),
+                    disabledBackgroundColor: const Color(0xFFF95B3D).withValues(alpha: 0.35),
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     elevation: _acceptedTerms ? 6 : 0,
-                    shadowColor: const Color(0xFFF95B3D).withOpacity(0.4),
+                    shadowColor: const Color(0xFFF95B3D).withValues(alpha: 0.4),
                   ),
                   child: _isLoading
                       ? const SizedBox(
@@ -445,7 +449,7 @@ class _FirstTimeOnboardingScreenState extends State<FirstTimeOnboardingScreen> {
                     child: Text(
                       'Log Out / Switch Account',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.5),
+                        color: Colors.white.withValues(alpha: 0.5),
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
                       ),
