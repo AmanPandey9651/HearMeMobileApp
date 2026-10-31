@@ -157,123 +157,38 @@ class _PublicHomeScreenState extends State<PublicHomeScreen> {
           color: Colors.white,
           border: Border(top: BorderSide(color: borderWarm, width: 1.0)),
         ),
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: SafeArea(
-          top: false,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              // 1. Explore Tab (Active with orange circle + dot)
-              _BottomNavItem(
-                icon: Icons.explore_rounded,
-                label: 'Explore',
-                isSelected: _navIndex == 0,
-                hasActiveDot: true,
-                onTap: () => setState(() => _navIndex = 0),
-              ),
-
-              // 2. How It Works Tab
-              _BottomNavItem(
-                icon: Icons.help_outline_rounded,
-                label: 'How It Works',
-                isSelected: _navIndex == 1,
-                hasActiveDot: false,
-                onTap: () => setState(() => _navIndex = 1),
-              ),
-
-              // 3. Log In Tab
-              _BottomNavItem(
-                icon: Icons.login_rounded,
-                label: 'Log In',
-                isSelected: false,
-                hasActiveDot: false,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen(initialTab: 0)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BottomNavItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool isSelected;
-  final bool hasActiveDot;
-  final VoidCallback onTap;
-
-  const _BottomNavItem({
-    required this.icon,
-    required this.label,
-    required this.isSelected,
-    required this.hasActiveDot,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    const activeColor = Color(0xFFF95B3D);
-    const inactiveColor = Color(0xFF6B7280);
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isSelected)
-              Container(
-                width: 40,
-                height: 40,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [Color(0xFFF95B3D), Color(0xFFFF7A45)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Color(0x3DF95B3D),
-                      blurRadius: 6,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: const Icon(Icons.explore_rounded, size: 22, color: Colors.white),
-              )
-            else
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Icon(icon, size: 24, color: inactiveColor),
-              ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11.5,
-                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
-                color: isSelected ? activeColor : inactiveColor,
-              ),
+        child: NavigationBar(
+          height: 60,
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          selectedIndex: _navIndex,
+          backgroundColor: Colors.white,
+          indicatorColor: const Color(0xFFFFECE5),
+          onDestinationSelected: (v) {
+            if (v == 2) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginScreen(initialTab: 0)),
+              );
+            } else {
+              setState(() => _navIndex = v);
+            }
+          },
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.explore_outlined, color: textMuted),
+              selectedIcon: Icon(Icons.explore_rounded, color: primaryOrange),
+              label: 'Explore',
             ),
-            if (isSelected && hasActiveDot) ...[
-              const SizedBox(height: 3),
-              Container(
-                width: 4.5,
-                height: 4.5,
-                decoration: const BoxDecoration(
-                  color: activeColor,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ],
+            NavigationDestination(
+              icon: Icon(Icons.help_outline_rounded, color: textMuted),
+              selectedIcon: Icon(Icons.help_rounded, color: primaryOrange),
+              label: 'How It Works',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.login_rounded, color: textMuted),
+              selectedIcon: Icon(Icons.login_rounded, color: primaryOrange),
+              label: 'Log In',
+            ),
           ],
         ),
       ),
