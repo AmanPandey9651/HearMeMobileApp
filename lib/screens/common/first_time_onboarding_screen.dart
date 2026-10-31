@@ -224,7 +224,7 @@ class _FirstTimeOnboardingScreenState extends State<FirstTimeOnboardingScreen> {
                                 ),
                                 SizedBox(height: 2),
                                 Text(
-                                  'Enter a friend's code to claim ₹20 welcome coins',
+                                  "Enter a friend's code to claim ₹20 welcome coins",
                                   style: TextStyle(
                                     color: Color(0xFF94A3B8),
                                     fontSize: 12,

@@ -26,8 +26,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   final _password = TextEditingController();
   final _mobile = TextEditingController();
   final _otp = TextEditingController();
-  final _referralCode = TextEditingController();
-  bool _showReferralInput = false;
   bool _obscurePassword = true;
   bool _otpSent = false;
   String? _verificationId;
@@ -208,7 +206,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     _password.dispose();
     _mobile.dispose();
     _otp.dispose();
-    _referralCode.dispose();
     super.dispose();
   }
 
@@ -488,76 +485,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                     ),
                   ),
                 ),
-                if (!_otpSent) ...[
-                  const SizedBox(height: 12),
-                  InkWell(
-                    onTap: () => setState(() => _showReferralInput = !_showReferralInput),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.card_giftcard_rounded, size: 15, color: Color(0xFF10B981)),
-                          const SizedBox(width: 6),
-                          Text(
-                            _showReferralInput ? 'Referral Code (Optional):' : 'Have an invite code? (Get ₹20 Coins)',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF10B981),
-                            ),
-                          ),
-                          const Spacer(),
-                          Icon(
-                            _showReferralInput ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                            size: 16,
-                            color: const Color(0xFF10B981),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (_showReferralInput) ...[
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: _referralCode,
-                      textCapitalization: TextCapitalization.characters,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: textDark,
-                        letterSpacing: 1.2,
-                        fontSize: 13.5,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: 'e.g. FEEL9K8X',
-                        hintStyle: const TextStyle(color: Color(0xFF9CA3AF), letterSpacing: 0.5, fontWeight: FontWeight.normal, fontSize: 13),
-                        prefixIcon: const Icon(Icons.tag_rounded, color: primaryOrange, size: 18),
-                        suffixIcon: _referralCode.text.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear_rounded, size: 16, color: Color(0xFF9CA3AF)),
-                                onPressed: () => setState(() => _referralCode.clear()),
-                              )
-                            : null,
-                        filled: true,
-                        fillColor: const Color(0xFFFFFBF7),
-                        contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: borderWarm),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: borderWarm),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFF10B981), width: 1.5),
-                        ),
-                      ),
-                      onChanged: (_) => setState(() {}),
-                    ),
-                  ],
-                ],
+
                 if (_otpSent) ...[
                   const SizedBox(height: 14),
                   Container(
@@ -1597,43 +1525,6 @@ class _TabPill extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _MiniFeaturePill extends StatelessWidget {
-  final IconData icon;
-  final String text;
-
-  const _MiniFeaturePill({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.borderWarm),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12.5, color: AppTheme.primaryOrange),
-          const SizedBox(width: 5),
-          Text(
-            text,
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppTheme.textDark),
-          ),
-        ],
       ),
     );
   }

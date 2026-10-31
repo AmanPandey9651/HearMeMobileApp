@@ -1,3 +1,4 @@
+import 'screens/common/first_time_onboarding_screen.dart';
 import 'services/app_lock_service.dart';
 import 'widgets/app_lock_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -144,7 +145,7 @@ class _RootGateState extends State<RootGate> {
 
     // First time login terms acceptance and referral onboarding
     if (!app.user!.termsAccepted) {
-      return const FirstTimeOnboardingScreen();
+      return FirstTimeOnboardingScreen();
     }
 
     if (app.user!.isListener) {
