@@ -1,4 +1,4 @@
-import '../common/refer_and_earn_screen.dart';
+import '../../services/app_lock_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -342,13 +342,10 @@ class _ListenerMoreScreenState extends State<ListenerMoreScreen> {
                   ),
                   const SizedBox(height: 14),
 
-                  // Refer & Earn Banner Card for Listener
+                  // App Lock & Privacy Security Card for Listener
                   InkWell(
                     borderRadius: BorderRadius.circular(18),
-                    onTap: () {
-                      final nav = TalkStrangersApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
-                      nav.push(MaterialPageRoute(builder: (_) => const ReferAndEarnScreen()));
-                    },
+                    onTap: () => _showAppLockConfigDialog(context),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                       decoration: BoxDecoration(
@@ -375,22 +372,38 @@ class _ListenerMoreScreenState extends State<ListenerMoreScreen> {
                               color: primaryOrange.withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Icon(Icons.card_giftcard_rounded, color: primaryOrange, size: 22),
+                            child: const Icon(Icons.lock_outline_rounded, color: primaryOrange, size: 22),
                           ),
                           const SizedBox(width: 12),
-                          const Expanded(
+                          Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
                                   children: [
-                                    Text('Refer & Earn', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
-                                    SizedBox(width: 8),
-                                    Text('₹20 Bonus', style: TextStyle(color: Color(0xFF4ADE80), fontWeight: FontWeight.w800, fontSize: 11)),
+                                    const Text('App Lock & Security PIN', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                                    const SizedBox(width: 8),
+                                    Consumer<AppLockService>(
+                                      builder: (_, lock, __) => Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: lock.isLockEnabled ? const Color(0xFF16A34A).withValues(alpha: 0.25) : Colors.white.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          lock.isLockEnabled ? 'Active' : 'Setup PIN',
+                                          style: TextStyle(
+                                            color: lock.isLockEnabled ? const Color(0xFF4ADE80) : const Color(0xFF94A3B8),
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 10.5,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   ],
                                 ),
-                                SizedBox(height: 2),
-                                Text('Invite callers & peers to earn bonus coins', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5)),
+                                const SizedBox(height: 2),
+                                const Text('Protect your consultations, earnings & caller chats', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5)),
                               ],
                             ),
                           ),
@@ -809,6 +822,16 @@ class _ListenerMoreScreenState extends State<ListenerMoreScreen> {
                           },
                         ),
                         const Divider(height: 1, color: borderWarm, indent: 64),
+                        Consumer<AppLockService>(
+                          builder: (_, lock, __) => _MenuRowItem(
+                            icon: Icons.lock_outline_rounded,
+                            title: 'App Lock & Security PIN',
+                            trailingBadge: lock.isLockEnabled ? 'Active' : null,
+                            trailingBadgeColor: const Color(0xFF16A34A),
+                            onTap: () => _showAppLockConfigDialog(context),
+                          ),
+                        ),
+                        const Divider(height: 1, color: borderWarm, indent: 64),
                         _MenuRowItem(
                           icon: Icons.notifications_none_rounded,
                           title: 'Notifications',
@@ -866,6 +889,232 @@ class _ListenerMoreScreenState extends State<ListenerMoreScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showAppLockConfigDialog(BuildContext context) {
+    final lockService = context.read<AppLockService>();
+    final pinController = TextEditingController();
+    bool obscurePin = true;
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocalState) {
+          final isEnabled = lockService.isLockEnabled;
+          return Dialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+            insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Header with Badge
+                  Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF0EC),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: const Color(0xFFFED7AA), width: 1.2),
+                        ),
+                        child: const Icon(Icons.shield_rounded, color: primaryOrange, size: 24),
+                      ),
+                      const SizedBox(width: 14),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'App Lock & Privacy',
+                              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: textDark),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Protect your earnings & consultations',
+                              style: TextStyle(fontSize: 12, color: textMuted),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+
+                  // Switch Container
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFAF5EE),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFF1E6D8)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Require 4-Digit PIN',
+                                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5, color: textDark),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Locks FeelBack on app switch',
+                                style: TextStyle(fontSize: 11, color: textMuted),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: isEnabled,
+                          activeTrackColor: primaryOrange,
+                          activeThumbColor: Colors.white,
+                          onChanged: (val) async {
+                            if (val) {
+                              if (pinController.text.trim().length != 4) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Please enter a 4-digit PIN below first!'),
+                                    backgroundColor: Color(0xFFEF4444),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                                return;
+                              }
+                              await lockService.setPin(pinController.text.trim());
+                            } else {
+                              await lockService.setLockEnabled(false);
+                            }
+                            setLocalState(() {});
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // PIN Input Field
+                  TextField(
+                    controller: pinController,
+                    keyboardType: TextInputType.number,
+                    maxLength: 4,
+                    obscureText: obscurePin,
+                    style: const TextStyle(
+                      letterSpacing: 8,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 18,
+                      color: textDark,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Set 4-Digit Security PIN',
+                      labelStyle: const TextStyle(fontSize: 13, color: textMuted, letterSpacing: 0),
+                      hintText: '••••',
+                      counterText: '',
+                      filled: true,
+                      fillColor: Colors.white,
+                      prefixIcon: const Icon(Icons.lock_outline_rounded, color: primaryOrange, size: 20),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          obscurePin ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                          color: textMuted,
+                          size: 20,
+                        ),
+                        onPressed: () => setLocalState(() => obscurePin = !obscurePin),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: borderWarm)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: borderWarm)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: primaryOrange, width: 1.8)),
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+
+                  // Action Buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 13),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            side: const BorderSide(color: borderWarm),
+                          ),
+                          child: const Text('Cancel', style: TextStyle(color: textMuted, fontWeight: FontWeight.w700)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(14),
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFFF6A00), Color(0xFFF95B3D)],
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: primaryOrange.withValues(alpha: 0.3),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
+                              padding: const EdgeInsets.symmetric(vertical: 13),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            ),
+                            onPressed: () async {
+                              if (pinController.text.trim().length == 4) {
+                                await lockService.setPin(pinController.text.trim());
+                                if (ctx.mounted) {
+                                  Navigator.pop(ctx);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Row(
+                                        children: [
+                                          Icon(Icons.check_circle_rounded, color: Colors.white),
+                                          SizedBox(width: 10),
+                                          Text('4-Digit Security PIN saved successfully!'),
+                                        ],
+                                      ),
+                                      backgroundColor: Color(0xFF10B981),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                }
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('PIN must be exactly 4 digits!'),
+                                    backgroundColor: Color(0xFFEF4444),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
+                            },
+                            child: const Text('Save PIN', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -956,11 +1205,15 @@ class _MenuRowItem extends StatelessWidget {
   final IconData icon;
   final String title;
   final VoidCallback onTap;
+  final String? trailingBadge;
+  final Color? trailingBadgeColor;
 
   const _MenuRowItem({
     required this.icon,
     required this.title,
     required this.onTap,
+    this.trailingBadge,
+    this.trailingBadgeColor,
   });
 
   @override
@@ -1003,6 +1256,24 @@ class _MenuRowItem extends StatelessWidget {
                   ),
                 ),
               ),
+              if (trailingBadge != null) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: (trailingBadgeColor ?? primaryOrange).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    trailingBadge!,
+                    style: TextStyle(
+                      color: trailingBadgeColor ?? primaryOrange,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+              ],
               const Icon(
                 Icons.chevron_right_rounded,
                 color: Color(0xFF9CA3AF),
