@@ -99,6 +99,10 @@ class _WalletScreenState extends State<WalletScreen> {
   }
 
   Future<void> _recharge() async {
+    List<Map<String, dynamic>> availableOffers = [];
+    try {
+      availableOffers = await context.read<AppController>().api.availableCoupons();
+    } catch (_) {}
     final c = TextEditingController(text: '100');
     final couponCtrl = TextEditingController();
     Map<String, dynamic>? appliedCoupon;
@@ -216,6 +220,197 @@ class _WalletScreenState extends State<WalletScreen> {
                     }).toList(),
                   ),
                   const SizedBox(height: 14),
+
+                  // Available Offers Section
+                  if (availableOffers.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF9F5),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFFFD8C7)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Row(
+                                children: [
+                                  Icon(Icons.auto_awesome_rounded, size: 15, color: primaryOrange),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'AVAILABLE OFFERS',
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: primaryOrange,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: primaryOrange.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Text(
+                                  'Save More',
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: primaryOrange),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          ...availableOffers.map((offer) {
+                            final code = '${offer['code'] ?? ''}';
+                            final isApplied = appliedCoupon != null && (appliedCoupon!['code'] ?? '') == code;
+                            final minAmt = (offer['minRechargeAmount'] as num?)?.toDouble() ?? 50.0;
+                            final discountType = '${offer['discountType'] ?? ''}';
+                            final discountVal = (offer['discountValue'] as num?)?.toInt() ?? 0;
+                            final badgeText = discountType == 'PERCENTAGE_BONUS'
+                                ? '+$discountVal% BONUS'
+                                : discountType == 'FLAT_COINS'
+                                    ? '+₹$discountVal EXTRA'
+                                    : '$discountVal% OFF';
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isApplied ? const Color(0xFFE8F5E9) : Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isApplied ? const Color(0xFF4CAF50) : borderWarm,
+                                  width: isApplied ? 1.5 : 1.0,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFF4EDE4),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                code,
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w800,
+                                                  fontSize: 11,
+                                                  letterSpacing: 0.5,
+                                                  color: textDark,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: isApplied ? const Color(0xFFC8E6C9) : softPeach,
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                badgeText,
+                                                style: TextStyle(
+                                                  fontSize: 9.5,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: isApplied ? const Color(0xFF2E7D32) : primaryOrange,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Text(
+                                          '${offer['description'] ?? ''}',
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(fontSize: 10.5, color: textMuted),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Min recharge: ₹${minAmt.toInt()}',
+                                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: textDark),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  InkWell(
+                                    onTap: (isCheckingCoupon || isApplied)
+                                        ? null
+                                        : () async {
+                                            final currentAmt = double.tryParse(c.text.trim()) ?? 0;
+                                            if (currentAmt < minAmt) {
+                                              c.text = '${minAmt.toInt()}';
+                                            }
+                                            final effectiveAmt = double.tryParse(c.text.trim()) ?? minAmt;
+                                            couponCtrl.text = code;
+                                            setDialogState(() => isCheckingCoupon = true);
+                                            try {
+                                              final res = await context.read<AppController>().api.estimateCoupon(code, effectiveAmt);
+                                              final valid = res['valid'] == true;
+                                              if (valid) {
+                                                appliedCoupon = res;
+                                                couponFeedback = res['message'] ?? 'Offer applied successfully!';
+                                                isCouponError = false;
+                                              } else {
+                                                appliedCoupon = null;
+                                                couponFeedback = res['message'] ?? 'Coupon not valid for this amount';
+                                                isCouponError = true;
+                                              }
+                                            } catch (e) {
+                                              appliedCoupon = null;
+                                              couponFeedback = 'Failed to apply offer';
+                                              isCouponError = true;
+                                            } finally {
+                                              setDialogState(() => isCheckingCoupon = false);
+                                            }
+                                          },
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: isApplied ? const Color(0xFF4CAF50) : primaryOrange,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: isApplied
+                                          ? const Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(Icons.check, size: 12, color: Colors.white),
+                                                SizedBox(width: 2),
+                                                Text(
+                                                  'Applied',
+                                                  style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800),
+                                                ),
+                                              ],
+                                            )
+                                          : const Text(
+                                              'Apply',
+                                              style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800),
+                                            ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
 
                   // Promo / Coupon Code Section
                   Container(
