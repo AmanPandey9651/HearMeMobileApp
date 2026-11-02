@@ -15,16 +15,41 @@ import '../../main.dart';
 import 'anonymous_profile_screen.dart';
 import 'followed_listeners_screen.dart';
 
-class CallerMoreScreen extends StatelessWidget {
+class CallerMoreScreen extends StatefulWidget {
   const CallerMoreScreen({super.key});
 
+  @override
+  State<CallerMoreScreen> createState() => _CallerMoreScreenState();
+}
+
+class _CallerMoreScreenState extends State<CallerMoreScreen> {
+  num? _customBonus;
+
   static const Color bgCream = AppTheme.bgCream;
-  static const Color borderWarm = AppTheme.borderWarm;
   static const Color primaryOrange = AppTheme.primaryOrange;
-  static const Color secondaryOrange = AppTheme.secondaryOrange;
   static const Color softPeach = AppTheme.softPeach;
   static const Color textDark = AppTheme.textDark;
   static const Color textMuted = AppTheme.textMuted;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchReferralBonus();
+  }
+
+  Future<void> _fetchReferralBonus() async {
+    try {
+      final app = context.read<AppController>();
+      final summary = await app.api.getReferralSummary();
+      final bonus = summary['potentialRewardPerReferral'];
+      if (bonus != null && mounted) {
+        final parsed = bonus is num ? bonus : num.tryParse(bonus.toString());
+        if (parsed != null && parsed > 0) {
+          setState(() => _customBonus = parsed);
+        }
+      }
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -141,10 +166,15 @@ class CallerMoreScreen extends StatelessWidget {
           _MenuItemTile(
             icon: Icons.card_giftcard_rounded,
             title: 'Refer & Earn',
-            trailingBadge: 'Earn ₹20',
-            onTap: () {
+            trailingBadge: () {
+              final amount = _customBonus ?? app.referralRewardAmount;
+              final str = (amount.toInt() == amount) ? '${amount.toInt()}' : amount.toStringAsFixed(0);
+              return 'Earn ₹$str';
+            }(),
+            onTap: () async {
               final nav = TalkStrangersApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
-              nav.push(MaterialPageRoute(builder: (_) => const ReferAndEarnScreen()));
+              await nav.push(MaterialPageRoute(builder: (_) => const ReferAndEarnScreen()));
+              _fetchReferralBonus();
             },
           ),
           const SizedBox(height: 10),

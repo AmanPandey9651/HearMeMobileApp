@@ -65,6 +65,7 @@ class AppController extends ChangeNotifier {
   Timer? _accountStatusTimer;
   bool _checkingAccountStatus = false;
   int activeSessionCount = 0;
+  num referralRewardAmount = 20;
 
   bool get isListenerVerified {
     if (user == null || !user!.isListener) return false;
@@ -243,6 +244,21 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  Future<void> refreshReferralReward() async {
+    if (client.token == null) return;
+    try {
+      final summary = await api.getReferralSummary();
+      final potential = summary['potentialRewardPerReferral'];
+      if (potential != null) {
+        final val = potential is num ? potential : num.tryParse(potential.toString());
+        if (val != null && val > 0) {
+          referralRewardAmount = val;
+          notifyListeners();
+        }
+      }
+    } catch (_) {}
+  }
+
   Future<void> refreshUser() async {
     user = await api.me();
     if (user != null && user!.isListener) {
@@ -256,6 +272,7 @@ class AppController extends ChangeNotifier {
     }
     await _persist();
     notifyListeners();
+    refreshReferralReward();
   }
 
   void _startAccountWatcher() {

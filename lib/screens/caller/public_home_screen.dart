@@ -1,4 +1,3 @@
-import '../../core/countries_data.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -11,6 +10,7 @@ import '../../widgets/listener_card_item.dart';
 import '../auth/listener_register_screen.dart';
 import '../auth/login_screen.dart';
 import 'listener_detail_screen.dart';
+import 'listener_filter_screen.dart';
 
 class PublicHomeScreen extends StatefulWidget {
   const PublicHomeScreen({super.key});
@@ -207,9 +207,7 @@ class _PublicExploreViewState extends State<_PublicExploreView> {
   final search = TextEditingController();
   List<ListenerCardModel> listeners = [];
   bool loading = true;
-  String filter = 'ALL';
-  String categorySlug = '';
-  String selectedCountry = 'ALL';
+  ListenerFilterCriteria filterCriteria = ListenerFilterCriteria();
   Timer? timer;
 
   static const Color borderWarm = Color(0xFFF1E6D8);
@@ -243,108 +241,12 @@ class _PublicExploreViewState extends State<_PublicExploreView> {
     super.dispose();
   }
 
-  void _showCountryPicker() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        String query = '';
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final filteredCountries = kGlobalCountries.where((c) {
-              if (query.isEmpty) return true;
-              return c.name.toLowerCase().contains(query.toLowerCase());
-            }).toList();
-
-            return Container(
-              height: MediaQuery.of(ctx).size.height * 0.72,
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-              child: Column(
-                children: [
-                  Container(
-                    width: 36,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Select Country (60+ Worldwide)',
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: textDark),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    onChanged: (val) => setModalState(() => query = val),
-                    decoration: InputDecoration(
-                      hintText: 'Search country...',
-                      prefixIcon: const Icon(Icons.search_rounded, color: primaryOrange),
-                      filled: true,
-                      fillColor: const Color(0xFFFAF5EE),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(color: borderWarm),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(color: borderWarm),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Expanded(
-                    child: ListView.separated(
-                      itemCount: filteredCountries.length + 1,
-                      separatorBuilder: (_, __) => const Divider(height: 1, color: borderWarm),
-                      itemBuilder: (context, i) {
-                        if (i == 0) {
-                          return ListTile(
-                            leading: const Text('🌐', style: TextStyle(fontSize: 22)),
-                            title: const Text('All Countries (Worldwide)', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                            selected: selectedCountry == 'ALL',
-                            selectedTileColor: const Color(0xFFFFF3ED),
-                            onTap: () {
-                              setState(() => selectedCountry = 'ALL');
-                              Navigator.pop(ctx);
-                            },
-                          );
-                        }
-                        final c = filteredCountries[i - 1];
-                        final isSelected = selectedCountry == c.code;
-                        return ListTile(
-                          leading: Text(c.flag, style: const TextStyle(fontSize: 22)),
-                          title: Text(c.name, style: TextStyle(fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500, fontSize: 14, color: isSelected ? primaryOrange : textDark)),
-                          selected: isSelected,
-                          selectedTileColor: const Color(0xFFFFF3ED),
-                          onTap: () {
-                            setState(() => selectedCountry = c.code);
-                            Navigator.pop(ctx);
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
   Future<void> _load({bool silent = false}) async {
     if (!silent && mounted) setState(() => loading = true);
     try {
       final data = await context.read<AppController>().api.allListeners(
             query: search.text.trim().isEmpty ? null : search.text.trim(),
-            category: categorySlug.isEmpty ? null : categorySlug,
+            category: filterCriteria.categorySlug.isEmpty ? null : filterCriteria.categorySlug,
           );
       if (mounted) setState(() => listeners = data);
     } catch (e) {
@@ -434,10 +336,12 @@ class _PublicExploreViewState extends State<_PublicExploreView> {
   @override
   Widget build(BuildContext context) {
     var visible = List<ListenerCardModel>.from(listeners);
-    if (selectedCountry != 'ALL') {
+
+    // 1. Country Filter
+    if (filterCriteria.country != 'ALL') {
       visible = visible.where((x) {
         final c = (x.country?.isNotEmpty == true ? x.country! : 'India').trim().toLowerCase();
-        final target = selectedCountry.trim().toLowerCase();
+        final target = filterCriteria.country.trim().toLowerCase();
         if (target == 'united states' || target == 'usa') {
           return c == 'united states' || c == 'usa' || c == 'us';
         }
@@ -447,22 +351,45 @@ class _PublicExploreViewState extends State<_PublicExploreView> {
         return c == target;
       }).toList();
     }
-    if (filter == 'ONLINE') visible = visible.where((x) => x.presence == 'ONLINE').toList();
-    if (filter == 'TOP_RATED') {
+
+    // 2. Availability (Online Now)
+    if (filterCriteria.status == 'ONLINE') {
+      visible = visible.where((x) => x.presence == 'ONLINE').toList();
+    }
+
+    // 3. Modality (Voice, Video, Chat)
+    if (filterCriteria.modality == 'VOICE') {
+      visible = visible.where((x) => x.audioAvailable).toList();
+    } else if (filterCriteria.modality == 'VIDEO') {
+      visible = visible.where((x) => x.videoAvailable).toList();
+    } else if (filterCriteria.modality == 'CHAT') {
+      visible = visible.where((x) => x.chatAvailable).toList();
+    }
+
+    // 4. Topic Slug
+    if (filterCriteria.categorySlug.isNotEmpty) {
+      if (filterCriteria.categorySlug == '18+ adult talk') {
+        visible = visible.where((x) => x.isAdult).toList();
+      } else {
+        visible = visible.where((x) => x.categories.any(
+            (cat) => cat.toLowerCase().contains(filterCriteria.categorySlug.toLowerCase()))).toList();
+      }
+    }
+
+    // 5. Top Rated
+    if (filterCriteria.topRated) {
       visible = visible.where((x) => x.rating >= 4.8).toList()
         ..sort((a, b) => b.rating.compareTo(a.rating));
     }
-    if (filter == 'LGBTQ') {
-      visible = visible.where((x) => x.categories.any((c) => c.toLowerCase().contains('lgbt') || c.toLowerCase().contains('identity'))).toList();
-      if (visible.isEmpty) {
-        visible = List<ListenerCardModel>.from(listeners);
-      }
-    }
-    if (filter == 'BUDGET') {
+
+    // 6. Budget
+    if (filterCriteria.budget) {
       visible = visible.where((x) => x.audioRate > 0 && x.audioRate <= 15).toList()
         ..sort((a, b) => a.audioRate.compareTo(b.audioRate));
     }
-    if (filter == 'ADULT_TALK') {
+
+    // 7. Adult Talk
+    if (filterCriteria.adultTalk) {
       visible = visible.where((x) => x.isAdult).toList();
     }
 
@@ -475,221 +402,239 @@ class _PublicExploreViewState extends State<_PublicExploreView> {
         children: [
           const SizedBox(height: 10),
 
-          // 1. Search Bar (White rounded container, orange search icon, placeholder)
+          // 1. Search Bar & Dedicated Filters Button
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: SizedBox(
-              height: 48,
-              child: TextField(
-                controller: search,
-                textInputAction: TextInputAction.search,
-                onSubmitted: (_) => _load(),
-                style: const TextStyle(fontSize: 14, color: textDark),
-                decoration: InputDecoration(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
-                  prefixIcon: const Icon(Icons.search_rounded, size: 22, color: primaryOrange),
-                  hintText: 'Search listeners, topics...',
-                  hintStyle: const TextStyle(fontSize: 13.5, color: Color(0xFF9CA3AF)),
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: const BorderSide(color: borderWarm, width: 1.0),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: const BorderSide(color: borderWarm, width: 1.0),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: const BorderSide(color: primaryOrange, width: 1.2),
-                  ),
-                  suffixIcon: search.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.close_rounded, size: 16, color: textMuted),
-                          onPressed: () {
-                            search.clear();
-                            _load();
-                          },
-                        )
-                      : null,
-                ),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 10),
-
-          // 2. Filter Pills - Row 1 (Topics/Moods with emojis)
-          SizedBox(
-            height: 38,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              itemCount: quickTopics.length,
-              itemBuilder: (ctx, idx) {
-                final topic = quickTopics[idx];
-                final isSelected = categorySlug == topic['slug'];
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(20),
-                    onTap: () {
-                      setState(() => categorySlug = topic['slug'] ?? '');
-                      _load();
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: isSelected ? null : Colors.white,
-                        gradient: isSelected
-                            ? const LinearGradient(
-                                colors: [Color(0xFFF95B3D), Color(0xFFFF7A45)],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
+            child: Row(
+              children: [
+                // Search Box
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: TextField(
+                      controller: search,
+                      textInputAction: TextInputAction.search,
+                      onSubmitted: (_) => _load(),
+                      style: const TextStyle(fontSize: 14, color: textDark),
+                      decoration: InputDecoration(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
+                        prefixIcon: const Icon(Icons.search_rounded, size: 22, color: primaryOrange),
+                        hintText: 'Search listeners, topics...',
+                        hintStyle: const TextStyle(fontSize: 13.5, color: Color(0xFF9CA3AF)),
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: const BorderSide(color: borderWarm, width: 1.0),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: const BorderSide(color: borderWarm, width: 1.0),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: const BorderSide(color: primaryOrange, width: 1.2),
+                        ),
+                        suffixIcon: search.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.close_rounded, size: 16, color: textMuted),
+                                onPressed: () {
+                                  search.clear();
+                                  _load();
+                                },
                               )
                             : null,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: isSelected ? primaryOrange : borderWarm,
-                          width: 1.0,
-                        ),
-                        boxShadow: isSelected
-                            ? [
-                                BoxShadow(
-                                  color: primaryOrange.withValues(alpha: 0.3),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ]
-                            : null,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(topic['icon'] ?? '', style: const TextStyle(fontSize: 13)),
-                          const SizedBox(width: 5),
-                          Text(
-                            topic['name'] ?? '',
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                              color: isSelected ? Colors.white : const Color(0xFF374151),
-                            ),
-                          ),
-                        ],
                       ),
                     ),
                   ),
-                );
-              },
-            ),
-          ),
+                ),
+                const SizedBox(width: 10),
 
-          const SizedBox(height: 6),
-
-          // 2.5 Country Filter Pills
-          SizedBox(
-            height: 32,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              children: [
-                _BadgePill(
-                  label: '🌐 All Countries',
-                  isSelected: selectedCountry == 'ALL',
-                  onTap: () => setState(() => selectedCountry = 'ALL'),
-                ),
-                _BadgePill(
-                  label: '🇮🇳 India',
-                  isSelected: selectedCountry == 'India',
-                  onTap: () => setState(() => selectedCountry = 'India'),
-                ),
-                _BadgePill(
-                  label: '🇺🇸 USA',
-                  isSelected: selectedCountry == 'United States',
-                  onTap: () => setState(() => selectedCountry = 'United States'),
-                ),
-                _BadgePill(
-                  label: '🇬🇧 UK',
-                  isSelected: selectedCountry == 'United Kingdom',
-                  onTap: () => setState(() => selectedCountry = 'United Kingdom'),
-                ),
-                _BadgePill(
-                  label: '🇨🇦 Canada',
-                  isSelected: selectedCountry == 'Canada',
-                  onTap: () => setState(() => selectedCountry = 'Canada'),
-                ),
-                _BadgePill(
-                  label: '🇦🇺 Australia',
-                  isSelected: selectedCountry == 'Australia',
-                  onTap: () => setState(() => selectedCountry = 'Australia'),
-                ),
-                _BadgePill(
-                  label: '🇦🇪 UAE',
-                  isSelected: selectedCountry == 'United Arab Emirates',
-                  onTap: () => setState(() => selectedCountry = 'United Arab Emirates'),
-                ),
-                _BadgePill(
-                  label: (selectedCountry != 'ALL' && !['India', 'United States', 'United Kingdom', 'Canada', 'Australia', 'United Arab Emirates'].contains(selectedCountry))
-                      ? '📍 $selectedCountry'
-                      : '🌍 More (60+)...',
-                  isSelected: selectedCountry != 'ALL' && !['India', 'United States', 'United Kingdom', 'Canada', 'Australia', 'United Arab Emirates'].contains(selectedCountry),
-                  onTap: _showCountryPicker,
+                // Dedicated Filter Button with Active Badge
+                InkWell(
+                  onTap: () async {
+                    final updated = await Navigator.push<ListenerFilterCriteria>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ListenerFilterScreen(
+                          initialCriteria: filterCriteria,
+                          allListeners: listeners,
+                        ),
+                      ),
+                    );
+                    if (updated != null) {
+                      setState(() => filterCriteria = updated);
+                      _load();
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(24),
+                  child: Container(
+                    height: 48,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: filterCriteria.hasActiveFilters ? const Color(0xFFFFF3ED) : Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: filterCriteria.hasActiveFilters ? primaryOrange : borderWarm,
+                        width: 1.0,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.03),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.tune_rounded,
+                          size: 20,
+                          color: filterCriteria.hasActiveFilters ? primaryOrange : textDark,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Filters',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: filterCriteria.hasActiveFilters ? FontWeight.w800 : FontWeight.w700,
+                            color: filterCriteria.hasActiveFilters ? primaryOrange : textDark,
+                          ),
+                        ),
+                        if (filterCriteria.hasActiveFilters) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: const BoxDecoration(
+                              color: primaryOrange,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Text(
+                              '${filterCriteria.activeFilterCount}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
+
+          // Active Filter Chips Row (Visible only when filters are active)
+          if (filterCriteria.hasActiveFilters) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 32,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                children: [
+                  if (filterCriteria.status == 'ONLINE')
+                    _buildActiveFilterPill(
+                      '🟢 Online Now',
+                      () {
+                        setState(() => filterCriteria.status = 'ALL');
+                        _load();
+                      },
+                    ),
+                  if (filterCriteria.modality != 'ALL')
+                    _buildActiveFilterPill(
+                      filterCriteria.modality == 'VOICE'
+                          ? '📞 Voice Call'
+                          : filterCriteria.modality == 'VIDEO'
+                              ? '📹 Video Call'
+                              : '💬 Chat',
+                      () {
+                        setState(() => filterCriteria.modality = 'ALL');
+                        _load();
+                      },
+                    ),
+                  if (filterCriteria.country != 'ALL')
+                    _buildActiveFilterPill(
+                      '📍 ${filterCriteria.country}',
+                      () {
+                        setState(() => filterCriteria.country = 'ALL');
+                        _load();
+                      },
+                    ),
+                  if (filterCriteria.categorySlug.isNotEmpty)
+                    _buildActiveFilterPill(
+                      '🔆 ${filterCriteria.categorySlug.replaceAll('_', ' ')}',
+                      () {
+                        setState(() => filterCriteria.categorySlug = '');
+                        _load();
+                      },
+                    ),
+                  if (filterCriteria.topRated)
+                    _buildActiveFilterPill(
+                      '⭐ 4.8+ Stars',
+                      () {
+                        setState(() => filterCriteria.topRated = false);
+                        _load();
+                      },
+                    ),
+                  if (filterCriteria.budget)
+                    _buildActiveFilterPill(
+                      '🏷️ Under ₹15/m',
+                      () {
+                        setState(() => filterCriteria.budget = false);
+                        _load();
+                      },
+                    ),
+                  if (filterCriteria.adultTalk)
+                    _buildActiveFilterPill(
+                      '🔞 18+ Adult',
+                      () {
+                        setState(() => filterCriteria.adultTalk = false);
+                        _load();
+                      },
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: InkWell(
+                      onTap: () {
+                        setState(() => filterCriteria.reset());
+                        _load();
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: borderWarm),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.refresh_rounded, size: 13, color: textMuted),
+                            SizedBox(width: 4),
+                            Text(
+                              'Clear All',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: textMuted),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
 
           const SizedBox(height: 8),
 
-          // 3. Filter Pills - Row 2 (Badges: All (24), Online, Top Rated, LGBTQ+, Budget)
-          SizedBox(
-            height: 36,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              children: [
-                _BadgePill(
-                  label: '✓ All (${listeners.length})',
-                  isSelected: filter == 'ALL',
-                  onTap: () => setState(() => filter = 'ALL'),
-                ),
-                _BadgePill(
-                  label: '🟢 Online',
-                  isSelected: filter == 'ONLINE',
-                  onTap: () => setState(() => filter = 'ONLINE'),
-                ),
-                _BadgePill(
-                  label: '⭐ Top Rated',
-                  isSelected: filter == 'TOP_RATED',
-                  onTap: () => setState(() => filter = 'TOP_RATED'),
-                ),
-                _BadgePill(
-                  label: '👥 LGBTQ+',
-                  isSelected: filter == 'LGBTQ',
-                  onTap: () => setState(() => filter = 'LGBTQ'),
-                ),
-                _BadgePill(
-                  label: '🔞 18+ Adult',
-                  isSelected: filter == 'ADULT_TALK',
-                  onTap: () => setState(() => filter = 'ADULT_TALK'),
-                ),
-                _BadgePill(
-                  label: '💰 Budget',
-                  isSelected: filter == 'BUDGET',
-                  onTap: () => setState(() => filter = 'BUDGET'),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 6),
-
-          // 4. Hero Banner Card ("You're Not Alone / Real People. Real Support.")
+          // 2. Compact Hero Banner Card ("You're Not Alone / Real People. Real Support.")
           HeroBannerCard(
             onChatTap: () => _promptLogin('a listener for Chat'),
             onVoiceTap: () => _promptLogin('a listener for Voice Call'),
@@ -739,8 +684,7 @@ class _PublicExploreViewState extends State<_PublicExploreView> {
                     InkWell(
                       onTap: () {
                         setState(() {
-                          filter = 'ALL';
-                          categorySlug = '';
+                          filterCriteria.reset();
                           search.clear();
                         });
                         _load();
@@ -801,8 +745,7 @@ class _PublicExploreViewState extends State<_PublicExploreView> {
                     TextButton(
                       onPressed: () {
                         setState(() {
-                          categorySlug = '';
-                          filter = 'ALL';
+                          filterCriteria.reset();
                           search.clear();
                         });
                         _load();
@@ -826,6 +769,42 @@ class _PublicExploreViewState extends State<_PublicExploreView> {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildActiveFilterPill(String label, VoidCallback onClear) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: Container(
+        padding: const EdgeInsets.only(left: 10, right: 4, top: 4, bottom: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF3ED),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: primaryOrange.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w800,
+                color: primaryOrange,
+              ),
+            ),
+            const SizedBox(width: 2),
+            InkWell(
+              onTap: onClear,
+              borderRadius: BorderRadius.circular(12),
+              child: const Padding(
+                padding: EdgeInsets.all(2),
+                child: Icon(Icons.close_rounded, size: 14, color: primaryOrange),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
