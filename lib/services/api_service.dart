@@ -354,7 +354,12 @@ class ApiService {
       ];
     }
   }
-  Future<List<dynamic>> signals(String sessionId, [int? since]) async => _content(await client.get('/webrtc/sessions/$sessionId/signals', query: {if (since != null) 'since': since}));
+  Future<List<dynamic>> signals(String sessionId, [int? since, String? clientId, String? role]) async =>
+      _content(await client.get('/webrtc/sessions/$sessionId/signals', query: {
+        if (since != null) 'since': since,
+        if (clientId != null && clientId.isNotEmpty) 'clientId': clientId,
+        if (role != null && role.isNotEmpty) 'role': role,
+      }));
   Future<void> sendSignal(String sessionId, Map<String, dynamic> data) async => client.post('/webrtc/sessions/$sessionId/signal', body: data);
 
   Future<List<dynamic>> gifts() async => _content(await client.get('/gifts'));

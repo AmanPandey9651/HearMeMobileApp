@@ -1,7 +1,7 @@
 name: talkstrangersmobile
 description: Flutter mobile client for the TalkStrangers/Feelback user and listener platform.
 publish_to: 'none'
-version: 1.2.15+42
+version: 1.2.16+43
 
 environment:
   sdk: '>=3.4.0 <4.0.0'

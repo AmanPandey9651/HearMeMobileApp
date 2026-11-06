@@ -64,6 +64,18 @@ late final Future<void> _renderersReady;
   bool isNudityAllowed = false;
   bool _nudityCooldownActive = false;
   Timer? _nudityCooldownTimer;
+  final String _clientId = '${DateTime.now().microsecondsSinceEpoch}_${(1000 + DateTime.now().millisecond * 7 % 9000)}';
+
+  Future<void> _sendSignal(Map<String, dynamic> data) async {
+    try {
+      final payload = <String, dynamic>{
+        ...data,
+        'senderRole': widget.callerSide ? 'caller' : 'listener',
+        'senderClientId': _clientId,
+      };
+      await _api.sendSignal(widget.booking.id, payload);
+    } catch (_) {}
+  }
 
   void _toggleNudityPermission({bool? forcedVal}) {
     if (!mounted) return;
@@ -78,11 +90,10 @@ late final Future<void> _renderersReady;
         banner = '🛡️ Nudity protection re-enabled';
       }
     });
-    context.read<AppController>().api.sendSignal(widget.booking.id, {
+    _sendSignal({
       'type': 'NUDITY_PERMISSION_TOGGLED',
       'allowed': nextVal,
-      'senderRole': widget.callerSide ? 'USER' : 'LISTENER',
-    }).catchError((_) {});
+    });
   }
 
   void _dismissNudityBlur() {
@@ -98,9 +109,9 @@ late final Future<void> _renderersReady;
         setState(() => _nudityCooldownActive = false);
       }
     });
-    context.read<AppController>().api.sendSignal(widget.booking.id, {
+    _sendSignal({
       'type': 'NUDITY_ACKNOWLEDGED',
-    }).catchError((_) {});
+    });
   }
 
   DateTime? _lastNudityReportTime;
@@ -163,11 +174,11 @@ late final Future<void> _renderersReady;
       isNudityBlurred = true;
       nuditySource = source ?? 'peer';
     });
-    context.read<AppController>().api.sendSignal(widget.booking.id, {
+    _sendSignal({
       'type': 'NUDITY_DETECTED',
       'source': source ?? (widget.callerSide ? 'user' : 'listener'),
       'reason': 'Nudity is strictly prohibited',
-    }).catchError((_) {});
+    });
 
     // Silently capture unblurred snapshot & report to admin without notifying users
     _reportNudityIncidentSilently(source: source);
@@ -341,9 +352,9 @@ void initState() {
           ? <String, dynamic>{
               'facingMode': 'user',
               'mandatory': <String, dynamic>{
-                'minWidth': '640',
-                'minHeight': '480',
-                'minFrameRate': '15',
+                'minWidth': 640,
+                'minHeight': 480,
+                'minFrameRate': 15,
               },
               'optional': <dynamic>[],
             }
@@ -509,7 +520,7 @@ void initState() {
   /*
    * Remote media
    */
-  peer.onTrack = (event) async {
+  peer.onTrack = (event) {
     if (_isDisposed || ending) return;
 
     debugPrint(
@@ -519,48 +530,40 @@ void initState() {
       'streams=${event.streams.length}',
     );
 
-    // 1. Ensure remoteStream exists
-    remoteStream ??= await createLocalMediaStream('booking_remote_stream');
+    event.track.enabled = true;
 
-    // 2. Merge all tracks from event.streams if available
     if (event.streams.isNotEmpty) {
-      for (final s in event.streams) {
-        for (final track in s.getTracks()) {
-          final exists = remoteStream!.getTracks().any((t) => t.id == track.id);
-          if (!exists) {
-            remoteStream!.addTrack(track);
-          }
-        }
+      remoteStream = event.streams[0];
+    }
+
+    if (remoteStream != null) {
+      for (final track in remoteStream!.getTracks()) {
+        track.enabled = true;
+      }
+      if (remoteRenderer.srcObject != remoteStream) {
+        remoteRenderer.srcObject = remoteStream;
       }
     }
 
-    // 3. Ensure the direct event.track is added
-    final trackExists = remoteStream!.getTracks().any((t) => t.id == event.track.id);
-    if (!trackExists) {
-      remoteStream!.addTrack(event.track);
-    }
-
-    // 4. Force re-bind remoteRenderer whenever video track arrives or changes
-    if (event.track.kind == 'video' || remoteStream!.getVideoTracks().isNotEmpty) {
-      try {
-        if (remoteRenderer.srcObject != remoteStream) {
-          remoteRenderer.srcObject = remoteStream;
-        } else {
-          // Re-trigger native texture binding on Android
-          remoteRenderer.srcObject = null;
-          remoteRenderer.srcObject = remoteStream;
-        }
-      } catch (_) {}
-    } else if (remoteRenderer.srcObject == null) {
-      remoteRenderer.srcObject = remoteStream;
-    }
-
-    // 5. Automatically route incoming voice audio to loudspeaker
-    Helper.setSpeakerphoneOn(true).catchError((_) {});
+    Helper.setSpeakerphoneOn(speaker).catchError((_) {});
 
     if (mounted) {
       setState(() {});
     }
+  };
+
+  peer.onAddStream = (stream) {
+    if (_isDisposed || ending) return;
+    debugPrint('[WebRTC Booking] onAddStream id=${stream.id}');
+    remoteStream = stream;
+    for (final track in stream.getTracks()) {
+      track.enabled = true;
+    }
+    if (remoteRenderer.srcObject != stream) {
+      remoteRenderer.srcObject = stream;
+    }
+    Helper.setSpeakerphoneOn(speaker).catchError((_) {});
+    if (mounted) setState(() {});
   };
 
   /*
@@ -573,18 +576,14 @@ void initState() {
       return;
     }
 
-    api.sendSignal(
-      widget.booking.id,
-      {
-        'type': 'candidate',
-        'candidate': {
-          'candidate': value,
-          'sdpMid': candidate.sdpMid,
-          'sdpMLineIndex':
-              candidate.sdpMLineIndex,
-        },
+    _sendSignal({
+      'type': 'candidate',
+      'candidate': {
+        'candidate': value,
+        'sdpMid': candidate.sdpMid,
+        'sdpMLineIndex': candidate.sdpMLineIndex,
       },
-    ).catchError((_) {});
+    });
   };
 
   peer.onDataChannel = _attachVoiceChannel;
@@ -673,19 +672,20 @@ void initState() {
   /*
    * Voice capability
    */
-  await api.sendSignal(
-    widget.booking.id,
-    {
-      'type': 'VOICE_FX_CAPABILITY',
-      'supported': voiceFx.supported,
-    },
-  ).catchError((_) {});
+  await _sendSignal({
+    'type': 'VOICE_FX_CAPABILITY',
+    'supported': voiceFx.supported,
+  });
 
   /*
-   * Caller creates offer.
+   * Caller creates offer; Listener announces peer_ready
    */
   if (widget.callerSide) {
     await _sendOffer();
+  } else {
+    await _sendSignal({
+      'type': 'peer_ready',
+    });
   }
 
   if (mounted) {
@@ -698,6 +698,38 @@ void initState() {
     channel.onMessage = (data) {
       if (data.isBinary && voiceFx.supported) voiceFx.play(data.binary).catchError((_) {});
     };
+  }
+
+  static String _preferVP8(String sdp) {
+    if (!sdp.contains('m=video')) return sdp;
+    final lines = sdp.split(RegExp(r'\r\n|\r|\n'));
+    int? mVideoIndex;
+    String? vp8Payload;
+
+    for (int i = 0; i < lines.length; i++) {
+      final line = lines[i];
+      if (line.startsWith('m=video ')) {
+        mVideoIndex = i;
+      } else if (line.startsWith('a=rtpmap:') && line.contains('VP8/90000')) {
+        final match = RegExp(r'a=rtpmap:(\d+)\s+VP8/90000').firstMatch(line);
+        if (match != null) {
+          vp8Payload = match.group(1);
+        }
+      }
+    }
+
+    if (mVideoIndex != null && vp8Payload != null) {
+      final parts = lines[mVideoIndex].split(' ');
+      if (parts.length > 3) {
+        final header = parts.sublist(0, 3);
+        final payloads = parts.sublist(3);
+        payloads.remove(vp8Payload);
+        payloads.insert(0, vp8Payload);
+        lines[mVideoIndex] = (header + payloads).join(' ');
+      }
+    }
+
+    return lines.join('\r\n');
   }
 
   Future<void> _sendOffer({bool restart = false}) async {
@@ -713,18 +745,25 @@ void initState() {
       'offerToReceiveVideo': isVideo,
       if (restart) 'iceRestart': true,
     });
-    await peer.setLocalDescription(offer);
-    await context.read<AppController>().api.sendSignal(widget.booking.id, {
+    final sdp = _preferVP8(offer.sdp ?? '');
+    final finalOffer = RTCSessionDescription(sdp, offer.type);
+    await peer.setLocalDescription(finalOffer);
+    await _sendSignal({
       'type': 'offer',
       'restart': restart,
-      'sdp': {'type': offer.type, 'sdp': offer.sdp},
+      'sdp': {'type': finalOffer.type, 'sdp': finalOffer.sdp},
     });
   }
 
   Future<void> _pollSignals() async {
     if (ending || _isDisposed) return;
     try {
-      final signals = await _api.signals(widget.booking.id, signalSince);
+      final signals = await _api.signals(
+        widget.booking.id,
+        signalSince,
+        _clientId,
+        widget.callerSide ? 'caller' : 'listener',
+      );
       for (final raw in signals) {
         final s = Map<String, dynamic>.from(raw as Map);
         final ts = (s['timestamp'] as num?)?.toInt() ?? signalSince;
@@ -735,6 +774,14 @@ void initState() {
   }
 
   Future<void> _processSignal(Map<String, dynamic> s) async {
+    final senderClientId = s['senderClientId']?.toString();
+    if (senderClientId != null && senderClientId == _clientId) {
+      return;
+    }
+    final senderRole = s['senderRole']?.toString();
+    if (senderRole != null && senderRole.toLowerCase() == (widget.callerSide ? 'caller' : 'listener')) {
+      return;
+    }
     final type = '${s['type'] ?? ''}';
     if (const {'call_ended', 'hangup', 'peer_left'}.contains(type)) {
       await _peerEnded();
@@ -810,20 +857,33 @@ void initState() {
 
     final peer = pc;
     if (peer == null) return;
+    if (type == 'peer_ready' && widget.callerSide) {
+      final connState = await peer.getConnectionState();
+      if (connState != RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
+        await _sendOffer();
+      }
+      return;
+    }
     if (type == 'offer' && !widget.callerSide) {
       final d = Map<String, dynamic>.from(s['sdp'] as Map);
-      await peer.setRemoteDescription(RTCSessionDescription(d['sdp']?.toString(), d['type']?.toString()));
+      final rawSdp = d['sdp']?.toString() ?? '';
+      await peer.setRemoteDescription(RTCSessionDescription(_preferVP8(rawSdp), d['type']?.toString()));
       await _flushCandidates();
-      final answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-      await context.read<AppController>().api.sendSignal(widget.booking.id, {
+      final answer = await peer.createAnswer({
+        'offerToReceiveAudio': true,
+        'offerToReceiveVideo': isVideo,
+      });
+      final finalAnswer = RTCSessionDescription(_preferVP8(answer.sdp ?? ''), answer.type);
+      await peer.setLocalDescription(finalAnswer);
+      await _sendSignal({
         'type': 'answer',
         'restart': s['restart'] == true,
-        'sdp': {'type': answer.type, 'sdp': answer.sdp},
+        'sdp': {'type': finalAnswer.type, 'sdp': finalAnswer.sdp},
       });
     } else if (type == 'answer' && widget.callerSide) {
       final d = Map<String, dynamic>.from(s['sdp'] as Map);
-      await peer.setRemoteDescription(RTCSessionDescription(d['sdp']?.toString(), d['type']?.toString()));
+      final rawSdp = d['sdp']?.toString() ?? '';
+      await peer.setRemoteDescription(RTCSessionDescription(_preferVP8(rawSdp), d['type']?.toString()));
       await _flushCandidates();
     } else if (type == 'candidate' && s['candidate'] is Map) {
       final c = Map<String, dynamic>.from(s['candidate'] as Map);
@@ -914,8 +974,8 @@ void initState() {
     try { remoteRenderer.srcObject = null; } catch (_) {}
 
     try {
+      _sendSignal({'type': 'call_ended', 'reason': 'USER_ENDED'});
       final api = context.read<AppController>().api;
-      api.sendSignal(widget.booking.id, {'type': 'call_ended', 'reason': 'USER_ENDED'}).catchError((_) {});
       api.endBookingCall(widget.booking.id).catchError((_) {});
     } catch (_) {}
 
@@ -1237,7 +1297,7 @@ void initState() {
     } else {
       await voiceFx.stopCapture();
     }
-    await context.read<AppController>().api.sendSignal(widget.booking.id, {'type': 'VOICE_FILTER_CHANGED', 'filter': selected});
+    await _sendSignal({'type': 'VOICE_FILTER_CHANGED', 'filter': selected});
     if (mounted) setState(() {});
   }
 
@@ -1257,7 +1317,7 @@ void initState() {
     );
     if (selected == null || selected == activeVideoFilter) return;
     activeVideoFilter = selected;
-    await context.read<AppController>().api.sendSignal(widget.booking.id, {'type': 'VIDEO_FILTER_CHANGED', 'filter': selected});
+    await _sendSignal({'type': 'VIDEO_FILTER_CHANGED', 'filter': selected});
     if (mounted) setState(() {});
   }
 
@@ -1278,7 +1338,7 @@ void initState() {
             'timestamp': DateTime.now().toIso8601String(),
           };
           inCallMessages.add(message);
-          await context.read<AppController>().api.sendSignal(widget.booking.id, {'type': 'IN_CALL_CHAT', 'message': message});
+          await _sendSignal({'type': 'IN_CALL_CHAT', 'message': message});
           if (ctx.mounted) setLocal(() {});
         }
 
@@ -1327,7 +1387,7 @@ void initState() {
       ),
     );
     if (topic != null) {
-      await context.read<AppController>().api.sendSignal(widget.booking.id, {'type': 'TOPIC_BROADCAST', 'topic': topic});
+      await _sendSignal({'type': 'TOPIC_BROADCAST', 'topic': topic});
       if (mounted) setState(() => banner = '💡 Topic: $topic');
     }
   }
@@ -1336,7 +1396,7 @@ void initState() {
     if (!mounted || gameSheetOpen) return;
     gameSheetOpen = true;
     if (!fromPeer) {
-      await context.read<AppController>().api.sendSignal(widget.booking.id, {
+      await _sendSignal({
         'type': 'GAME_ACTION',
         'payload': {'game': 'TTT', 'action': 'OPEN', 'data': <String, dynamic>{}},
       });
@@ -1349,7 +1409,7 @@ void initState() {
       builder: (_) => InCallMiniGames(
         isCaller: widget.callerSide,
         incomingSignal: gameSignal,
-        send: (payload) => context.read<AppController>().api.sendSignal(widget.booking.id, {'type': 'GAME_ACTION', 'payload': payload}),
+        send: (payload) => _sendSignal({'type': 'GAME_ACTION', 'payload': payload}),
       ),
     );
     gameSheetOpen = false;

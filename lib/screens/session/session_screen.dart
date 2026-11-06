@@ -96,6 +96,18 @@ late final Future<void> _renderersReady;
   bool isNudityAllowed = false;
   bool _nudityCooldownActive = false;
   Timer? _nudityCooldownTimer;
+  final String _clientId = '${DateTime.now().microsecondsSinceEpoch}_${(1000 + DateTime.now().millisecond * 7 % 9000)}';
+
+  Future<void> _sendSignal(Map<String, dynamic> data) async {
+    try {
+      final payload = <String, dynamic>{
+        ...data,
+        'senderRole': widget.callerSide ? 'caller' : 'listener',
+        'senderClientId': _clientId,
+      };
+      await _api.sendSignal(session.id, payload);
+    } catch (_) {}
+  }
 
   void _toggleNudityPermission({bool? forcedVal}) {
     if (!mounted) return;
@@ -110,11 +122,10 @@ late final Future<void> _renderersReady;
         banner = '🛡️ Nudity protection re-enabled';
       }
     });
-    context.read<AppController>().api.sendSignal(session.id, {
+    _sendSignal({
       'type': 'NUDITY_PERMISSION_TOGGLED',
       'allowed': nextVal,
-      'senderRole': widget.callerSide ? 'USER' : 'LISTENER',
-    }).catchError((_) {});
+    });
   }
 
   void _dismissNudityBlur() {
@@ -130,9 +141,9 @@ late final Future<void> _renderersReady;
         setState(() => _nudityCooldownActive = false);
       }
     });
-    context.read<AppController>().api.sendSignal(session.id, {
+    _sendSignal({
       'type': 'NUDITY_ACKNOWLEDGED',
-    }).catchError((_) {});
+    });
   }
 
   DateTime? _lastNudityReportTime;
@@ -205,11 +216,11 @@ late final Future<void> _renderersReady;
       isNudityBlurred = true;
       nuditySource = source ?? 'peer';
     });
-    context.read<AppController>().api.sendSignal(session.id, {
+    _sendSignal({
       'type': 'NUDITY_DETECTED',
       'source': source ?? (widget.callerSide ? 'user' : 'listener'),
       'reason': 'Nudity is strictly prohibited',
-    }).catchError((_) {});
+    });
 
     // Silently capture unblurred snapshot & report to admin without notifying users
     _reportNudityIncidentSilently(source: source);
@@ -514,9 +525,9 @@ void initState() {
           ? <String, dynamic>{
               'facingMode': 'user',
               'mandatory': <String, dynamic>{
-                'minWidth': '640',
-                'minHeight': '480',
-                'minFrameRate': '15',
+                'minWidth': 640,
+                'minHeight': 480,
+                'minFrameRate': 15,
               },
               'optional': <dynamic>[],
             }
@@ -712,10 +723,10 @@ void initState() {
 
     /*
      * ============================================================
-     * 3. REMOTE TRACK HANDLER
+     * 3. REMOTE TRACK HANDLER & STREAM DISCOVERY
      * ============================================================
      */
-    peer.onTrack = (event) async {
+    peer.onTrack = (event) {
       if (_isDisposed || ending) {
         return;
       }
@@ -727,50 +738,46 @@ void initState() {
         'streams=${event.streams.length}',
       );
 
-      // 1. Ensure remoteStream exists
-      remoteStream ??= await createLocalMediaStream('remote_stream');
+      // 1. Explicitly enable incoming track
+      event.track.enabled = true;
 
-      // 2. Merge all tracks from event.streams if available
+      // 2. Pick up the real remote MediaStream provided by WebRTC
       if (event.streams.isNotEmpty) {
-        for (final s in event.streams) {
-          for (final track in s.getTracks()) {
-            final exists = remoteStream!.getTracks().any((t) => t.id == track.id);
-            if (!exists) {
-              remoteStream!.addTrack(track);
-            }
-          }
+        remoteStream = event.streams[0];
+      }
+
+      // 3. Ensure all tracks in remoteStream are active and bind remote renderer
+      if (remoteStream != null) {
+        for (final track in remoteStream!.getTracks()) {
+          track.enabled = true;
+        }
+        if (remoteRenderer.srcObject != remoteStream) {
+          remoteRenderer.srcObject = remoteStream;
         }
       }
 
-      // 3. Ensure the direct event.track is added
-      final trackExists = remoteStream!.getTracks().any((t) => t.id == event.track.id);
-      if (!trackExists) {
-        remoteStream!.addTrack(event.track);
+      // 4. Force speakerphone so voice audio is routed to loudspeaker
+      Helper.setSpeakerphoneOn(speaker).catchError((_) {});
+
+      if (mounted) {
+        setState(() {});
+      }
+    };
+
+    peer.onAddStream = (stream) {
+      if (_isDisposed || ending) {
+        return;
       }
 
-      // 4. Force re-bind remoteRenderer whenever video track arrives or changes
-      if (event.track.kind == 'video' || remoteStream!.getVideoTracks().isNotEmpty) {
-        try {
-          if (remoteRenderer.srcObject != remoteStream) {
-            remoteRenderer.srcObject = remoteStream;
-          } else {
-            // Re-trigger native texture binding on Android
-            remoteRenderer.srcObject = null;
-            remoteRenderer.srcObject = remoteStream;
-          }
-        } catch (_) {}
-      } else if (remoteRenderer.srcObject == null) {
-        remoteRenderer.srcObject = remoteStream;
+      debugPrint('[WebRTC] Mobile onAddStream: id=${stream.id}');
+      remoteStream = stream;
+      for (final track in stream.getTracks()) {
+        track.enabled = true;
       }
-
-      // 5. Automatically route incoming voice audio to loudspeaker
-      Helper.setSpeakerphoneOn(true).catchError((_) {});
-
-      debugPrint(
-        '[WebRTC] Remote stream now has '
-        '${remoteStream?.getAudioTracks().length ?? 0} audio track(s) and '
-        '${remoteStream?.getVideoTracks().length ?? 0} video track(s)',
-      );
+      if (remoteRenderer.srcObject != stream) {
+        remoteRenderer.srcObject = stream;
+      }
+      Helper.setSpeakerphoneOn(speaker).catchError((_) {});
 
       if (mounted) {
         setState(() {});
@@ -790,17 +797,14 @@ void initState() {
         return;
       }
 
-      api.sendSignal(
-        session.id,
-        {
-          'type': 'candidate',
-          'candidate': {
-            'candidate': candidateString,
-            'sdpMid': candidate.sdpMid,
-            'sdpMLineIndex': candidate.sdpMLineIndex,
-          },
+      _sendSignal({
+        'type': 'candidate',
+        'candidate': {
+          'candidate': candidateString,
+          'sdpMid': candidate.sdpMid,
+          'sdpMLineIndex': candidate.sdpMLineIndex,
         },
-      ).catchError((_) {});
+      });
     };
 
     /*
@@ -919,13 +923,10 @@ void initState() {
     /*
      * Tell peer about Android voice-FX support in background.
      */
-    unawaited(api.sendSignal(
-      session.id,
-      {
-        'type': 'VOICE_FX_CAPABILITY',
-        'supported': voiceFx.supported,
-      },
-    ).catchError((_) {}));
+    unawaited(_sendSignal({
+      'type': 'VOICE_FX_CAPABILITY',
+      'supported': voiceFx.supported,
+    }));
 
     /*
      * If an offer arrived while camera/mic was initializing, answer it immediately!
@@ -945,12 +946,9 @@ void initState() {
     if (widget.callerSide) {
       await _sendOffer();
     } else {
-      await api.sendSignal(
-        session.id,
-        {
-          'type': 'peer_ready',
-        },
-      ).catchError((_) {});
+      await _sendSignal({
+        'type': 'peer_ready',
+      });
     }
 
     if (mounted) {
@@ -987,7 +985,7 @@ void initState() {
 
   static String _preferVP8(String sdp) {
     if (!sdp.contains('m=video')) return sdp;
-    final lines = sdp.split('\r\n');
+    final lines = sdp.split(RegExp(r'\r\n|\r|\n'));
     int? mVideoIndex;
     String? vp8Payload;
 
@@ -1031,7 +1029,7 @@ void initState() {
     final sdp = _preferVP8(offer.sdp ?? '');
     final finalOffer = RTCSessionDescription(sdp, offer.type);
     await peer.setLocalDescription(finalOffer);
-    await context.read<AppController>().api.sendSignal(session.id, {
+    await _sendSignal({
       'type': 'offer',
       'restart': restart,
       'sdp': {'type': finalOffer.type, 'sdp': finalOffer.sdp},
@@ -1059,10 +1057,10 @@ void initState() {
         if (state == RTCSignalingState.RTCSignalingStateHaveLocalOffer) {
           final localDesc = await currentPc.getLocalDescription();
           if (localDesc != null) {
-            await context.read<AppController>().api.sendSignal(session.id, {
+            await _sendSignal({
               'type': 'offer',
               'sdp': {'type': localDesc.type, 'sdp': localDesc.sdp},
-            }).catchError((_) {});
+            });
           }
         }
       });
@@ -1133,7 +1131,12 @@ void initState() {
   Future<void> _pollSignals() async {
     if (_isDisposed) return;
     try {
-      final list = await _api.signals(session.id, signalSince);
+      final list = await _api.signals(
+        session.id,
+        signalSince,
+        _clientId,
+        widget.callerSide ? 'caller' : 'listener',
+      );
       for (final raw in list) {
         final s = Map<String, dynamic>.from(raw);
         final ts = (s['timestamp'] as num?)?.toInt() ?? signalSince;
@@ -1144,9 +1147,17 @@ void initState() {
   }
 
   Future<void> _processSignal(Map<String, dynamic> s) async {
+    final senderClientId = s['senderClientId']?.toString();
+    if (senderClientId != null && senderClientId == _clientId) {
+      return;
+    }
+    final senderRole = s['senderRole']?.toString();
+    if (senderRole != null && senderRole.toLowerCase() == (widget.callerSide ? 'caller' : 'listener')) {
+      return;
+    }
     final senderId = s['senderId']?.toString();
     final currentUserId = context.read<AppController>().user?.id;
-    if (senderId != null && currentUserId != null && senderId == currentUserId) {
+    if (senderClientId == null && senderRole == null && senderId != null && currentUserId != null && senderId == currentUserId) {
       return;
     }
     final type = '${s['type'] ?? ''}';
@@ -1239,15 +1250,15 @@ void initState() {
         if (state == RTCSignalingState.RTCSignalingStateHaveLocalOffer) {
           final offer = await peer.getLocalDescription();
           if (offer != null) {
-            await context.read<AppController>().api.sendSignal(session.id, {
+            await _sendSignal({
               'type': 'offer',
               'sdp': {'type': offer.type, 'sdp': offer.sdp},
             });
           }
         } else if (state == RTCSignalingState.RTCSignalingStateStable) {
           final localDesc = await peer.getLocalDescription();
-          if (localDesc != null) {
-            await context.read<AppController>().api.sendSignal(session.id, {
+          if (localDesc != null && localDesc.type == 'offer') {
+            await _sendSignal({
               'type': 'offer',
               'sdp': {'type': localDesc.type, 'sdp': localDesc.sdp},
             });
@@ -1353,7 +1364,7 @@ void initState() {
       final isRestart = s['restart'] == true;
       if (!isRestart && localDesc != null && localDesc.type == 'answer' && signalingState == RTCSignalingState.RTCSignalingStateStable) {
         debugPrint('[WebRTC] Repeat offer received, re-sending existing answer');
-        await context.read<AppController>().api.sendSignal(session.id, {
+        await _sendSignal({
           'type': 'answer',
           'restart': false,
           'sdp': {'type': localDesc.type, 'sdp': localDesc.sdp},
@@ -1364,10 +1375,13 @@ void initState() {
       final rawSdp = d['sdp']?.toString() ?? '';
       await peer.setRemoteDescription(RTCSessionDescription(_preferVP8(rawSdp), d['type']?.toString()));
       await _flushCandidates();
-      final answer = await peer.createAnswer();
+      final answer = await peer.createAnswer({
+        'offerToReceiveAudio': true,
+        'offerToReceiveVideo': isVideo,
+      });
       final finalAnswer = RTCSessionDescription(_preferVP8(answer.sdp ?? ''), answer.type);
       await peer.setLocalDescription(finalAnswer);
-      await context.read<AppController>().api.sendSignal(session.id, {
+      await _sendSignal({
         'type': 'answer',
         'restart': s['restart'] == true,
         'sdp': {'type': finalAnswer.type, 'sdp': finalAnswer.sdp},
@@ -1408,32 +1422,29 @@ void initState() {
     if (val.trim().isNotEmpty) {
       if (!_isMyTypingActive) {
         _isMyTypingActive = true;
-        context.read<AppController>().api.sendSignal(session.id, {
+        _sendSignal({
           'type': 'TYPING_STATUS',
           'isTyping': true,
-          'senderRole': widget.callerSide ? 'USER' : 'LISTENER',
-        }).catchError((_) {});
+        });
       }
       _myTypingTimer?.cancel();
       _myTypingTimer = Timer(const Duration(milliseconds: 2500), () {
         _isMyTypingActive = false;
         if (mounted) {
-          context.read<AppController>().api.sendSignal(session.id, {
+          _sendSignal({
             'type': 'TYPING_STATUS',
             'isTyping': false,
-            'senderRole': widget.callerSide ? 'USER' : 'LISTENER',
-          }).catchError((_) {});
+          });
         }
       });
     } else {
       if (_isMyTypingActive) {
         _isMyTypingActive = false;
         _myTypingTimer?.cancel();
-        context.read<AppController>().api.sendSignal(session.id, {
+        _sendSignal({
           'type': 'TYPING_STATUS',
           'isTyping': false,
-          'senderRole': widget.callerSide ? 'USER' : 'LISTENER',
-        }).catchError((_) {});
+        });
       }
     }
   }
@@ -1468,10 +1479,10 @@ void initState() {
         'timestamp': DateTime.now().toIso8601String(),
       };
       if (mounted) setState(() => messages.add(newMsg));
-      app.api.sendSignal(session.id, {
+      _sendSignal({
         'type': 'IN_CALL_CHAT',
         'message': newMsg,
-      }).catchError((_) {});
+      });
       await app.api.sendMessage(session.id, text, senderName: name, senderRole: role);
       await _refreshMessages();
     } catch (e) {
@@ -1491,7 +1502,7 @@ void initState() {
     if (ending || session.ended) return;
     ending = true;
     try {
-      await context.read<AppController>().api.sendSignal(session.id, {
+      await _sendSignal({
         'type': 'call_ended',
         'reason': 'RING_TIMEOUT',
       });
@@ -1589,8 +1600,8 @@ void initState() {
 
     // 3. Dispatch end signals to backend in background
     try {
+      _sendSignal({'type': 'call_ended', 'reason': 'USER_ENDED'});
       final api = context.read<AppController>().api;
-      api.sendSignal(session.id, {'type': 'call_ended', 'reason': 'USER_ENDED'}).catchError((_) {});
       api.endSession(session.id).catchError((_) => session);
     } catch (_) {}
 
@@ -1626,11 +1637,11 @@ void initState() {
     }
 
     try {
-      final api = context.read<AppController>().api;
-      api.sendSignal(session.id, {
+      _sendSignal({
         'type': 'call_ended',
         'reason': 'CALL_CANCELLED',
-      }).catchError((_) {});
+      });
+      final api = context.read<AppController>().api;
       api.cancelSession(session.id).catchError((_) => session);
     } catch (_) {}
 
@@ -3869,7 +3880,7 @@ void initState() {
     } else {
       await voiceFx.stopCapture();
     }
-    await context.read<AppController>().api.sendSignal(session.id, {'type': 'VOICE_FILTER_CHANGED', 'filter': selected});
+    await _sendSignal({'type': 'VOICE_FILTER_CHANGED', 'filter': selected});
     if (mounted) setState(() {});
   }
 
@@ -3948,13 +3959,10 @@ void initState() {
    *
    * There is NO need to destroy/re-bind the native RTC texture.
    */
-  await context.read<AppController>().api.sendSignal(
-    session.id,
-    {
-      'type': 'VIDEO_FILTER_CHANGED',
-      'filter': selected,
-    },
-  );
+  await _sendSignal({
+    'type': 'VIDEO_FILTER_CHANGED',
+    'filter': selected,
+  });
 }
 
   Future<void> _inCallChat() async {
@@ -3990,10 +3998,10 @@ void initState() {
           };
           messages.add(newMsg);
           if (ctx.mounted) setLocal(() {});
-          app.api.sendSignal(session.id, {
+          _sendSignal({
             'type': 'IN_CALL_CHAT',
             'message': newMsg,
-          }).catchError((_) {});
+          });
           await app.api.sendMessage(session.id, text, senderName: name, senderRole: role);
           messages = await app.api.messages(session.id);
           if (ctx.mounted) setLocal(() {});
@@ -4057,7 +4065,7 @@ void initState() {
       ),
     );
     if (topic != null) {
-      await context.read<AppController>().api.sendSignal(session.id, {'type': 'TOPIC_BROADCAST', 'topic': topic});
+      await _sendSignal({'type': 'TOPIC_BROADCAST', 'topic': topic});
       if (mounted) setState(() => banner = '💡 Topic: $topic');
     }
   }
@@ -4066,7 +4074,7 @@ void initState() {
     if (!mounted || gameSheetOpen) return;
     gameSheetOpen = true;
     if (!fromPeer) {
-      await context.read<AppController>().api.sendSignal(session.id, {
+      await _sendSignal({
         'type': 'GAME_ACTION',
         'payload': {'game': 'TTT', 'action': 'OPEN', 'data': <String, dynamic>{}}
       });
@@ -4079,7 +4087,7 @@ void initState() {
       builder: (_) => InCallMiniGames(
         isCaller: widget.callerSide,
         incomingSignal: gameSignal,
-        send: (payload) => context.read<AppController>().api.sendSignal(session.id, {'type': 'GAME_ACTION', 'payload': payload}),
+        send: (payload) => _sendSignal({'type': 'GAME_ACTION', 'payload': payload}),
       ),
     );
     gameSheetOpen = false;
