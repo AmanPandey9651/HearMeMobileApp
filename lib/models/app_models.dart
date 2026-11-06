@@ -22,6 +22,7 @@ class AppUser {
   final String? avatarUrl;
   final String? gender;
   final String? hobbies;
+  final String? country;
   final String? idType;
   final String? idNumber;
   final bool idVerified;
@@ -42,6 +43,7 @@ class AppUser {
     this.avatarUrl,
     this.gender,
     this.hobbies,
+    this.country,
     this.idType,
     this.idNumber,
     this.idVerified = false,
@@ -65,6 +67,7 @@ class AppUser {
         avatarUrl: j['avatarUrl']?.toString(),
         gender: j['gender']?.toString(),
         hobbies: j['hobbies']?.toString(),
+        country: j['country']?.toString(),
         idType: j['idType']?.toString(),
         idNumber: j['idNumber']?.toString(),
         idVerified: j['idVerified'] == true,
@@ -86,6 +89,7 @@ class AppUser {
         'avatarUrl': avatarUrl,
         'gender': gender,
         'hobbies': hobbies,
+        'country': country,
         'idType': idType,
         'idNumber': idNumber,
         'idVerified': idVerified,
