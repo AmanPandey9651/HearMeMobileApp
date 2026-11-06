@@ -149,7 +149,25 @@ class _ListenerProfileScreenState extends State<ListenerProfileScreen> {
     }
   }
 
-  double _limit(String key, double fallback) => (limits?[key] as num?)?.toDouble() ?? fallback;
+  bool get _isInternational {
+    final c = (p?['country'] ?? context.read<AppController>().user?.country ?? '').toString().trim().toLowerCase();
+    return c.isNotEmpty && c != 'india' && c != 'in';
+  }
+
+  double _limit(String key, double fallback) {
+    if (_isInternational) {
+      final intlKey = key.replaceFirst('min', 'minInternational').replaceFirst('max', 'maxInternational');
+      final val = (limits?[intlKey] as num?)?.toDouble();
+      if (val != null) return val;
+      if (key == 'minAudioRatePerMinute') return 20.0;
+      if (key == 'maxAudioRatePerMinute') return 150.0;
+      if (key == 'minVideoRatePerMinute') return 35.0;
+      if (key == 'maxVideoRatePerMinute') return 250.0;
+      if (key == 'minChatRatePerMinute') return 10.0;
+      if (key == 'maxChatRatePerMinute') return 80.0;
+    }
+    return (limits?[key] as num?)?.toDouble() ?? fallback;
+  }
 
   Future<void> _photo() async {
     final x = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85, maxWidth: 1800);
@@ -173,9 +191,10 @@ class _ListenerProfileScreenState extends State<ListenerProfileScreen> {
     final amin = _limit('minAudioRatePerMinute', 5), amax = _limit('maxAudioRatePerMinute', 50);
     final vmin = _limit('minVideoRatePerMinute', 10), vmax = _limit('maxVideoRatePerMinute', 100);
     final cmin = _limit('minChatRatePerMinute', 2), cmax = _limit('maxChatRatePerMinute', 30);
-    if (a < amin || a > amax) throw Exception('Audio rate must be between ₹$amin and ₹$amax per minute.');
-    if (v < vmin || v > vmax) throw Exception('Video rate must be between ₹$vmin and ₹$vmax per minute.');
-    if (c < cmin || c > cmax) throw Exception('Chat rate must be between ₹$cmin and ₹$cmax per minute.');
+    final tier = _isInternational ? 'International' : 'Domestic';
+    if (a < amin || a > amax) throw Exception('Audio rate must be between ₹$amin and ₹$amax per minute ($tier).');
+    if (v < vmin || v > vmax) throw Exception('Video rate must be between ₹$vmin and ₹$vmax per minute ($tier).');
+    if (c < cmin || c > cmax) throw Exception('Chat rate must be between ₹$cmin and ₹$cmax per minute ($tier).');
   }
 
   Future<void> _save() async {
@@ -607,7 +626,7 @@ class _ListenerProfileScreenState extends State<ListenerProfileScreen> {
                         const SizedBox(height: 8),
                         if (limits != null)
                           Text(
-                            'Platform limits: Audio ₹${_limit('minAudioRatePerMinute', 5).toStringAsFixed(0)}–₹${_limit('maxAudioRatePerMinute', 50).toStringAsFixed(0)} • Video ₹${_limit('minVideoRatePerMinute', 10).toStringAsFixed(0)}–₹${_limit('maxVideoRatePerMinute', 100).toStringAsFixed(0)} • Chat ₹${_limit('minChatRatePerMinute', 2).toStringAsFixed(0)}–₹${_limit('maxChatRatePerMinute', 30).toStringAsFixed(0)}',
+                            'Platform limits (${_isInternational ? 'International' : 'Domestic'}): Audio ₹${_limit('minAudioRatePerMinute', 5).toStringAsFixed(0)}–₹${_limit('maxAudioRatePerMinute', 50).toStringAsFixed(0)} • Video ₹${_limit('minVideoRatePerMinute', 10).toStringAsFixed(0)}–₹${_limit('maxVideoRatePerMinute', 100).toStringAsFixed(0)} • Chat ₹${_limit('minChatRatePerMinute', 2).toStringAsFixed(0)}–₹${_limit('maxChatRatePerMinute', 30).toStringAsFixed(0)}',
                             style: const TextStyle(fontSize: 11, color: textMuted),
                           ),
                       ],

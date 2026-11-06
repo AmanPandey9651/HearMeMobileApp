@@ -1246,9 +1246,25 @@ class _ListenerRegisterScreenState extends State<ListenerRegisterScreen> {
         throw Exception('A personal bio statement (minimum 15 characters) is required.');
       }
 
-      final a = double.tryParse(audio.text) ?? 10;
-      final v = double.tryParse(video.text) ?? 15;
-      final c = double.tryParse(chat.text) ?? 5;
+      final isIntl = country.text.trim().toLowerCase() != 'india' && country.text.trim().toLowerCase() != 'in';
+      final amax = isIntl ? ((limits?['maxInternationalAudioRatePerMinute'] as num?)?.toDouble() ?? 150.0) : ((limits?['maxAudioRatePerMinute'] as num?)?.toDouble() ?? 50.0);
+      final amin = isIntl ? ((limits?['minInternationalAudioRatePerMinute'] as num?)?.toDouble() ?? 20.0) : ((limits?['minAudioRatePerMinute'] as num?)?.toDouble() ?? 5.0);
+      final vmax = isIntl ? ((limits?['maxInternationalVideoRatePerMinute'] as num?)?.toDouble() ?? 250.0) : ((limits?['maxVideoRatePerMinute'] as num?)?.toDouble() ?? 100.0);
+      final vmin = isIntl ? ((limits?['minInternationalVideoRatePerMinute'] as num?)?.toDouble() ?? 35.0) : ((limits?['minVideoRatePerMinute'] as num?)?.toDouble() ?? 10.0);
+      final cmax = isIntl ? ((limits?['maxInternationalChatRatePerMinute'] as num?)?.toDouble() ?? 80.0) : ((limits?['maxChatRatePerMinute'] as num?)?.toDouble() ?? 30.0);
+      final cmin = isIntl ? ((limits?['minInternationalChatRatePerMinute'] as num?)?.toDouble() ?? 10.0) : ((limits?['minChatRatePerMinute'] as num?)?.toDouble() ?? 2.0);
+
+      double a = double.tryParse(audio.text) ?? (isIntl ? amin : 10.0);
+      double v = double.tryParse(video.text) ?? (isIntl ? vmin : 15.0);
+      double c = double.tryParse(chat.text) ?? (isIntl ? cmin : 5.0);
+
+      if (a < amin) a = amin;
+      if (a > amax) a = amax;
+      if (v < vmin) v = vmin;
+      if (v > vmax) v = vmax;
+      if (c < cmin) c = cmin;
+      if (c > cmax) c = cmax;
+
       final fullPhoneNumber = '$selectedDialCode${phone.text.trim().replaceAll(RegExp(r'^\+'), '')}';
 
       await context.read<AppController>().registerListener({
