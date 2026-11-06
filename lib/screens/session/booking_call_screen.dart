@@ -1075,7 +1075,56 @@ void initState() {
         appBar: AppBar(
           title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(peerName),
-            Text(_time(elapsed), style: Theme.of(context).textTheme.labelSmall),
+            Row(
+              children: [
+                Text(_time(elapsed), style: Theme.of(context).textTheme.labelSmall),
+                const SizedBox(width: 6),
+                Builder(builder: (_) {
+                  final dur = widget.booking.durationMinutes > 0 ? widget.booking.durationMinutes : 15;
+                  final rate = widget.booking.holdAmount > 0 ? (widget.booking.holdAmount / dur) : 20.0;
+                  final cost = (elapsed / 60.0) * rate;
+                  if (widget.callerSide) {
+                    final rem = (widget.booking.holdAmount - cost).clamp(0.0, double.infinity);
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF1F2),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFFECDD3), width: 0.8),
+                      ),
+                      child: Text(
+                        '▼ ₹${rem.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFFE11D48),
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    );
+                  } else {
+                    final earn = cost * 0.8;
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFA7F3D0), width: 0.8),
+                      ),
+                      child: Text(
+                        '▲ +₹${earn.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF059669),
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    );
+                  }
+                }),
+              ],
+            ),
           ]),
           actions: [IconButton(onPressed: loading ? null : _showTools, icon: const Icon(Icons.auto_awesome))],
         ),

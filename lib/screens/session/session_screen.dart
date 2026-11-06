@@ -98,6 +98,32 @@ late final Future<void> _renderersReady;
   Timer? _nudityCooldownTimer;
   final String _clientId = '${DateTime.now().microsecondsSinceEpoch}_${(1000 + DateTime.now().millisecond * 7 % 9000)}';
 
+  // Live money and balance tracking (real-time decreasing for caller, increasing for listener)
+  double? _callerInitialBalance;
+  double _callerGiftsSpent = 0.0;
+  double _listenerGiftEarnings = 0.0;
+
+  double get _effectiveRatePerMinute => session.ratePerMinute > 0 ? session.ratePerMinute : 10.0;
+
+  double get _currentLiveCost {
+    if (seconds < 5) return 0.0;
+    return (seconds / 60.0) * _effectiveRatePerMinute;
+  }
+
+  double get _callerRemainingBalance {
+    final initBal = _callerInitialBalance ??
+        (session.maxAllowedSeconds > 0
+            ? (session.maxAllowedSeconds / 60.0) * _effectiveRatePerMinute
+            : 0.0);
+    final rem = initBal - _currentLiveCost - _callerGiftsSpent;
+    return rem > 0 ? rem : 0.0;
+  }
+
+  double get _listenerTotalEarnings {
+    final callEarn = seconds < 5 ? 0.0 : ((seconds / 60.0) * _effectiveRatePerMinute * 0.80);
+    return callEarn + _listenerGiftEarnings;
+  }
+
   Future<void> _sendSignal(Map<String, dynamic> data) async {
     try {
       final payload = <String, dynamic>{
@@ -297,6 +323,18 @@ void initState() {
 
   everLive = isLive;
   ringRemaining = _initRingRemaining();
+  _listenerGiftEarnings = session.giftEarnings;
+
+  if (widget.callerSide) {
+    _api.wallet().then((w) {
+      if (mounted) {
+        setState(() {
+          final total = w.totalBalance > 0 ? w.totalBalance : (w.balance + w.bonusBalance);
+          _callerInitialBalance = total;
+        });
+      }
+    }).catchError((_) {});
+  }
 
   /*
    * Initialize RTC renderers ONCE.
@@ -475,6 +513,12 @@ void initState() {
       if (!mounted || _isDisposed) return;
       setState(() {
         session = next;
+        if (next.giftEarnings > 0 && next.giftEarnings > _listenerGiftEarnings) {
+          _listenerGiftEarnings = next.giftEarnings;
+        }
+        if (_callerInitialBalance == null && next.maxAllowedSeconds > 0) {
+          _callerInitialBalance = (next.maxAllowedSeconds / 60.0) * (next.ratePerMinute > 0 ? next.ratePerMinute : 10.0);
+        }
         if (isLive) {
           everLive = true;
           final startStr = next.connectedAt ?? next.startedAt;
@@ -1166,7 +1210,17 @@ void initState() {
       return;
     }
     if (type == 'gift_sent') {
-      if (mounted) setState(() => banner = '🎁 Gift received: ${s['gift']?['giftEmoji'] ?? '🎁'} ${s['gift']?['giftName'] ?? 'Gift'}');
+      final gift = s['gift'] is Map ? Map<String, dynamic>.from(s['gift'] as Map) : null;
+      final giftAmt = (gift?['amount'] as num?)?.toDouble() ??
+          (gift?['grossAmount'] as num?)?.toDouble() ??
+          (gift?['price'] as num?)?.toDouble() ??
+          0.0;
+      if (mounted) {
+        setState(() {
+          _listenerGiftEarnings += giftAmt;
+          banner = '🎁 Gift received: ${gift?['giftEmoji'] ?? '🎁'} ${gift?['giftName'] ?? 'Gift'}${giftAmt > 0 ? " (+₹${giftAmt.toStringAsFixed(0)})" : ""}';
+        });
+      }
       return;
     }
     if (type == 'TOPIC_BROADCAST') {
@@ -2364,6 +2418,10 @@ void initState() {
                     letterSpacing: 0.5,
                   ),
                 ),
+                const SizedBox(height: 10),
+
+                // Live Money Pill (Decreasing for Caller, Increasing for Listener)
+                _buildLiveMoneyBadge(isDark: false, compact: false),
 
                 if (peerVoiceFilter != AndroidVoiceFx.normal) ...[
                   const SizedBox(height: 10),
@@ -2425,19 +2483,26 @@ void initState() {
             ),
           ),
 
-          // Center Peer Name
+          // Center Peer Name & Live Money Badge
           Expanded(
-            child: Text(
-              peerName,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 16.5,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF1E293B),
-                letterSpacing: -0.2,
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  peerName,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1E293B),
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                _buildLiveMoneyBadge(isDark: false, compact: true),
+              ],
             ),
           ),
 
@@ -2464,6 +2529,131 @@ void initState() {
         ],
       ),
     );
+  }
+
+  /// Real-time live money badge (shows money decreasing for caller, increasing for listener)
+  Widget _buildLiveMoneyBadge({bool isDark = false, bool compact = false}) {
+    if (widget.callerSide) {
+      final balance = _callerRemainingBalance;
+      final cost = _currentLiveCost;
+      return Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 8 : 12,
+          vertical: compact ? 3 : 5,
+        ),
+        decoration: BoxDecoration(
+          color: isDark
+              ? const Color(0xFF881337).withValues(alpha: 0.45)
+              : const Color(0xFFFFF1F2),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isDark
+                ? const Color(0xFFF43F5E).withValues(alpha: 0.45)
+                : const Color(0xFFFECDD3),
+            width: 1.0,
+          ),
+          boxShadow: isDark
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.25),
+                    blurRadius: 6,
+                  )
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.arrow_downward_rounded,
+              size: compact ? 11 : 13,
+              color: isDark ? const Color(0xFFFB7185) : const Color(0xFFE11D48),
+            ),
+            const SizedBox(width: 3),
+            Text(
+              '₹${balance.toStringAsFixed(2)}',
+              style: TextStyle(
+                fontSize: compact ? 11.5 : 13,
+                fontWeight: FontWeight.w800,
+                color: isDark ? const Color(0xFFFECDD3) : const Color(0xFFBE123C),
+                fontFamily: 'monospace',
+                letterSpacing: -0.2,
+              ),
+            ),
+            if (!compact) ...[
+              const SizedBox(width: 4),
+              Text(
+                '(-₹${cost.toStringAsFixed(2)})',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? const Color(0xFFFDA4AF) : const Color(0xFFE11D48),
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    } else {
+      final earned = _listenerTotalEarnings;
+      return Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 8 : 12,
+          vertical: compact ? 3 : 5,
+        ),
+        decoration: BoxDecoration(
+          color: isDark
+              ? const Color(0xFF064E3B).withValues(alpha: 0.5)
+              : const Color(0xFFECFDF5),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isDark
+                ? const Color(0xFF10B981).withValues(alpha: 0.45)
+                : const Color(0xFFA7F3D0),
+            width: 1.0,
+          ),
+          boxShadow: isDark
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.25),
+                    blurRadius: 6,
+                  )
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.trending_up_rounded,
+              size: compact ? 12 : 14,
+              color: isDark ? const Color(0xFF34D399) : const Color(0xFF059669),
+            ),
+            const SizedBox(width: 3),
+            Text(
+              '+₹${earned.toStringAsFixed(2)}',
+              style: TextStyle(
+                fontSize: compact ? 11.5 : 13,
+                fontWeight: FontWeight.w800,
+                color: isDark ? const Color(0xFF6EE7B7) : const Color(0xFF047857),
+                fontFamily: 'monospace',
+                letterSpacing: -0.2,
+              ),
+            ),
+            if (_listenerGiftEarnings > 0 && !compact) ...[
+              const SizedBox(width: 4),
+              const Text(
+                '🎁',
+                style: TextStyle(fontSize: 10),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
   }
 
   /// Center glowing avatar orb with concentric aura and silhouette
@@ -2939,14 +3129,14 @@ void initState() {
                             ),
                             const SizedBox(width: 8),
                             ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 130),
+                              constraints: const BoxConstraints(maxWidth: 95),
                               child: Text(
                                 peerName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 13.5,
+                                  fontSize: 13,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -2956,7 +3146,7 @@ void initState() {
                               _time(seconds),
                               style: const TextStyle(
                                 color: Color(0xFF38BDF8),
-                                fontSize: 12.5,
+                                fontSize: 12,
                                 fontWeight: FontWeight.w700,
                                 fontFamily: 'monospace',
                               ),
@@ -2964,6 +3154,10 @@ void initState() {
                           ],
                         ),
                       ),
+                      const SizedBox(width: 8),
+
+                      // Live Money Badge (Decreasing for Caller / Increasing for Listener)
+                      _buildLiveMoneyBadge(isDark: true, compact: false),
 
                       const Spacer(),
 
@@ -3431,13 +3625,19 @@ void initState() {
                       color: Color(0xFF0F172A),
                     ),
                   ),
-                  Text(
-                    isPeerTyping ? 'typing…' : 'Chatting • ${_time(seconds)}',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
-                      color: isPeerTyping ? const Color(0xFF059669) : const Color(0xFFF95B3D),
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        isPeerTyping ? 'typing…' : 'Chatting • ${_time(seconds)}',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: isPeerTyping ? const Color(0xFF059669) : const Color(0xFFF95B3D),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      _buildLiveMoneyBadge(isDark: false, compact: true),
+                    ],
                   ),
                 ],
               ),
@@ -4040,8 +4240,13 @@ void initState() {
         },
       );
       if (sent != null && mounted) {
+        final giftAmt = (sent['amount'] as num?)?.toDouble() ??
+            (sent['grossAmount'] as num?)?.toDouble() ??
+            (sent['price'] as num?)?.toDouble() ??
+            0.0;
         setState(() {
-          banner = '🎁 Gift sent: ${sent['giftEmoji'] ?? '🎁'} ${sent['giftName'] ?? 'Gift'} (₹${sent['amount'] ?? ''})';
+          _callerGiftsSpent += giftAmt;
+          banner = '🎁 Gift sent: ${sent['giftEmoji'] ?? '🎁'} ${sent['giftName'] ?? 'Gift'}${giftAmt > 0 ? " (₹${giftAmt.toStringAsFixed(0)})" : ""}';
         });
       }
     } catch (e) {

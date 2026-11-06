@@ -248,13 +248,37 @@ class _MinimizedCallBarState extends State<MinimizedCallBar> with SingleTickerPr
                                           fontFamily: 'monospace',
                                         ),
                                       ),
-                                      Text(
-                                        ' • ₹${session.ratePerMinute.toStringAsFixed(0)}/min',
-                                        style: TextStyle(
-                                          color: Colors.white.withValues(alpha: 0.65),
-                                          fontSize: 10.5,
-                                          fontWeight: FontWeight.w500,
-                                        ),
+                                      Builder(
+                                        builder: (_) {
+                                          final rate = session.ratePerMinute > 0 ? session.ratePerMinute : 10.0;
+                                          final secs = widget.callManager.elapsedSeconds;
+                                          if (widget.callManager.isCaller) {
+                                            final liveCost = secs < 5 ? 0.0 : (secs / 60.0) * rate;
+                                            final maxSecs = session.maxAllowedSeconds;
+                                            final initBal = maxSecs > 0 ? (maxSecs / 60.0) * rate : 0.0;
+                                            final remBal = (initBal - liveCost).clamp(0.0, double.infinity);
+                                            return Text(
+                                              ' • ▼ ₹${remBal.toStringAsFixed(1)}',
+                                              style: const TextStyle(
+                                                color: Color(0xFFFB7185),
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.w700,
+                                                fontFamily: 'monospace',
+                                              ),
+                                            );
+                                          } else {
+                                            final earnings = (secs < 5 ? 0.0 : (secs / 60.0) * rate * 0.8) + session.giftEarnings;
+                                            return Text(
+                                              ' • ▲ +₹${earnings.toStringAsFixed(1)}',
+                                              style: const TextStyle(
+                                                color: Color(0xFF34D399),
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.w700,
+                                                fontFamily: 'monospace',
+                                              ),
+                                            );
+                                          }
+                                        },
                                       ),
                                     ],
                                   ),
