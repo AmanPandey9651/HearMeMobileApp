@@ -30,6 +30,38 @@ class ListenerCardItem extends StatelessWidget {
     'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=300&fit=crop&crop=faces',
   ];
 
+  static String _getCountryFlag(String? country) {
+    if (country == null || country.isEmpty) return '🇮🇳';
+    final c = country.trim().toLowerCase();
+    if (c == 'india' || c == 'in') return '🇮🇳';
+    if (c == 'united states' || c == 'usa' || c == 'us') return '🇺🇸';
+    if (c == 'united kingdom' || c == 'uk' || c == 'england' || c == 'gb') return '🇬🇧';
+    if (c == 'canada' || c == 'ca') return '🇨🇦';
+    if (c == 'australia' || c == 'au') return '🇦🇺';
+    if (c == 'germany' || c == 'de') return '🇩🇪';
+    if (c == 'france' || c == 'fr') return '🇫🇷';
+    if (c == 'united arab emirates' || c == 'uae' || c == 'dubai') return '🇦🇪';
+    if (c == 'singapore' || c == 'sg') return '🇸🇬';
+    if (c == 'philippines' || c == 'ph') return '🇵🇭';
+    if (c == 'south africa' || c == 'za') return '🇿🇦';
+    if (c == 'nepal' || c == 'np') return '🇳🇵';
+    return '🌐';
+  }
+
+  static String _getCountryShort(String? country) {
+    if (country == null || country.isEmpty) return 'India';
+    final c = country.trim().toLowerCase();
+    if (c == 'india' || c == 'in') return 'India';
+    if (c == 'united states' || c == 'usa' || c == 'us') return 'USA';
+    if (c == 'united kingdom' || c == 'uk' || c == 'england' || c == 'gb') return 'UK';
+    if (c == 'canada' || c == 'ca') return 'Canada';
+    if (c == 'australia' || c == 'au') return 'Australia';
+    if (c == 'germany' || c == 'de') return 'Germany';
+    if (c == 'france' || c == 'fr') return 'France';
+    if (c == 'united arab emirates' || c == 'uae') return 'UAE';
+    return country.length > 9 ? country.substring(0, 9) : country;
+  }
+
   String _getResolvedAvatar() {
     final clean = normalizeAvatarUrl(listener.avatarUrl);
     if (clean != null && clean.isNotEmpty) return clean;
@@ -39,6 +71,11 @@ class ListenerCardItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final rawCountry = (listener.country ?? 'India').trim();
+    final isInternational = rawCountry.isNotEmpty &&
+        rawCountry.toLowerCase() != 'india' &&
+        rawCountry.toLowerCase() != 'in';
+
     final isOnline = listener.presence == 'ONLINE';
     final isBusy = listener.presence == 'BUSY_IN_CALL' || listener.presence == 'BUSY';
 
@@ -247,6 +284,38 @@ class ListenerCardItem extends StatelessWidget {
                                       ),
                                     ),
                                   ),
+                                  WidgetSpan(
+                                    alignment: PlaceholderAlignment.middle,
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(left: 4),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                        decoration: BoxDecoration(
+                                          color: isInternational ? const Color(0xFFEFF6FF) : const Color(0xFFF3F4F6),
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(
+                                            color: isInternational ? const Color(0xFF93C5FD) : const Color(0xFFE5E7EB),
+                                            width: 0.8,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(_getCountryFlag(listener.country), style: const TextStyle(fontSize: 9.5)),
+                                            const SizedBox(width: 2.5),
+                                            Text(
+                                              _getCountryShort(listener.country),
+                                              style: TextStyle(
+                                                fontSize: 8.5,
+                                                fontWeight: FontWeight.w700,
+                                                color: isInternational ? const Color(0xFF1D4ED8) : const Color(0xFF4B5563),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                   if (listener.isTest)
                                     WidgetSpan(
                                       alignment: PlaceholderAlignment.middle,
@@ -409,6 +478,7 @@ class ListenerCardItem extends StatelessWidget {
                       icon: Icons.chat_bubble_rounded,
                       rate: listener.chatRate,
                       isEnabled: listener.chatAvailable,
+                      isInternational: isInternational,
                       onTap: () {
                         if (isPublic) {
                           onConnect?.call();
@@ -435,6 +505,7 @@ class ListenerCardItem extends StatelessWidget {
                       icon: Icons.call_rounded,
                       rate: listener.audioRate,
                       isEnabled: listener.audioAvailable,
+                      isInternational: isInternational,
                       onTap: () {
                         if (isPublic) {
                           onConnect?.call();
@@ -461,6 +532,7 @@ class ListenerCardItem extends StatelessWidget {
                       icon: Icons.videocam_rounded,
                       rate: listener.videoRate,
                       isEnabled: listener.videoAvailable,
+                      isInternational: isInternational,
                       onTap: () {
                         if (isPublic) {
                           onConnect?.call();
@@ -653,18 +725,23 @@ class _ActionButton extends StatelessWidget {
   final IconData icon;
   final double rate;
   final bool isEnabled;
+  final bool isInternational;
   final VoidCallback onTap;
 
   const _ActionButton({
     required this.icon,
     required this.rate,
     required this.isEnabled,
+    this.isInternational = false,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final rateLabel = rate > 0 ? '₹${rate.toStringAsFixed(0)}/m' : 'Free';
+    final usdRate = (rate / 85.0).toStringAsFixed(2);
+    final rateLabel = rate > 0
+        ? (isInternational ? '₹${rate.toStringAsFixed(0)} (\$$usdRate)' : '₹${rate.toStringAsFixed(0)}/m')
+        : 'Free';
     return Opacity(
       opacity: isEnabled ? 1.0 : 0.35,
       child: Material(

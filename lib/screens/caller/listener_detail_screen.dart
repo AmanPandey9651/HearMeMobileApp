@@ -35,6 +35,8 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
   double get audioRate => _number(expert['ratePerMinute'], widget.listener.audioRate);
   double get videoRate => _number(expert['videoRatePerMinute'], widget.listener.videoRate);
   double get chatRate => _number(expert['chatRatePerMinute'], widget.listener.chatRate);
+  String get country => (expert['country'] ?? widget.listener.country ?? 'India').toString().trim();
+  bool get isInternational => country.isNotEmpty && country.toLowerCase() != 'india' && country.toLowerCase() != 'in';
 
   @override
   void initState() {
@@ -583,6 +585,42 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
                               color: Color(0xFF64748B),
                             ),
                           ),
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3.5),
+                            decoration: BoxDecoration(
+                              color: isInternational ? const Color(0xFFEFF6FF) : const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: isInternational ? const Color(0xFF93C5FD) : const Color(0xFFE2E8F0),
+                                width: 0.8,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  isInternational
+                                      ? (country.toLowerCase().contains('united states') || country.toLowerCase().contains('usa') ? '🇺🇸' :
+                                         country.toLowerCase().contains('united kingdom') || country.toLowerCase().contains('uk') ? '🇬🇧' :
+                                         country.toLowerCase().contains('canada') ? '🇨🇦' :
+                                         country.toLowerCase().contains('australia') ? '🇦🇺' :
+                                         country.toLowerCase().contains('uae') ? '🇦🇪' : '🌐')
+                                      : '🇮🇳',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  isInternational ? '$country • International Listener' : 'India • Verified Domestic Listener',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: isInternational ? const Color(0xFF1D4ED8) : const Color(0xFF475569),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                           const SizedBox(height: 12),
                           // Live Status Badge
                           Container(
@@ -675,7 +713,9 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
                         iconColor: const Color(0xFFE05D44),
                         title: 'Voice Call',
                         subtitle: 'Instant private audio session',
-                        rateText: '₹${audioRate.toStringAsFixed(0)}/min',
+                        rateText: isInternational
+                            ? '₹${audioRate.toStringAsFixed(0)}/min (~\$${(audioRate / 85.0).toStringAsFixed(2)})'
+                            : '₹${audioRate.toStringAsFixed(0)}/min',
                         isAvailable: audioAvailable,
                         isBusy: isBusy,
                         isOnline: isOnline,
@@ -692,7 +732,9 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
                         iconColor: const Color(0xFF7C3AED),
                         title: 'Video Call',
                         subtitle: 'Private 1-on-1 video session',
-                        rateText: '₹${videoRate.toStringAsFixed(0)}/min',
+                        rateText: isInternational
+                            ? '₹${videoRate.toStringAsFixed(0)}/min (~\$${(videoRate / 85.0).toStringAsFixed(2)})'
+                            : '₹${videoRate.toStringAsFixed(0)}/min',
                         isAvailable: videoAvailable,
                         isBusy: isBusy,
                         isOnline: isOnline,
@@ -708,7 +750,9 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
                       iconColor: const Color(0xFF2563EB),
                       title: 'Private Chat',
                       subtitle: 'Real-time encrypted text chat',
-                      rateText: '₹${chatRate.toStringAsFixed(0)}/min',
+                      rateText: isInternational
+                          ? '₹${chatRate.toStringAsFixed(0)}/min (~\$${(chatRate / 85.0).toStringAsFixed(2)})'
+                          : '₹${chatRate.toStringAsFixed(0)}/min',
                       isAvailable: chatAvailable,
                       isBusy: isBusy,
                       isOnline: isOnline,

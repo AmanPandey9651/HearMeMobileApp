@@ -110,12 +110,13 @@ class _WalletScreenState extends State<WalletScreen> {
     String? couponFeedback;
     bool isCouponError = false;
     String? formError;
+    bool isGlobalMode = false;
     final amount = await showDialog<double>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
           final currentVal = double.tryParse(c.text.trim()) ?? 0;
-          final isBelowMin = c.text.trim().isNotEmpty && currentVal < 50;
+          final isBelowMin = c.text.trim().isNotEmpty && (isGlobalMode ? currentVal < 5 : currentVal < 50);
 
           return AlertDialog(
             backgroundColor: Colors.white,
@@ -152,9 +153,98 @@ class _WalletScreenState extends State<WalletScreen> {
                       isWarning: true,
                       onDismiss: () => setDialogState(() => formError = null),
                     ),
-                  const Text(
-                    'Select or enter amount in INR (minimum ₹50):',
-                    style: TextStyle(fontSize: 12.5, color: textMuted),
+
+                  // Domestic vs Global Switcher Segment
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              if (isGlobalMode) {
+                                setDialogState(() {
+                                  isGlobalMode = false;
+                                  c.text = '100';
+                                  formError = null;
+                                });
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 7),
+                              decoration: BoxDecoration(
+                                color: !isGlobalMode ? Colors.white : Colors.transparent,
+                                borderRadius: BorderRadius.circular(10),
+                                boxShadow: !isGlobalMode ? [const BoxShadow(color: Colors.black12, blurRadius: 4)] : null,
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Text('🇮🇳', style: TextStyle(fontSize: 13)),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    'India (INR ₹)',
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: !isGlobalMode ? FontWeight.w800 : FontWeight.w600,
+                                      color: !isGlobalMode ? primaryOrange : textMuted,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              if (!isGlobalMode) {
+                                setDialogState(() {
+                                  isGlobalMode = true;
+                                  c.text = '10';
+                                  formError = null;
+                                });
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 7),
+                              decoration: BoxDecoration(
+                                color: isGlobalMode ? Colors.white : Colors.transparent,
+                                borderRadius: BorderRadius.circular(10),
+                                boxShadow: isGlobalMode ? [const BoxShadow(color: Colors.black12, blurRadius: 4)] : null,
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Text('🌐', style: TextStyle(fontSize: 13)),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    'Global (USD \$)',
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: isGlobalMode ? FontWeight.w800 : FontWeight.w600,
+                                      color: isGlobalMode ? primaryOrange : textMuted,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  Text(
+                    isGlobalMode
+                        ? 'Select or enter amount in USD (minimum \$5):'
+                        : 'Select or enter amount in INR (minimum ₹50):',
+                    style: const TextStyle(fontSize: 12.5, color: textMuted),
                   ),
                   const SizedBox(height: 10),
                   TextField(
@@ -163,9 +253,9 @@ class _WalletScreenState extends State<WalletScreen> {
                     style: const TextStyle(fontWeight: FontWeight.w800, color: textDark, fontSize: 18),
                     onChanged: (_) => setDialogState(() { formError = null; }),
                     decoration: InputDecoration(
-                      prefixText: '₹ ',
+                      prefixText: isGlobalMode ? '\$ ' : '₹ ',
                       prefixStyle: const TextStyle(fontWeight: FontWeight.w800, color: primaryOrange, fontSize: 18),
-                      labelText: 'Amount (Min ₹50)',
+                      labelText: isGlobalMode ? 'Amount (Min \$5)' : 'Amount (Min ₹50)',
                       labelStyle: TextStyle(color: isBelowMin ? Colors.redAccent : textMuted, fontSize: 13),
                       filled: true,
                       fillColor: bgCream,
@@ -177,48 +267,109 @@ class _WalletScreenState extends State<WalletScreen> {
                   ),
                   if (isBelowMin) ...[
                     const SizedBox(height: 6),
-                    const Row(
+                    Row(
                       children: [
-                        Icon(Icons.error_outline_rounded, size: 14, color: Colors.redAccent),
-                        SizedBox(width: 4),
+                        const Icon(Icons.error_outline_rounded, size: 14, color: Colors.redAccent),
+                        const SizedBox(width: 4),
                         Text(
-                          'Minimum recharge amount is ₹50',
-                          style: TextStyle(fontSize: 11.5, color: Colors.redAccent, fontWeight: FontWeight.w600),
+                          isGlobalMode ? 'Minimum international recharge is \$5 USD' : 'Minimum recharge amount is ₹50',
+                          style: const TextStyle(fontSize: 11.5, color: Colors.redAccent, fontWeight: FontWeight.w600),
                         ),
                       ],
                     ),
                   ],
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: [50, 100, 200, 500, 1000].map((amt) {
-                      final isSelected = c.text.trim() == '$amt';
-                      return InkWell(
-                        borderRadius: BorderRadius.circular(20),
-                        onTap: () {
-                          c.text = '$amt';
-                          setDialogState(() { formError = null; });
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: isSelected ? primaryOrange : softPeach,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: isSelected ? primaryOrange : const Color(0xFFFCDFD5)),
-                          ),
-                          child: Text(
-                            '₹$amt',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: isSelected ? Colors.white : primaryOrange,
-                              fontSize: 12.5,
+                  if (isGlobalMode) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFBFDBFE)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Text('💳', style: TextStyle(fontSize: 13)),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Foreign cards (Visa/Master/Amex) accepted. Equivalent to ≈ ₹${((double.tryParse(c.text.trim()) ?? 10) * 85).round()} INR.',
+                              style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: Color(0xFF1D4ED8)),
                             ),
                           ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  if (isGlobalMode)
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        {'usd': 5, 'label': '\$5 (~₹425)'},
+                        {'usd': 10, 'label': '\$10 (~₹850)'},
+                        {'usd': 25, 'label': '\$25 (~₹2,125)'},
+                        {'usd': 50, 'label': '\$50 (~₹4,250)'},
+                      ].map((item) {
+                        final val = item['usd'] as int;
+                        final isSelected = c.text.trim() == '$val';
+                        return InkWell(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: () {
+                            c.text = '$val';
+                            setDialogState(() { formError = null; });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: isSelected ? primaryOrange : softPeach,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: isSelected ? primaryOrange : const Color(0xFFFCDFD5)),
+                            ),
+                            child: Text(
+                              '${item['label']}',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: isSelected ? Colors.white : primaryOrange,
+                                fontSize: 11.5,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    )
+                  else
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [50, 100, 200, 500, 1000].map((amt) {
+                        final isSelected = c.text.trim() == '$amt';
+                        return InkWell(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: () {
+                            c.text = '$amt';
+                            setDialogState(() { formError = null; });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: isSelected ? primaryOrange : softPeach,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: isSelected ? primaryOrange : const Color(0xFFFCDFD5)),
+                            ),
+                            child: Text(
+                              '₹$amt',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: isSelected ? Colors.white : primaryOrange,
+                                fontSize: 12.5,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
                   const SizedBox(height: 14),
 
                   // Available Offers Section
@@ -590,16 +741,30 @@ class _WalletScreenState extends State<WalletScreen> {
               FilledButton(
                 onPressed: () {
                   final entered = double.tryParse(c.text.trim());
-                  if (entered == null || entered < 50) {
-                    setDialogState(() {
-                      formError = 'Minimum recharge amount is ₹50. Please enter ₹50 or more.';
-                    });
-                    return;
+                  if (isGlobalMode) {
+                    if (entered == null || entered < 5) {
+                      setDialogState(() {
+                        formError = 'Minimum international recharge is \$5 USD (~₹425).';
+                      });
+                      return;
+                    }
+                    _appliedCouponCode = (appliedCoupon != null && appliedCoupon!['valid'] == true)
+                        ? '${appliedCoupon!['code']}'
+                        : null;
+                    final inrAmount = (entered * 85.0).roundToDouble();
+                    Navigator.pop(ctx, inrAmount);
+                  } else {
+                    if (entered == null || entered < 50) {
+                      setDialogState(() {
+                        formError = 'Minimum recharge amount is ₹50. Please enter ₹50 or more.';
+                      });
+                      return;
+                    }
+                    _appliedCouponCode = (appliedCoupon != null && appliedCoupon!['valid'] == true)
+                        ? '${appliedCoupon!['code']}'
+                        : null;
+                    Navigator.pop(ctx, entered);
                   }
-                  _appliedCouponCode = (appliedCoupon != null && appliedCoupon!['valid'] == true)
-                      ? '${appliedCoupon!['code']}'
-                      : null;
-                  Navigator.pop(ctx, entered);
                 },
                 style: FilledButton.styleFrom(
                   backgroundColor: primaryOrange,
@@ -747,14 +912,33 @@ class _WalletScreenState extends State<WalletScreen> {
                         ),
                       ),
                       const SizedBox(height: 6),
-                      Text(
-                        wallet?.formattedBalance ?? '₹0.00',
-                        style: const TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white,
-                          letterSpacing: -0.5,
-                        ),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(
+                            wallet?.formattedBalance ?? '₹0.00',
+                            style: const TextStyle(
+                              fontSize: 32,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Builder(builder: (_) {
+                            final inr = wallet?.totalBalance ?? (wallet?.balance ?? 0.0);
+                            final usd = (inr / 85.0).toStringAsFixed(2);
+                            return Text(
+                              '(≈ \$$usd USD)',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFFFFECE5),
+                              ),
+                            );
+                          }),
+                        ],
                       ),
                       if ((wallet?.bonusBalance ?? 0) > 0) ...[
                         const SizedBox(height: 2),
