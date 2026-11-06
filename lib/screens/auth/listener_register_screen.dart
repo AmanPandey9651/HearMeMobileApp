@@ -249,6 +249,12 @@ class _ListenerRegisterScreenState extends State<ListenerRegisterScreen> {
                             if (state.text.isEmpty) {
                               state.text = 'Maharashtra';
                             }
+                            final amax = (limits?['maxAudioRatePerMinute'] as num?)?.toDouble() ?? 50.0;
+                            final vmax = (limits?['maxVideoRatePerMinute'] as num?)?.toDouble() ?? 100.0;
+                            final cmax = (limits?['maxChatRatePerMinute'] as num?)?.toDouble() ?? 30.0;
+                            if ((double.tryParse(audio.text) ?? 0) > amax) audio.text = amax.toStringAsFixed(0);
+                            if ((double.tryParse(video.text) ?? 0) > vmax) video.text = vmax.toStringAsFixed(0);
+                            if ((double.tryParse(chat.text) ?? 0) > cmax) chat.text = cmax.toStringAsFixed(0);
                           } else {
                             if (selectedIdType == 'AADHAAR' || selectedIdType == 'PAN') {
                               selectedIdType = 'PASSPORT';
@@ -256,6 +262,12 @@ class _ListenerRegisterScreenState extends State<ListenerRegisterScreen> {
                             if (state.text == 'Maharashtra') {
                               state.text = '';
                             }
+                            final amin = (limits?['minInternationalAudioRatePerMinute'] as num?)?.toDouble() ?? 20.0;
+                            final vmin = (limits?['minInternationalVideoRatePerMinute'] as num?)?.toDouble() ?? 35.0;
+                            final cmin = (limits?['minInternationalChatRatePerMinute'] as num?)?.toDouble() ?? 10.0;
+                            if ((double.tryParse(audio.text) ?? 0) < amin) audio.text = amin.toStringAsFixed(0);
+                            if ((double.tryParse(video.text) ?? 0) < vmin) video.text = vmin.toStringAsFixed(0);
+                            if ((double.tryParse(chat.text) ?? 0) < cmin) chat.text = cmin.toStringAsFixed(0);
                           }
                         });
                         Navigator.pop(ctx);
