@@ -335,16 +335,20 @@ void initState() {
   _startPolling();
   _privacyAlerts.start(_onPrivacyAlert);
 
-  if (!isChat) {
-    InCallVoiceSafetyService.instance.startMonitoring(
-      sessionId: session.id,
-      apiClient: context.read<AppController>().client,
-      onLeakageDetected: (warning) {
-        if (mounted) {
-          setState(() => banner = warning);
-        }
-      },
-    );
+  if (!isChat && defaultTargetPlatform != TargetPlatform.iOS) {
+    try {
+      InCallVoiceSafetyService.instance.startMonitoring(
+        sessionId: session.id,
+        apiClient: context.read<AppController>().client,
+        onLeakageDetected: (warning) {
+          if (mounted) {
+            setState(() => banner = warning);
+          }
+        },
+      );
+    } catch (e) {
+      debugPrint('[InCallVoiceSafety] Safe start error: $e');
+    }
   }
 
   // Sub-second connection: join media immediately if already live on mount

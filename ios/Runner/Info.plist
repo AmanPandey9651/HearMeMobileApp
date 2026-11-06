@@ -88,6 +88,8 @@
 	<string>FeelBack requires microphone access to enable voice and video consultations with listeners.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>FeelBack requires photo library access to upload profile pictures and verification documents.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>FeelBack requires speech recognition to monitor call safety and prevent off-platform contact sharing during calls.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

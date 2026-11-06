@@ -74,6 +74,15 @@ class InCallVoiceSafetyService {
     _apiClient = apiClient;
     _onLeakageDetected = onLeakageDetected;
 
+    // Critical guard for iOS: Concurrent speech recognition (AVAudioEngine) while WebRTC
+    // is capturing microphone audio triggers an uncatchable native audio hardware conflict
+    // and causes the OS to terminate the app. Bypassing speech recognition on iOS during
+    // live calls prevents crashes and keeps calls smooth and stable.
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      debugPrint('[InCallVoiceSafety] Speech recognition bypassed on iOS during active call to prevent audio hardware conflicts.');
+      return;
+    }
+
     try {
       if (!_isInitialized) {
         _isInitialized = await _speech.initialize(

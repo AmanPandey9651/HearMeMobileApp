@@ -262,16 +262,20 @@ void initState() {
 
     registeredActiveSession = true;
 
-    if (!isVideo) {
-      InCallVoiceSafetyService.instance.startMonitoring(
-        sessionId: widget.booking.id,
-        apiClient: context.read<AppController>().client,
-        onLeakageDetected: (warning) {
-          if (mounted) {
-            setState(() => banner = warning);
-          }
-        },
-      );
+    if (!isVideo && defaultTargetPlatform != TargetPlatform.iOS) {
+      try {
+        InCallVoiceSafetyService.instance.startMonitoring(
+          sessionId: widget.booking.id,
+          apiClient: context.read<AppController>().client,
+          onLeakageDetected: (warning) {
+            if (mounted) {
+              setState(() => banner = warning);
+            }
+          },
+        );
+      } catch (e) {
+        debugPrint('[InCallVoiceSafety] Safe start error: $e');
+      }
     }
 
     _bootstrap();
