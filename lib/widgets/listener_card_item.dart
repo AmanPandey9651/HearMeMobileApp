@@ -219,99 +219,120 @@ class ListenerCardItem extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Line 1: Name + Verified Checkmark + Star Rating
+                      // Line 1: Full Name + Verified Checkmark + Star Rating
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Flexible(
-                            child: Text(
-                              listener.displayName,
-                              maxLines: 1,
+                          Expanded(
+                            child: RichText(
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 14.5,
-                                color: Color(0xFF111827),
-                                letterSpacing: -0.2,
+                              text: TextSpan(
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 14.5,
+                                  color: Color(0xFF111827),
+                                  letterSpacing: -0.2,
+                                ),
+                                children: [
+                                  TextSpan(text: listener.displayName),
+                                  const WidgetSpan(
+                                    alignment: PlaceholderAlignment.middle,
+                                    child: Padding(
+                                      padding: EdgeInsets.only(left: 4),
+                                      child: Icon(
+                                        Icons.verified,
+                                        size: 14,
+                                        color: Color(0xFFF95B3D),
+                                      ),
+                                    ),
+                                  ),
+                                  if (listener.isTest)
+                                    WidgetSpan(
+                                      alignment: PlaceholderAlignment.middle,
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(left: 4),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFFEF3C7),
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(
+                                              color: const Color(0xFFF59E0B),
+                                              width: 0.8,
+                                            ),
+                                          ),
+                                          child: const Text(
+                                            '🧪 TEST',
+                                            style: TextStyle(
+                                              fontSize: 8.5,
+                                              fontWeight: FontWeight.w800,
+                                              color: Color(0xFFB45309),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  if (listener.isAdult)
+                                    WidgetSpan(
+                                      alignment: PlaceholderAlignment.middle,
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(left: 4),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFFFF1F2),
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(
+                                              color: const Color(0xFFFDA4AF),
+                                              width: 0.8,
+                                            ),
+                                          ),
+                                          child: const Text(
+                                            '🔞 18+',
+                                            style: TextStyle(
+                                              fontSize: 9.5,
+                                              fontWeight: FontWeight.w800,
+                                              color: Color(0xFFE11D48),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                           ),
                           const SizedBox(width: 4),
-                          const Icon(
-                            Icons.verified,
-                            size: 14,
-                            color: Color(0xFFF95B3D),
-                          ),
-                          if (listener.isTest) ...[
-                            const SizedBox(width: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFEF3C7),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: const Color(0xFFF59E0B),
-                                  width: 0.8,
+                          Padding(
+                            padding: const EdgeInsets.only(top: 1.5),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.star_rounded,
+                                  size: 13.5,
+                                  color: Color(0xFFF59E0B),
                                 ),
-                              ),
-                              child: const Text(
-                                '🧪 TEST',
-                                style: TextStyle(
-                                  fontSize: 8.5,
-                                  fontWeight: FontWeight.w800,
-                                  color: Color(0xFFB45309),
+                                const SizedBox(width: 2),
+                                Text(
+                                  listener.rating.toStringAsFixed(1),
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF111827),
+                                  ),
                                 ),
-                              ),
+                                Text(
+                                  ' (${listener.reviewCount > 0 ? listener.reviewCount : 120})',
+                                  style: const TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFF6B7280),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                          if (listener.isAdult) ...[
-                            const SizedBox(width: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFFF1F2),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: const Color(0xFFFDA4AF),
-                                  width: 0.8,
-                                ),
-                              ),
-                              child: const Text(
-                                '🔞 18+',
-                                style: TextStyle(
-                                  fontSize: 9.5,
-                                  fontWeight: FontWeight.w800,
-                                  color: Color(0xFFE11D48),
-                                ),
-                              ),
-                            ),
-                          ],
-                          const Spacer(),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.star_rounded,
-                                size: 13.5,
-                                color: Color(0xFFF59E0B),
-                              ),
-                              const SizedBox(width: 2),
-                              Text(
-                                listener.rating.toStringAsFixed(1),
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w800,
-                                  color: Color(0xFF111827),
-                                ),
-                              ),
-                              Text(
-                                ' (${listener.reviewCount > 0 ? listener.reviewCount : 120})',
-                                style: const TextStyle(
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w500,
-                                  color: Color(0xFF6B7280),
-                                ),
-                              ),
-                            ],
                           ),
                         ],
                       ),

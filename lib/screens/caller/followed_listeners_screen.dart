@@ -697,7 +697,7 @@ class _FollowedListenersScreenState extends State<FollowedListenersScreen> {
                               Flexible(
                                 child: Text(
                                   listener.displayName,
-                                  maxLines: 1,
+                                  maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                     fontSize: 16.5,
