@@ -179,8 +179,18 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
     setState(() => busy = true);
     try {
       final app = context.read<AppController>();
+      final callerCountry = (app.user?.country ?? '').trim().toLowerCase();
+      final isCallerIntl = (callerCountry.isNotEmpty && callerCountry != 'india' && callerCountry != 'in') ||
+          (DateTime.now().timeZoneOffset.inMinutes != 330);
       // Backend automatically checks 1-min balance and returns helpful message if insufficient
-      final session = await app.api.requestSession(widget.listener.id, type, categorySlug: _categorySlug());
+      final session = await app.api.requestSession(
+        widget.listener.id,
+        type,
+        categorySlug: _categorySlug(),
+        callerIsInternational: isCallerIntl,
+        callerCountry: app.user?.country,
+        callerTimezone: DateTime.now().timeZoneName,
+      );
       if (!mounted) return;
       ActiveCallManager.instance.startCall(session, callerSide: true);
       _refreshPresence();

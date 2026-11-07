@@ -288,11 +288,21 @@ class ApiService {
   Future<List<dynamic>> followedListeners() async => _content(await client.get('/listeners/following'));
   Future<Map<String, dynamic>> nudge(String listenerId) async => Map<String, dynamic>.from(await client.post('/listeners/$listenerId/nudge'));
 
-  Future<InstantSessionModel> requestSession(String listenerId, String type, {String? categorySlug}) async =>
+  Future<InstantSessionModel> requestSession(
+    String listenerId,
+    String type, {
+    String? categorySlug,
+    bool? callerIsInternational,
+    String? callerCountry,
+    String? callerTimezone,
+  }) async =>
       InstantSessionModel.fromJson(Map<String, dynamic>.from(await client.post('/sessions/instant-request', body: {
         'listenerId': listenerId,
         'sessionType': type,
         if (categorySlug != null) 'categorySlug': categorySlug,
+        if (callerIsInternational != null) 'callerIsInternational': callerIsInternational,
+        if (callerCountry != null) 'callerCountry': callerCountry,
+        if (callerTimezone != null) 'callerTimezone': callerTimezone,
       })));
 
   Future<InstantSessionModel?> pendingListenerSession() async {

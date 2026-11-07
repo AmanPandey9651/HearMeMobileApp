@@ -68,8 +68,18 @@ class CallLauncher {
     _inProgress = true;
     try {
       HapticFeedback.lightImpact();
+      final callerCountry = (app.user?.country ?? '').trim().toLowerCase();
+      final isCallerIntl = (callerCountry.isNotEmpty && callerCountry != 'india' && callerCountry != 'in') ||
+          (DateTime.now().timeZoneOffset.inMinutes != 330);
       // Fast single-POST call initiation (< 300ms)
-      final session = await app.api.requestSession(listener.id, type, categorySlug: categorySlug);
+      final session = await app.api.requestSession(
+        listener.id,
+        type,
+        categorySlug: categorySlug,
+        callerIsInternational: isCallerIntl,
+        callerCountry: app.user?.country,
+        callerTimezone: DateTime.now().timeZoneName,
+      );
       ActiveCallManager.instance.startCall(session, callerSide: true);
     } catch (e) {
       showError(context, e);
