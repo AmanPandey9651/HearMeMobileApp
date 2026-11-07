@@ -76,6 +76,11 @@ class ListenerCardItem extends StatelessWidget {
         rawCountry.toLowerCase() != 'india' &&
         rawCountry.toLowerCase() != 'in';
 
+    final appUser = context.read<AppController>().user;
+    final callerCountry = (appUser?.country ?? '').trim().toLowerCase();
+    final isCallerIntl = callerCountry.isNotEmpty && callerCountry != 'india' && callerCountry != 'in';
+    final showDual = isInternational || isCallerIntl;
+
     final isOnline = listener.presence == 'ONLINE';
     final isBusy = listener.presence == 'BUSY_IN_CALL' || listener.presence == 'BUSY';
 
@@ -478,7 +483,7 @@ class ListenerCardItem extends StatelessWidget {
                       icon: Icons.chat_bubble_rounded,
                       rate: listener.chatRate,
                       isEnabled: listener.chatAvailable,
-                      isInternational: isInternational,
+                      isInternational: showDual,
                       onTap: () {
                         if (isPublic) {
                           onConnect?.call();
@@ -505,7 +510,7 @@ class ListenerCardItem extends StatelessWidget {
                       icon: Icons.call_rounded,
                       rate: listener.audioRate,
                       isEnabled: listener.audioAvailable,
-                      isInternational: isInternational,
+                      isInternational: showDual,
                       onTap: () {
                         if (isPublic) {
                           onConnect?.call();
@@ -532,7 +537,7 @@ class ListenerCardItem extends StatelessWidget {
                       icon: Icons.videocam_rounded,
                       rate: listener.videoRate,
                       isEnabled: listener.videoAvailable,
-                      isInternational: isInternational,
+                      isInternational: showDual,
                       onTap: () {
                         if (isPublic) {
                           onConnect?.call();

@@ -37,6 +37,11 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
   double get chatRate => _number(expert['chatRatePerMinute'], widget.listener.chatRate);
   String get country => (expert['country'] ?? widget.listener.country ?? 'India').toString().trim();
   bool get isInternational => country.isNotEmpty && country.toLowerCase() != 'india' && country.toLowerCase() != 'in';
+  bool get showDualRate {
+    if (isInternational) return true;
+    final callerCountry = (context.read<AppController>().user?.country ?? '').trim().toLowerCase();
+    return callerCountry.isNotEmpty && callerCountry != 'india' && callerCountry != 'in';
+  }
 
   @override
   void initState() {
@@ -713,7 +718,7 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
                         iconColor: const Color(0xFFE05D44),
                         title: 'Voice Call',
                         subtitle: 'Instant private audio session',
-                        rateText: isInternational
+                        rateText: showDualRate
                             ? '₹${audioRate.toStringAsFixed(0)}/min (~\$${(audioRate / 85.0).toStringAsFixed(2)})'
                             : '₹${audioRate.toStringAsFixed(0)}/min',
                         isAvailable: audioAvailable,
@@ -732,7 +737,7 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
                         iconColor: const Color(0xFF7C3AED),
                         title: 'Video Call',
                         subtitle: 'Private 1-on-1 video session',
-                        rateText: isInternational
+                        rateText: showDualRate
                             ? '₹${videoRate.toStringAsFixed(0)}/min (~\$${(videoRate / 85.0).toStringAsFixed(2)})'
                             : '₹${videoRate.toStringAsFixed(0)}/min',
                         isAvailable: videoAvailable,
@@ -750,7 +755,7 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
                       iconColor: const Color(0xFF2563EB),
                       title: 'Private Chat',
                       subtitle: 'Real-time encrypted text chat',
-                      rateText: isInternational
+                      rateText: showDualRate
                           ? '₹${chatRate.toStringAsFixed(0)}/min (~\$${(chatRate / 85.0).toStringAsFixed(2)})'
                           : '₹${chatRate.toStringAsFixed(0)}/min',
                       isAvailable: chatAvailable,
