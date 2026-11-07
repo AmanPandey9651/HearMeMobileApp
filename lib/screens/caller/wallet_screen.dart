@@ -612,7 +612,7 @@ class _WalletScreenState extends State<WalletScreen> {
                                 textCapitalization: TextCapitalization.characters,
                                 style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, letterSpacing: 1),
                                 decoration: InputDecoration(
-                                  hintText: 'e.g. WELCOME50',
+                                  hintText: 'Enter promo / coupon code',
                                   hintStyle: const TextStyle(color: textMuted, fontSize: 12, fontWeight: FontWeight.normal),
                                   isDense: true,
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

@@ -230,39 +230,14 @@ class ApiService {
   Future<List<dynamic>> walletTransactions({int page = 0, int size = 50}) async => _content(await client.get('/wallet/transactions', query: {'page': page, 'size': size}));
   Future<Map<String, dynamic>> createRecharge(double amount) async => Map<String, dynamic>.from(await client.post('/wallet/recharge/create-order', body: {'amount': amount}));
   Future<WalletModel> verifyRecharge(Map<String, dynamic> data) async => WalletModel.fromJson(Map<String, dynamic>.from(await client.post('/wallet/recharge/verify', body: data)));
-    Future<List<Map<String, dynamic>>> availableCoupons() async {
+  Future<List<Map<String, dynamic>>> availableCoupons() async {
     try {
       final res = await client.get('/wallet/coupons/available');
-      if (res is List && res.isNotEmpty) {
+      if (res is List) {
         return res.map((e) => Map<String, dynamic>.from(e as Map)).toList();
       }
     } catch (_) {}
-    return [
-      {
-        'code': 'WELCOME50',
-        'description': 'Get 50% extra bonus coins on your recharge (up to 250 bonus coins)',
-        'discountType': 'PERCENTAGE_BONUS',
-        'discountValue': 50,
-        'minRechargeAmount': 100,
-        'maxBonusAmount': 250,
-      },
-      {
-        'code': 'FEELGOOD20',
-        'description': 'Flat 20% bonus coins on all recharges above ₹200',
-        'discountType': 'PERCENTAGE_BONUS',
-        'discountValue': 20,
-        'minRechargeAmount': 200,
-        'maxBonusAmount': 500,
-      },
-      {
-        'code': 'SUPER100',
-        'description': 'Get ₹100 flat bonus coins on recharges of ₹500 or more',
-        'discountType': 'FLAT_COINS',
-        'discountValue': 100,
-        'minRechargeAmount': 500,
-        'maxBonusAmount': 100,
-      },
-    ];
+    return [];
   }
 
   Future<Map<String, dynamic>> estimateCoupon(String code, double amount) async =>
