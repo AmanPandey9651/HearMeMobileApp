@@ -78,8 +78,28 @@ class ListenerCardItem extends StatelessWidget {
 
     final appUser = context.read<AppController>().user;
     final callerCountry = (appUser?.country ?? '').trim().toLowerCase();
-    final isCallerIntl = callerCountry.isNotEmpty && callerCountry != 'india' && callerCountry != 'in';
+    final isCallerIntl = (callerCountry.isNotEmpty && callerCountry != 'india' && callerCountry != 'in') ||
+        (DateTime.now().timeZoneOffset.inMinutes != 330);
     final showDual = isInternational || isCallerIntl;
+
+    final double effectiveChatRate;
+    final double effectiveAudioRate;
+    final double effectiveVideoRate;
+    if (isCallerIntl) {
+      if (!isInternational) {
+        effectiveChatRate = (listener.chatRate * 2.0 < 15.0) ? 15.0 : listener.chatRate * 2.0;
+        effectiveAudioRate = (listener.audioRate * 2.0 < 25.0) ? 25.0 : listener.audioRate * 2.0;
+        effectiveVideoRate = (listener.videoRate * 2.0 < 40.0) ? 40.0 : listener.videoRate * 2.0;
+      } else {
+        effectiveChatRate = listener.chatRate < 35.0 ? 35.0 : listener.chatRate;
+        effectiveAudioRate = listener.audioRate < 60.0 ? 60.0 : listener.audioRate;
+        effectiveVideoRate = listener.videoRate < 90.0 ? 90.0 : listener.videoRate;
+      }
+    } else {
+      effectiveChatRate = listener.chatRate;
+      effectiveAudioRate = listener.audioRate;
+      effectiveVideoRate = listener.videoRate;
+    }
 
     final isOnline = listener.presence == 'ONLINE';
     final isBusy = listener.presence == 'BUSY_IN_CALL' || listener.presence == 'BUSY';
@@ -481,7 +501,7 @@ class ListenerCardItem extends StatelessWidget {
                     // Top: Chat (Warm Peach + Orange Icon + Rate)
                     _ActionButton(
                       icon: Icons.chat_bubble_rounded,
-                      rate: listener.chatRate,
+                      rate: effectiveChatRate,
                       isEnabled: listener.chatAvailable,
                       isInternational: showDual,
                       onTap: () {
@@ -508,7 +528,7 @@ class ListenerCardItem extends StatelessWidget {
                     // Middle: Voice Call (Warm Peach + Orange Icon + Rate)
                     _ActionButton(
                       icon: Icons.call_rounded,
-                      rate: listener.audioRate,
+                      rate: effectiveAudioRate,
                       isEnabled: listener.audioAvailable,
                       isInternational: showDual,
                       onTap: () {
@@ -535,7 +555,7 @@ class ListenerCardItem extends StatelessWidget {
                     // Bottom: Video Call (Warm Peach + Orange Icon + Rate)
                     _ActionButton(
                       icon: Icons.videocam_rounded,
-                      rate: listener.videoRate,
+                      rate: effectiveVideoRate,
                       isEnabled: listener.videoAvailable,
                       isInternational: showDual,
                       onTap: () {

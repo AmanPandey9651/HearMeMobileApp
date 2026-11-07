@@ -37,10 +37,43 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
   double get chatRate => _number(expert['chatRatePerMinute'], widget.listener.chatRate);
   String get country => (expert['country'] ?? widget.listener.country ?? 'India').toString().trim();
   bool get isInternational => country.isNotEmpty && country.toLowerCase() != 'india' && country.toLowerCase() != 'in';
-  bool get showDualRate {
-    if (isInternational) return true;
+
+  bool get isCallerIntl {
     final callerCountry = (context.read<AppController>().user?.country ?? '').trim().toLowerCase();
-    return callerCountry.isNotEmpty && callerCountry != 'india' && callerCountry != 'in';
+    return (callerCountry.isNotEmpty && callerCountry != 'india' && callerCountry != 'in') ||
+        (DateTime.now().timeZoneOffset.inMinutes != 330);
+  }
+
+  bool get showDualRate => isInternational || isCallerIntl;
+
+  double get effectiveAudioRate {
+    final base = audioRate;
+    if (!isCallerIntl) return base;
+    if (!isInternational) {
+      return (base * 2.0 < 25.0) ? 25.0 : base * 2.0;
+    } else {
+      return base < 60.0 ? 60.0 : base;
+    }
+  }
+
+  double get effectiveVideoRate {
+    final base = videoRate;
+    if (!isCallerIntl) return base;
+    if (!isInternational) {
+      return (base * 2.0 < 40.0) ? 40.0 : base * 2.0;
+    } else {
+      return base < 90.0 ? 90.0 : base;
+    }
+  }
+
+  double get effectiveChatRate {
+    final base = chatRate;
+    if (!isCallerIntl) return base;
+    if (!isInternational) {
+      return (base * 2.0 < 15.0) ? 15.0 : base * 2.0;
+    } else {
+      return base < 35.0 ? 35.0 : base;
+    }
   }
 
   @override
@@ -729,8 +762,8 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
                         title: 'Voice Call',
                         subtitle: 'Instant private audio session',
                         rateText: showDualRate
-                            ? '₹${audioRate.toStringAsFixed(0)}/min (~\$${(audioRate / 85.0).toStringAsFixed(2)})'
-                            : '₹${audioRate.toStringAsFixed(0)}/min',
+                            ? '₹${effectiveAudioRate.toStringAsFixed(0)}/min (~\$${(effectiveAudioRate / 85.0).toStringAsFixed(2)})'
+                            : '₹${effectiveAudioRate.toStringAsFixed(0)}/min',
                         isAvailable: audioAvailable,
                         isBusy: isBusy,
                         isOnline: isOnline,
@@ -748,8 +781,8 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
                         title: 'Video Call',
                         subtitle: 'Private 1-on-1 video session',
                         rateText: showDualRate
-                            ? '₹${videoRate.toStringAsFixed(0)}/min (~\$${(videoRate / 85.0).toStringAsFixed(2)})'
-                            : '₹${videoRate.toStringAsFixed(0)}/min',
+                            ? '₹${effectiveVideoRate.toStringAsFixed(0)}/min (~\$${(effectiveVideoRate / 85.0).toStringAsFixed(2)})'
+                            : '₹${effectiveVideoRate.toStringAsFixed(0)}/min',
                         isAvailable: videoAvailable,
                         isBusy: isBusy,
                         isOnline: isOnline,
@@ -766,8 +799,8 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
                       title: 'Private Chat',
                       subtitle: 'Real-time encrypted text chat',
                       rateText: showDualRate
-                          ? '₹${chatRate.toStringAsFixed(0)}/min (~\$${(chatRate / 85.0).toStringAsFixed(2)})'
-                          : '₹${chatRate.toStringAsFixed(0)}/min',
+                          ? '₹${effectiveChatRate.toStringAsFixed(0)}/min (~\$${(effectiveChatRate / 85.0).toStringAsFixed(2)})'
+                          : '₹${effectiveChatRate.toStringAsFixed(0)}/min',
                       isAvailable: chatAvailable,
                       isBusy: isBusy,
                       isOnline: isOnline,
