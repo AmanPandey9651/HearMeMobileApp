@@ -159,7 +159,7 @@ class _LegalPolicyScreenState extends State<LegalPolicyScreen> with SingleTicker
             badge: policy['badge'] ?? 'DPDP Act 2023 Compliant',
             badgeColor: _resolveColor(policy['badgeColor'], const Color(0xFF10B981)),
             title: policy['title'] ?? 'Privacy Policy & Zero-PII Declaration',
-            subtitle: policy['subtitle'] ?? 'Last updated: October 18, 2026 • FeelBack Technologies Inc.',
+            subtitle: policy['subtitle'] ?? 'Last updated: October 18, 2026 • GrimByte Technologies Private Limited',
           ),
           const SizedBox(height: 16),
           for (final sec in dynamicSections) ...[
@@ -188,7 +188,7 @@ class _LegalPolicyScreenState extends State<LegalPolicyScreen> with SingleTicker
           badge: 'DPDP Act 2023 Compliant',
           badgeColor: const Color(0xFF10B981),
           title: 'Privacy Policy & Zero-PII Declaration',
-          subtitle: 'Last updated: October 18, 2026 • FeelBack Technologies Inc.',
+          subtitle: 'Last updated: October 18, 2026 • GrimByte Technologies Private Limited',
         ),
         const SizedBox(height: 16),
 
@@ -540,7 +540,7 @@ class _LegalPolicyScreenState extends State<LegalPolicyScreen> with SingleTicker
           ),
           const SizedBox(height: 8),
           Text(
-            'Entity: FeelBack Technologies Inc.\n'
+            'Entity: GrimByte Technologies Private Limited\n'
             'Officer: ${grievance['officerName'] ?? 'Aman Pandey'}\n'
             'Address: ${grievance['address'] ?? 'Prayagraj, UP, India'}\n'
             'Email: ${grievance['email'] ?? 'feelback.help@gmail.com'}\n'
@@ -584,7 +584,7 @@ class _LegalPolicyScreenState extends State<LegalPolicyScreen> with SingleTicker
           ),
           const SizedBox(height: 8),
           const Text(
-            'Entity: FeelBack Technologies Inc.\n'
+            'Entity: GrimByte Technologies Private Limited\n'
             'Grievance Officer: Aman Pandey\n'
             'Address: Trivenipuram, Jhunsi, Prayagraj, UP 211019, India\n'
             'Email: feelback.help@gmail.com\n'
