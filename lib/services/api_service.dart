@@ -336,6 +336,22 @@ class ApiService {
         },
         {
           'urls': [
+            'turn:api.feelback.in:3478',
+            'turn:3.108.61.140:3478',
+          ],
+          'username': 'feelbackuser',
+          'credential': 'FeelBack@SecureTurn2026',
+        },
+        {
+          'urls': [
+            'turn:api.feelback.in:3478?transport=tcp',
+            'turn:3.108.61.140:3478?transport=tcp',
+          ],
+          'username': 'feelbackuser',
+          'credential': 'FeelBack@SecureTurn2026',
+        },
+        {
+          'urls': [
             'turn:global.relay.metered.ca:3478',
             'turn:global.relay.metered.ca:80',
             'turn:global.relay.metered.ca:443',
