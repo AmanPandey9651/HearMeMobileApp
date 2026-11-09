@@ -513,7 +513,14 @@ void initState() {
   final peer = await createPeerConnection({
     'iceServers': ice,
     'sdpSemantics': 'unified-plan',
+    'bundlePolicy': 'max-bundle',
+    'rtcpMuxPolicy': 'require',
+    'iceCandidatePoolSize': 4,
   });
+
+  peer.onIceConnectionState = (state) {
+    debugPrint('[WebRTC] Booking call ICE connection state = $state');
+  };
 
   pc = peer;
 

@@ -761,7 +761,20 @@ void initState() {
     final peer = await createPeerConnection({
       'iceServers': ice,
       'sdpSemantics': 'unified-plan',
+      'bundlePolicy': 'max-bundle',
+      'rtcpMuxPolicy': 'require',
+      'iceCandidatePoolSize': 4,
     });
+
+    peer.onIceConnectionState = (state) {
+      debugPrint('[WebRTC] Mobile ICE connection state = $state');
+      if (state == RTCIceConnectionState.RTCIceConnectionStateFailed) {
+        debugPrint('[WebRTC] ICE failed across networks, attempting ICE restart...');
+        if (widget.callerSide) {
+          _sendOffer(restart: true).catchError((_) {});
+        }
+      }
+    };
 
     pc = peer;
 
