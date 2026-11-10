@@ -85,6 +85,16 @@ late final Future<void> _renderersReady;
   bool peerVoiceFxCapable = false, nativeVoiceFxActive = false;
   final queuedCandidates = <Map<String, dynamic>>[];
   Map<String, dynamic>? pendingOffer, pendingAnswer;
+  RTCSessionDescription? _lastLocalDesc;
+
+  Future<RTCSessionDescription?> _safeGetLocalDescription(RTCPeerConnection peer) async {
+    if (_lastLocalDesc != null) return _lastLocalDesc;
+    try {
+      return await peer.getLocalDescription();
+    } catch (_) {
+      return null;
+    }
+  }
   List<dynamic> messages = [];
   String? banner;
   String activeVoiceFilter = AndroidVoiceFx.normal;
@@ -1099,6 +1109,7 @@ void initState() {
     final sdp = _preferVP8(offer.sdp ?? '');
     final finalOffer = RTCSessionDescription(sdp, offer.type);
     await peer.setLocalDescription(finalOffer);
+    _lastLocalDesc = finalOffer;
     await _sendSignal({
       'type': 'offer',
       'restart': restart,
@@ -1125,7 +1136,7 @@ void initState() {
           return;
         }
         if (state == RTCSignalingState.RTCSignalingStateHaveLocalOffer) {
-          final localDesc = await currentPc.getLocalDescription();
+          final localDesc = await _safeGetLocalDescription(currentPc);
           if (localDesc != null) {
             await _sendSignal({
               'type': 'offer',
@@ -1337,7 +1348,7 @@ void initState() {
         }
         final state = await peer.getSignalingState();
         if (state == RTCSignalingState.RTCSignalingStateHaveLocalOffer) {
-          final offer = await peer.getLocalDescription();
+          final offer = await _safeGetLocalDescription(peer);
           if (offer != null) {
             await _sendSignal({
               'type': 'offer',
@@ -1345,7 +1356,7 @@ void initState() {
             });
           }
         } else if (state == RTCSignalingState.RTCSignalingStateStable) {
-          final localDesc = await peer.getLocalDescription();
+          final localDesc = await _safeGetLocalDescription(peer);
           if (localDesc != null && localDesc.type == 'offer') {
             await _sendSignal({
               'type': 'offer',
@@ -1457,7 +1468,7 @@ void initState() {
       return;
     }
     try {
-      final localDesc = await peer.getLocalDescription();
+      final localDesc = await _safeGetLocalDescription(peer);
       final signalingState = await peer.getSignalingState();
       final isRestart = s['restart'] == true;
       if (!isRestart && localDesc != null && localDesc.type == 'answer' && signalingState == RTCSignalingState.RTCSignalingStateStable) {
@@ -1478,6 +1489,7 @@ void initState() {
       });
       final finalAnswer = RTCSessionDescription(_preferVP8(answer.sdp ?? ''), answer.type);
       await peer.setLocalDescription(finalAnswer);
+      _lastLocalDesc = finalAnswer;
       await _sendSignal({
         'type': 'answer',
         'restart': s['restart'] == true,
@@ -1794,6 +1806,7 @@ void initState() {
     localStream = null;
     remoteStream = null;
     pc = null;
+    _lastLocalDesc = null;
 
     try {
       for (final t in oldLocal?.getTracks() ?? <MediaStreamTrack>[]) {
