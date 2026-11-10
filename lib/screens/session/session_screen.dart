@@ -761,13 +761,17 @@ void initState() {
     final peer = await createPeerConnection({
       'iceServers': ice,
       'sdpSemantics': 'unified-plan',
-      'bundlePolicy': 'max-bundle',
+      'bundlePolicy': 'balanced',
       'rtcpMuxPolicy': 'require',
-      'iceCandidatePoolSize': 4,
     });
 
     peer.onIceConnectionState = (state) {
       debugPrint('[WebRTC] Mobile ICE connection state = $state');
+      unawaited(_sendSignal({
+        'type': 'WEBRTC_DIAG',
+        'event': 'ICE_STATE',
+        'detail': '$state',
+      }));
       if (state == RTCIceConnectionState.RTCIceConnectionStateFailed) {
         debugPrint('[WebRTC] ICE failed across networks, attempting ICE restart...');
         if (widget.callerSide) {
@@ -783,7 +787,7 @@ void initState() {
      * 3. REMOTE TRACK HANDLER & STREAM DISCOVERY
      * ============================================================
      */
-    peer.onTrack = (event) {
+    peer.onTrack = (event) async {
       if (_isDisposed || ending) {
         return;
       }
@@ -798,9 +802,12 @@ void initState() {
       // 1. Explicitly enable incoming track
       event.track.enabled = true;
 
-      // 2. Pick up the real remote MediaStream provided by WebRTC
+      // 2. Pick up the real remote MediaStream provided by WebRTC (or create fallback if unified-plan streamless)
       if (event.streams.isNotEmpty) {
         remoteStream = event.streams[0];
+      } else {
+        remoteStream ??= await createLocalMediaStream('remote_${session.id}');
+        await remoteStream!.addTrack(event.track);
       }
 
       // 3. Ensure all tracks in remoteStream are active and bind remote renderer
@@ -1020,6 +1027,12 @@ void initState() {
       '[WebRTC] _joinMedia STACK: $stackTrace',
     );
 
+    unawaited(_sendSignal({
+      'type': 'WEBRTC_DIAG',
+      'event': 'JOIN_MEDIA_ERR',
+      'detail': '$e',
+    }));
+
     if (mounted) {
       showError(context, e);
     }
@@ -1198,7 +1211,16 @@ void initState() {
         final s = Map<String, dynamic>.from(raw);
         final ts = (s['timestamp'] as num?)?.toInt() ?? signalSince;
         if (ts > signalSince) signalSince = ts;
-        await _processSignal(s);
+        try {
+          await _processSignal(s);
+        } catch (e) {
+          debugPrint('[WebRTC] Signal process error (${s['type']}): $e');
+          unawaited(_sendSignal({
+            'type': 'WEBRTC_DIAG',
+            'event': 'SIG_PROC_ERR',
+            'detail': '${s['type']}: $e',
+          }));
+        }
       }
     } catch (_) {}
   }
@@ -1411,10 +1433,19 @@ void initState() {
     if (peer == null) return;
 
     if (type == 'answer' && widget.callerSide) {
-      final d = Map<String, dynamic>.from(s['sdp'] as Map);
-      final rawSdp = d['sdp']?.toString() ?? '';
-      await peer.setRemoteDescription(RTCSessionDescription(_preferVP8(rawSdp), d['type']?.toString()));
-      await _flushCandidates();
+      try {
+        final d = Map<String, dynamic>.from(s['sdp'] as Map);
+        final rawSdp = d['sdp']?.toString() ?? '';
+        await peer.setRemoteDescription(RTCSessionDescription(_preferVP8(rawSdp), d['type']?.toString()));
+        await _flushCandidates();
+      } catch (e) {
+        debugPrint('[WebRTC] Error applying answer: $e');
+        unawaited(_sendSignal({
+          'type': 'WEBRTC_DIAG',
+          'event': 'ANSWER_APPLY_ERR',
+          'detail': '$e',
+        }));
+      }
       return;
     }
   }
@@ -1441,7 +1472,6 @@ void initState() {
       final d = Map<String, dynamic>.from(s['sdp'] as Map);
       final rawSdp = d['sdp']?.toString() ?? '';
       await peer.setRemoteDescription(RTCSessionDescription(_preferVP8(rawSdp), d['type']?.toString()));
-      await _flushCandidates();
       final answer = await peer.createAnswer({
         'offerToReceiveAudio': true,
         'offerToReceiveVideo': isVideo,
@@ -1453,28 +1483,37 @@ void initState() {
         'restart': s['restart'] == true,
         'sdp': {'type': finalAnswer.type, 'sdp': finalAnswer.sdp},
       });
+      await _flushCandidates();
       debugPrint('[WebRTC] Answer dispatched for remote offer');
     } catch (e) {
       debugPrint('[WebRTC] Error answering offer: $e');
+      unawaited(_sendSignal({
+        'type': 'WEBRTC_DIAG',
+        'event': 'ANSWER_ERR',
+        'detail': '$e',
+      }));
     }
   }
 
   Future<void> _flushCandidates() async {
     final peer = pc;
-    if (peer == null) return;
-    for (final c in List<Map<String, dynamic>>.from(queuedCandidates)) {
+    if (peer == null || queuedCandidates.isEmpty) return;
+    final batch = List<Map<String, dynamic>>.from(queuedCandidates);
+    queuedCandidates.clear();
+    for (final c in batch) {
       final rawCand = c['candidate']?.toString() ?? '';
       if (rawCand.trim().isEmpty) continue;
       final lineIdx = c['sdpMLineIndex'] is num
           ? (c['sdpMLineIndex'] as num).toInt()
           : int.tryParse('${c['sdpMLineIndex'] ?? ''}');
-      await peer.addCandidate(RTCIceCandidate(
-        rawCand,
-        c['sdpMid']?.toString(),
-        lineIdx,
-      ));
+      try {
+        await peer.addCandidate(RTCIceCandidate(
+          rawCand,
+          c['sdpMid']?.toString(),
+          lineIdx,
+        ));
+      } catch (_) {}
     }
-    queuedCandidates.clear();
   }
 
   Future<void> _refreshMessages() async {

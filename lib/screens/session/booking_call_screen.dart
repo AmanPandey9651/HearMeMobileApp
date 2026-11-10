@@ -513,9 +513,8 @@ void initState() {
   final peer = await createPeerConnection({
     'iceServers': ice,
     'sdpSemantics': 'unified-plan',
-    'bundlePolicy': 'max-bundle',
+    'bundlePolicy': 'balanced',
     'rtcpMuxPolicy': 'require',
-    'iceCandidatePoolSize': 4,
   });
 
   peer.onIceConnectionState = (state) {
@@ -527,7 +526,7 @@ void initState() {
   /*
    * Remote media
    */
-  peer.onTrack = (event) {
+  peer.onTrack = (event) async {
     if (_isDisposed || ending) return;
 
     debugPrint(
@@ -541,6 +540,9 @@ void initState() {
 
     if (event.streams.isNotEmpty) {
       remoteStream = event.streams[0];
+    } else {
+      remoteStream ??= await createLocalMediaStream('remote_${widget.booking.id}');
+      await remoteStream!.addTrack(event.track);
     }
 
     if (remoteStream != null) {
@@ -875,7 +877,6 @@ void initState() {
       final d = Map<String, dynamic>.from(s['sdp'] as Map);
       final rawSdp = d['sdp']?.toString() ?? '';
       await peer.setRemoteDescription(RTCSessionDescription(_preferVP8(rawSdp), d['type']?.toString()));
-      await _flushCandidates();
       final answer = await peer.createAnswer({
         'offerToReceiveAudio': true,
         'offerToReceiveVideo': isVideo,
@@ -887,6 +888,7 @@ void initState() {
         'restart': s['restart'] == true,
         'sdp': {'type': finalAnswer.type, 'sdp': finalAnswer.sdp},
       });
+      await _flushCandidates();
     } else if (type == 'answer' && widget.callerSide) {
       final d = Map<String, dynamic>.from(s['sdp'] as Map);
       final rawSdp = d['sdp']?.toString() ?? '';
@@ -898,18 +900,23 @@ void initState() {
       if (desc == null) {
         queuedCandidates.add(c);
       } else {
-        await peer.addCandidate(RTCIceCandidate(c['candidate']?.toString(), c['sdpMid']?.toString(), (c['sdpMLineIndex'] as num?)?.toInt()));
+        try {
+          await peer.addCandidate(RTCIceCandidate(c['candidate']?.toString(), c['sdpMid']?.toString(), (c['sdpMLineIndex'] as num?)?.toInt()));
+        } catch (_) {}
       }
     }
   }
 
   Future<void> _flushCandidates() async {
     final peer = pc;
-    if (peer == null) return;
-    for (final c in List<Map<String, dynamic>>.from(queuedCandidates)) {
-      await peer.addCandidate(RTCIceCandidate(c['candidate']?.toString(), c['sdpMid']?.toString(), (c['sdpMLineIndex'] as num?)?.toInt()));
-    }
+    if (peer == null || queuedCandidates.isEmpty) return;
+    final batch = List<Map<String, dynamic>>.from(queuedCandidates);
     queuedCandidates.clear();
+    for (final c in batch) {
+      try {
+        await peer.addCandidate(RTCIceCandidate(c['candidate']?.toString(), c['sdpMid']?.toString(), (c['sdpMLineIndex'] as num?)?.toInt()));
+      } catch (_) {}
+    }
   }
 
   Future<void> _pollStatus() async {

@@ -335,46 +335,14 @@ class ApiService {
           ]
         },
         {
-          'urls': [
-            'turn:api.feelback.in:3478',
-            'turn:3.108.61.140:3478',
-          ],
+          'urls': ['turn:3.108.61.140:3478'],
           'username': 'feelbackuser',
           'credential': 'FeelBack@SecureTurn2026',
         },
         {
-          'urls': [
-            'turn:api.feelback.in:3478?transport=tcp',
-            'turn:3.108.61.140:3478?transport=tcp',
-          ],
+          'urls': ['turn:3.108.61.140:3478?transport=tcp'],
           'username': 'feelbackuser',
           'credential': 'FeelBack@SecureTurn2026',
-        },
-        {
-          'urls': [
-            'turn:global.relay.metered.ca:3478',
-            'turn:global.relay.metered.ca:80',
-            'turn:global.relay.metered.ca:443',
-          ],
-          'username': '6345cd6bc373c28407cca377',
-          'credential': 'EF9r911qUNz4Fjkj',
-        },
-        {
-          'urls': [
-            'turn:global.relay.metered.ca:3478?transport=tcp',
-            'turn:global.relay.metered.ca:80?transport=tcp',
-            'turn:global.relay.metered.ca:443?transport=tcp',
-          ],
-          'username': '6345cd6bc373c28407cca377',
-          'credential': 'EF9r911qUNz4Fjkj',
-        },
-        {
-          'urls': [
-            'turns:global.relay.metered.ca:5349',
-            'turns:global.relay.metered.ca:443?transport=tcp',
-          ],
-          'username': '6345cd6bc373c28407cca377',
-          'credential': 'EF9r911qUNz4Fjkj',
         },
       ];
     }
