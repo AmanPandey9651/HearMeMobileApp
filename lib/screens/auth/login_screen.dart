@@ -1237,6 +1237,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     var channel = 'EMAIL';
     var sent = false;
     var busy = false;
+    String? forgotVerificationId;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -1314,13 +1315,80 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                             setLocal(() => busy = true);
                             try {
                               if (!sent) {
-                                await app.api.forgotPassword(id);
-                                setLocal(() => sent = true);
+                                if (channel == 'EMAIL') {
+                                  await app.api.forgotPassword(id);
+                                  setLocal(() => sent = true);
+                                } else {
+                                  // 1. Verify account exists on backend
+                                  await app.api.forgotPassword(id);
+
+                                  // 2. Dispatch real SMS via Firebase Phone Auth
+                                  final digits = id.replaceAll(RegExp(r'\D'), '');
+                                  final fullNumber = digits.startsWith('91') && digits.length == 12
+                                      ? '+$digits'
+                                      : '+91${digits.length > 10 ? digits.substring(digits.length - 10) : digits}';
+
+                                  final completer = Completer<void>();
+                                  await FirebaseAuth.instance.verifyPhoneNumber(
+                                    phoneNumber: fullNumber,
+                                    timeout: const Duration(seconds: 60),
+                                    verificationCompleted: (PhoneAuthCredential credential) async {
+                                      try {
+                                        final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
+                                        final idToken = await userCred.user?.getIdToken();
+                                        if (idToken != null) {
+                                          code.text = credential.smsCode ?? '';
+                                        }
+                                      } catch (_) {}
+                                    },
+                                    verificationFailed: (FirebaseAuthException e) {
+                                      if (!completer.isCompleted) {
+                                        completer.completeError(Exception(e.message ?? 'SMS dispatch failed. Please try again.'));
+                                      }
+                                    },
+                                    codeSent: (String verificationId, int? resendToken) {
+                                      forgotVerificationId = verificationId;
+                                      if (!completer.isCompleted) {
+                                        completer.complete();
+                                      }
+                                    },
+                                    codeAutoRetrievalTimeout: (String verificationId) {
+                                      forgotVerificationId = verificationId;
+                                    },
+                                  );
+
+                                  await completer.future.timeout(
+                                    const Duration(seconds: 25),
+                                    onTimeout: () => throw Exception('SMS dispatch timed out. Please check your connection.'),
+                                  );
+                                  setLocal(() => sent = true);
+                                }
                               } else {
                                 if (code.text.trim().isEmpty) throw Exception('Enter the verification code.');
-                                if (password.text.length < 8) throw Exception('Password must be at least 8 characters.');
+                                if (password.text.length < 6) throw Exception('Password must be at least 6 characters.');
                                 if (password.text != confirmPassword.text) throw Exception('Passwords do not match.');
-                                await app.api.resetPassword(id, code.text.trim(), password.text);
+
+                                String codeToSubmit = code.text.trim();
+                                if (channel == 'MOBILE' && forgotVerificationId != null) {
+                                  try {
+                                    final credential = PhoneAuthProvider.credential(
+                                      verificationId: forgotVerificationId!,
+                                      smsCode: codeToSubmit,
+                                    );
+                                    final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
+                                    final idToken = await userCred.user?.getIdToken();
+                                    if (idToken != null && idToken.isNotEmpty) {
+                                      codeToSubmit = idToken;
+                                    }
+                                  } on FirebaseAuthException catch (e) {
+                                    if (e.code == 'invalid-verification-code') {
+                                      throw Exception('Invalid SMS verification code. Please check and try again.');
+                                    }
+                                    throw Exception(e.message ?? 'Verification failed.');
+                                  }
+                                }
+
+                                await app.api.resetPassword(id, codeToSubmit, password.text);
                                 if (ctx.mounted) {
                                   Navigator.pop(ctx);
                                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password reset successfully. You can sign in now.')));
