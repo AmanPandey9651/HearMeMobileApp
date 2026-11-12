@@ -6,6 +6,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../models/app_models.dart';
 import '../services/api_service.dart';
 import '../services/android_voice_fx.dart';
+import '../services/call_push_service.dart';
 import 'api_client.dart';
 import 'app_config.dart';
 
@@ -134,6 +135,7 @@ class AppController extends ChangeNotifier {
           }
           await _persist();
           _startAccountWatcher();
+          unawaited(CallPushService.instance.onUserAuthenticated(api));
         } catch (_) {
           await logout(markOffline: false);
         }
@@ -171,6 +173,7 @@ class AppController extends ChangeNotifier {
       }
       await _persist();
       _startAccountWatcher();
+      unawaited(CallPushService.instance.onUserAuthenticated(api));
     } catch (e, stack) {
       debugPrint('[AppController] Bootstrap exception (recovered): $e\n$stack');
     } finally {
@@ -414,6 +417,7 @@ class AppController extends ChangeNotifier {
     }
     _accountStatusTimer?.cancel();
     _accountStatusTimer = null;
+    await CallPushService.instance.onLogout(client.token != null ? api : null);
     client.token = null;
     user = null;
     expertProfile = null;

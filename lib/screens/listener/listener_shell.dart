@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../core/active_call_manager.dart';
 import '../../core/app_controller.dart';
 import '../../models/app_models.dart';
+import '../../services/call_push_service.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/incoming_call_overlay.dart';
 import 'listener_dashboard_screen.dart';
@@ -43,10 +44,18 @@ class _ListenerShellState extends State<ListenerShell> {
     poll = Timer.periodic(const Duration(milliseconds: 1000), (_) => _incoming());
     nudgePoll = Timer.periodic(const Duration(seconds: 30), (_) => _nudges());
     Future<void>.delayed(const Duration(milliseconds: 900), _nudges);
+    CallPushService.instance.onForegroundIncomingCall = _incoming;
+    CallPushService.instance.onAlertNotificationReceived = _nudges;
   }
 
   @override
   void dispose() {
+    if (CallPushService.instance.onForegroundIncomingCall == _incoming) {
+      CallPushService.instance.onForegroundIncomingCall = null;
+    }
+    if (CallPushService.instance.onAlertNotificationReceived == _nudges) {
+      CallPushService.instance.onAlertNotificationReceived = null;
+    }
     poll?.cancel();
     nudgePoll?.cancel();
     super.dispose();
@@ -60,6 +69,7 @@ class _ListenerShellState extends State<ListenerShell> {
         return;
       }
       if (s.id == shownId || !mounted) return;
+      if (ActiveCallManager.instance.activeSession?.id == s.id) return;
       shownId = s.id;
       await _showIncoming(s);
     } catch (_) {}
@@ -160,19 +170,25 @@ class _ListenerShellState extends State<ListenerShell> {
   }
 
   Future<void> _showIncoming(InstantSessionModel s) async {
-    final decision = await IncomingCallOverlay.show(context, s);
-
+    CallPushService.instance.markSessionHandledInApp(s.id);
     try {
-      if (decision == true) {
-        final accepted = await context.read<AppController>().api.acceptSession(s.id);
-        ActiveCallManager.instance.startCall(accepted, callerSide: false);
-      } else if (decision == false) {
-        await context.read<AppController>().api.rejectSession(s.id, 'Listener declined');
+      final decision = await IncomingCallOverlay.show(context, s);
+
+      try {
+        if (decision == true) {
+          final accepted = await context.read<AppController>().api.acceptSession(s.id);
+          ActiveCallManager.instance.startCall(accepted, callerSide: false);
+        } else if (decision == false) {
+          await context.read<AppController>().api.rejectSession(s.id, 'Listener declined');
+        }
+      } catch (e) {
+        if (mounted) showError(context, e);
       }
-    } catch (e) {
-      if (mounted) showError(context, e);
+    } finally {
+      CallPushService.instance.clearSessionHandledInApp(s.id);
+      unawaited(CallPushService.instance.dismissCallNotification(s.id));
+      shownId = null;
     }
-    shownId = null;
   }
 
   @override

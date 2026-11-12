@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../core/active_call_manager.dart';
 import '../../core/app_controller.dart';
 import '../../models/app_models.dart';
+import '../../services/call_push_service.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/incoming_call_overlay.dart';
 import 'anonymous_profile_screen.dart';
@@ -52,10 +53,18 @@ class _CallerShellState extends State<CallerShell> {
     callbackPoll = Timer.periodic(const Duration(seconds: 3), (_) => _checkCallback());
     navPoll = Timer.periodic(const Duration(seconds: 20), (_) => _refreshNav());
     Future<void>.delayed(const Duration(milliseconds: 500), _refreshNav);
+    CallPushService.instance.onForegroundIncomingCall = _checkCallback;
+    CallPushService.instance.onAlertNotificationReceived = _refreshNav;
   }
 
   @override
   void dispose() {
+    if (CallPushService.instance.onForegroundIncomingCall == _checkCallback) {
+      CallPushService.instance.onForegroundIncomingCall = null;
+    }
+    if (CallPushService.instance.onAlertNotificationReceived == _refreshNav) {
+      CallPushService.instance.onAlertNotificationReceived = null;
+    }
     callbackPoll?.cancel();
     navPoll?.cancel();
     super.dispose();
@@ -81,25 +90,32 @@ class _CallerShellState extends State<CallerShell> {
       if (matches.isEmpty || !mounted) return;
       final s = matches.first;
       if (shownCallback == s.id) return;
+      if (ActiveCallManager.instance.activeSession?.id == s.id) return;
       shownCallback = s.id;
       await _showCallback(s);
     } catch (_) {}
   }
 
   Future<void> _showCallback(InstantSessionModel s) async {
-    final yes = await IncomingCallOverlay.show(context, s, isCallback: true);
-
+    CallPushService.instance.markSessionHandledInApp(s.id);
     try {
-      if (yes == true) {
-        final accepted = await context.read<AppController>().api.acceptSession(s.id);
-        ActiveCallManager.instance.startCall(accepted, callerSide: true);
-      } else {
-        await context.read<AppController>().api.rejectSession(s.id, 'Caller declined callback');
+      final yes = await IncomingCallOverlay.show(context, s, isCallback: true);
+
+      try {
+        if (yes == true) {
+          final accepted = await context.read<AppController>().api.acceptSession(s.id);
+          ActiveCallManager.instance.startCall(accepted, callerSide: true);
+        } else {
+          await context.read<AppController>().api.rejectSession(s.id, 'Caller declined callback');
+        }
+      } catch (e) {
+        if (mounted) showError(context, e);
       }
-    } catch (e) {
-      if (mounted) showError(context, e);
+    } finally {
+      CallPushService.instance.clearSessionHandledInApp(s.id);
+      unawaited(CallPushService.instance.dismissCallNotification(s.id));
+      shownCallback = null;
     }
-    shownCallback = null;
   }
 
   @override
