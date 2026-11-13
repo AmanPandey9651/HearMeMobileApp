@@ -3810,9 +3810,47 @@ void initState() {
             onPressed: _showTools,
             icon: const Icon(Icons.auto_awesome, color: Color(0xFF0F172A)),
           ),
-          IconButton(
-            onPressed: _end,
-            icon: const Icon(Icons.close_rounded, color: Color(0xFFE11D48)),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: GestureDetector(
+              onTap: () {
+                HapticFeedback.heavyImpact();
+                _end();
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEF4444),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFEF4444).withValues(alpha: 0.35),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.call_end_rounded,
+                      color: Colors.white,
+                      size: 14,
+                    ),
+                    SizedBox(width: 4),
+                    Text(
+                      'End',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -4847,6 +4885,18 @@ void initState() {
                         onTap: () {
                           Navigator.pop(ctx);
                           _report();
+                        },
+                      ),
+
+                      // End Consultation
+                      _buildLuxuryToolTile(
+                        icon: Icons.call_end_rounded,
+                        gradientColors: const [Color(0xFFEF4444), Color(0xFFDC2626)],
+                        title: 'End Consultation',
+                        subtitle: 'Hang up and conclude this session',
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _end();
                         },
                       ),
                       const SizedBox(height: 12),
