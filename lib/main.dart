@@ -19,16 +19,26 @@ import 'widgets/global_call_host.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppConfig.initialize();
-  try {
-    if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp(options: kAndroidFirebaseOptions);
-    }
-  } catch (e) {
-    debugPrint('[Firebase] Main initialization warning: $e');
+
+  // Platform-specific Firebase initialization
+  if (defaultTargetPlatform == TargetPlatform.android) {
     try {
-      if (Firebase.apps.isEmpty) await Firebase.initializeApp();
-    } catch (_) {}
+      if (Firebase.apps.isEmpty) {
+        await Firebase.initializeApp(options: kAndroidFirebaseOptions);
+      }
+    } catch (e) {
+      debugPrint('[Firebase] Android initialization warning: $e');
+    }
+  } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+    try {
+      if (Firebase.apps.isEmpty) {
+        await Firebase.initializeApp();
+      }
+    } catch (e) {
+      debugPrint('[Firebase] iOS initialization warning (GoogleService-Info.plist): $e');
+    }
   }
+
   await CallPushService.instance.initialize();
 
   runApp(

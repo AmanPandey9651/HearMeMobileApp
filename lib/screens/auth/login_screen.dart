@@ -1331,11 +1331,19 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                       : '+91${digits.length > 10 ? digits.substring(digits.length - 10) : digits}';
 
                                   try {
-                                    if (Firebase.apps.isEmpty) {
-                                      try {
-                                        await Firebase.initializeApp(options: kAndroidFirebaseOptions);
-                                      } catch (_) {
-                                        if (Firebase.apps.isEmpty) await Firebase.initializeApp();
+                                    if (defaultTargetPlatform == TargetPlatform.android) {
+                                      if (Firebase.apps.isEmpty) {
+                                        try {
+                                          await Firebase.initializeApp(options: kAndroidFirebaseOptions);
+                                        } catch (_) {
+                                          if (Firebase.apps.isEmpty) await Firebase.initializeApp();
+                                        }
+                                      }
+                                    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+                                      if (Firebase.apps.isEmpty) {
+                                        try {
+                                          await Firebase.initializeApp();
+                                        } catch (_) {}
                                       }
                                     }
 
