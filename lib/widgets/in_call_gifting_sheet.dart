@@ -140,6 +140,8 @@ class _InCallGiftingSheetState extends State<InCallGiftingSheet> {
     });
 
     try {
+      final app = context.read<AppController>();
+      final senderName = app.user?.fullName ?? app.user?.firstName ?? 'Listener';
       final note = noteController.text.trim();
       final giftType = '${selectedGift['id'] ?? selectedGift['giftType'] ?? selectedGift['name']}';
       final giftName = '${selectedGift['name'] ?? 'Gift'}';
@@ -151,12 +153,24 @@ class _InCallGiftingSheetState extends State<InCallGiftingSheet> {
         'giftEmoji': giftEmoji,
         'giftPrice': selectedPrice,
         'note': note.isNotEmpty ? note : null,
+        'senderName': senderName,
+        'senderRole': 'listener',
       };
 
-      await context.read<AppController>().api.sendSignal(
+      await app.api.sendSignal(
         widget.sessionId,
         payload,
       );
+
+      // Dual-channel redundancy: also broadcast into session chat so web/mobile user sees the request immediately
+      try {
+        await app.api.sendMessage(
+          widget.sessionId,
+          '🎁 Requested a $giftEmoji $giftName (₹${selectedPrice.toStringAsFixed(0)})${note.isNotEmpty ? " • \"$note\"" : ""}',
+          senderName: senderName,
+          senderRole: 'LISTENER',
+        );
+      } catch (_) {}
 
       if (widget.onGiftRequested != null) {
         widget.onGiftRequested!(payload);
