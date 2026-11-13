@@ -3787,6 +3787,26 @@ void initState() {
         ),
         actions: [
           IconButton(
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              _gift();
+            },
+            tooltip: widget.callerSide ? 'Send a Gift' : 'Request a Gift',
+            icon: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFECE5),
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFF95B3D).withValues(alpha: 0.3)),
+              ),
+              child: const Icon(
+                Icons.card_giftcard_rounded,
+                color: Color(0xFFF95B3D),
+                size: 18,
+              ),
+            ),
+          ),
+          IconButton(
             onPressed: _showTools,
             icon: const Icon(Icons.auto_awesome, color: Color(0xFF0F172A)),
           ),
@@ -3839,12 +3859,12 @@ void initState() {
                   label: 'Topic',
                   onTap: _topic,
                 ),
-                if (widget.callerSide)
-                  _buildQuickActionChip(
-                    icon: Icons.card_giftcard_rounded,
-                    label: 'Send Gift',
-                    onTap: _gift,
-                  ),
+                _buildQuickActionChip(
+                  icon: Icons.card_giftcard_rounded,
+                  label: widget.callerSide ? 'Send Gift 🎁' : 'Request Gift 🎁',
+                  onTap: _gift,
+                  isSpecial: true,
+                ),
                 _buildQuickActionChip(
                   icon: Icons.sports_esports_rounded,
                   label: 'Play Game',
@@ -3870,6 +3890,7 @@ void initState() {
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    bool isSpecial = false,
   }) {
     return Padding(
       padding: const EdgeInsets.only(right: 8),
@@ -3881,9 +3902,12 @@ void initState() {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: isSpecial ? const Color(0xFFFFF1EE) : Colors.white,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFFFECE5)),
+            border: Border.all(
+              color: isSpecial ? const Color(0xFFF95B3D) : const Color(0xFFFFECE5),
+              width: isSpecial ? 1.2 : 1,
+            ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -3892,10 +3916,10 @@ void initState() {
               const SizedBox(width: 5),
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF475569),
+                  color: isSpecial ? const Color(0xFFF95B3D) : const Color(0xFF475569),
                 ),
               ),
             ],
@@ -4058,6 +4082,27 @@ void initState() {
                       border: InputBorder.none,
                       isDense: true,
                       contentPadding: EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    _gift();
+                  },
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    margin: const EdgeInsets.only(right: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFECE5),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFFF95B3D).withValues(alpha: 0.25)),
+                    ),
+                    child: const Icon(
+                      Icons.card_giftcard_rounded,
+                      color: Color(0xFFF95B3D),
+                      size: 19,
                     ),
                   ),
                 ),
@@ -4986,12 +5031,62 @@ void initState() {
           child: SizedBox(
             height: MediaQuery.of(ctx).size.height * .68,
             child: Column(children: [
-              const Padding(padding: EdgeInsets.all(14), child: Text('In-call chat', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                child: Row(
+                  children: [
+                    const Text('In-call chat', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _gift();
+                      },
+                      icon: const Icon(Icons.card_giftcard_rounded, size: 16, color: Color(0xFFF95B3D)),
+                      label: Text(
+                        widget.callerSide ? 'Send Gift 🎁' : 'Request Gift 🎁',
+                        style: const TextStyle(
+                          color: Color(0xFFF95B3D),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               Expanded(child: ListView.builder(padding: const EdgeInsets.symmetric(horizontal: 12), itemCount: messages.length, itemBuilder: (_, i) {
                 final m = Map<String, dynamic>.from(messages[i]);
                 return ListTile(dense: true, title: Text('${m['senderName'] ?? ''}'), subtitle: Text('${m['text'] ?? ''}'));
               })),
-              SafeArea(child: Padding(padding: const EdgeInsets.all(10), child: Row(children: [Expanded(child: TextField(controller: controller, onSubmitted: (_) => send(), decoration: const InputDecoration(hintText: 'Message…'))), IconButton.filled(onPressed: send, icon: const Icon(Icons.send))]))),
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: controller,
+                          onSubmitted: (_) => send(),
+                          decoration: const InputDecoration(hintText: 'Message…'),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _gift();
+                        },
+                        tooltip: widget.callerSide ? 'Send Gift' : 'Request Gift',
+                        icon: const Icon(Icons.card_giftcard_rounded, color: Color(0xFFF95B3D)),
+                      ),
+                      IconButton.filled(
+                        onPressed: send,
+                        icon: const Icon(Icons.send),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ]),
           ),
         );
