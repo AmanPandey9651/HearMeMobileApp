@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'screens/common/first_time_onboarding_screen.dart';
 import 'services/app_lock_service.dart';
