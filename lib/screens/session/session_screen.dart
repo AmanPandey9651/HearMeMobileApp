@@ -108,6 +108,34 @@ late final Future<void> _renderersReady;
   Timer? _nudityCooldownTimer;
   final String _clientId = '${DateTime.now().microsecondsSinceEpoch}_${(1000 + DateTime.now().millisecond * 7 % 9000)}';
 
+  // WhatsApp-style video overlay controls visibility & 5-second auto-hide timer
+  bool _areVideoControlsVisible = true;
+  Timer? _videoControlsTimer;
+
+  void _resetVideoControlsTimer() {
+    _videoControlsTimer?.cancel();
+    if (_areVideoControlsVisible) {
+      _videoControlsTimer = Timer(const Duration(seconds: 5), () {
+        if (mounted && _areVideoControlsVisible) {
+          setState(() {
+            _areVideoControlsVisible = false;
+          });
+        }
+      });
+    }
+  }
+
+  void _toggleVideoControls() {
+    setState(() {
+      _areVideoControlsVisible = !_areVideoControlsVisible;
+    });
+    if (_areVideoControlsVisible) {
+      _resetVideoControlsTimer();
+    } else {
+      _videoControlsTimer?.cancel();
+    }
+  }
+
   // Live money and balance tracking (real-time decreasing for caller, increasing for listener)
   double? _callerInitialBalance;
   double _callerGiftsSpent = 0.0;
@@ -334,6 +362,10 @@ void initState() {
   everLive = isLive;
   ringRemaining = _initRingRemaining();
   _listenerGiftEarnings = session.giftEarnings;
+
+  if (isVideo) {
+    _resetVideoControlsTimer();
+  }
 
   if (widget.callerSide) {
     _api.wallet().then((w) {
@@ -1715,6 +1747,8 @@ void initState() {
     ending = true;
 
     // 1. Immediately freeze duration timer and cancel all polling
+    _videoControlsTimer?.cancel();
+    _videoControlsTimer = null;
     clock?.cancel();
     clock = null;
     sessionPoll?.cancel();
@@ -1853,6 +1887,8 @@ void initState() {
   @override
   void dispose() {
     _isDisposed = true;
+    _videoControlsTimer?.cancel();
+    _videoControlsTimer = null;
     sessionPoll?.cancel();
     sessionPoll = null;
     signalPoll?.cancel();
@@ -3008,37 +3044,48 @@ void initState() {
           child: Stack(
             fit: StackFit.expand,
             children: [
-            // 1. Fullscreen Remote Video or Connecting Fallback
+            // 1. Fullscreen Remote Video or Connecting Fallback (with WhatsApp-style tap-to-toggle overlay detector)
             Positioned.fill(
-              child: (remoteRenderer.srcObject != null &&
-                      remoteStream != null &&
-                      remoteStream!.getVideoTracks().isNotEmpty)
-                  ? FilteredVideoView(
-                      filter: peerVideoFilter,
-                      child: RTCVideoView(
-                        remoteRenderer,
-                        objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-                      ),
-                    )
-                  : _buildVideoConnectingFallback(peerName, peerAvatar),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  _toggleVideoControls();
+                },
+                child: (remoteRenderer.srcObject != null &&
+                        remoteStream != null &&
+                        remoteStream!.getVideoTracks().isNotEmpty)
+                    ? FilteredVideoView(
+                        filter: peerVideoFilter,
+                        child: RTCVideoView(
+                          remoteRenderer,
+                          objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                        ),
+                      )
+                    : _buildVideoConnectingFallback(peerName, peerAvatar),
+              ),
             ),
 
-            // 2. Subtle Cinematic Vignette Overlays
+            // 2. Subtle Cinematic Vignette Overlays (fade out when controls hide)
             Positioned(
               top: 0,
               left: 0,
               right: 0,
               height: 160,
               child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.black.withValues(alpha: 0.75),
-                        Colors.transparent,
-                      ],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
+                child: AnimatedOpacity(
+                  opacity: _areVideoControlsVisible ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 250),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.black.withValues(alpha: 0.75),
+                          Colors.transparent,
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
                     ),
                   ),
                 ),
@@ -3050,31 +3097,38 @@ void initState() {
               right: 0,
               height: 200,
               child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withValues(alpha: 0.85),
-                      ],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
+                child: AnimatedOpacity(
+                  opacity: _areVideoControlsVisible ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 250),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.85),
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
 
-            // 3. Floating PiP Local Video (top right)
-            Positioned(
+            // 3. Floating PiP Local Video (smoothly glides higher when controls hide)
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
               right: 16,
-              top: topPadding + 62,
+              top: _areVideoControlsVisible ? (topPadding + 62) : (topPadding + 16),
               width: 108,
               height: 154,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () {
                   HapticFeedback.lightImpact();
+                  _resetVideoControlsTimer();
                   _switchCamera();
                 },
                 child: Container(
@@ -3179,14 +3233,19 @@ void initState() {
               ),
             ),
 
-            // 4. Floating Top Bar (Strictly positioned at the top)
+            // 4. Floating Top Bar (Strictly positioned at the top, animated fade)
             Positioned(
               top: 0,
               left: 0,
               right: 0,
-              child: SafeArea(
-                bottom: false,
-                child: Padding(
+              child: IgnorePointer(
+                ignoring: !_areVideoControlsVisible,
+                child: AnimatedOpacity(
+                  opacity: _areVideoControlsVisible ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 250),
+                  child: SafeArea(
+                    bottom: false,
+                    child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Row(
                     children: [
@@ -3289,6 +3348,7 @@ void initState() {
                       GestureDetector(
                         onTap: () {
                           HapticFeedback.lightImpact();
+                          _resetVideoControlsTimer();
                           _showTools();
                         },
                         child: Container(
@@ -3319,6 +3379,8 @@ void initState() {
                   ),
                 ),
               ),
+                ),
+              ),
             ),
 
             // Top Banner if active
@@ -3327,7 +3389,14 @@ void initState() {
                 top: topPadding + 62,
                 left: 16,
                 right: 136,
-                child: _buildTopBanner(),
+                child: IgnorePointer(
+                  ignoring: !_areVideoControlsVisible,
+                  child: AnimatedOpacity(
+                    opacity: _areVideoControlsVisible ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 250),
+                    child: _buildTopBanner(),
+                  ),
+                ),
               ),
 
             // Safety Off-Platform Deterrence Strip
@@ -3335,7 +3404,14 @@ void initState() {
               top: topPadding + (banner != null ? 116 : 62),
               left: 16,
               right: 136,
-              child: _buildSafetyDeterrenceStrip(isVideo: true),
+              child: IgnorePointer(
+                ignoring: !_areVideoControlsVisible,
+                child: AnimatedOpacity(
+                  opacity: _areVideoControlsVisible ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 250),
+                  child: _buildSafetyDeterrenceStrip(isVideo: true),
+                ),
+              ),
             ),
 
             // 4. Secondary Floating Contextual Micro-Pills (Nudity Shield, Video Filters, Speaker)
@@ -3343,36 +3419,52 @@ void initState() {
               left: 16,
               right: 16,
               bottom: bottomPadding + 82,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Nudity Mode Micro-Pill
-                  _buildFloatingMicroPill(
-                    icon: isNudityAllowed ? Icons.shield_rounded : Icons.shield_outlined,
-                    label: isNudityAllowed ? '18+ Allowed' : 'Safety Shield',
-                    isActive: isNudityAllowed,
-                    activeColor: const Color(0xFFEC4899),
-                    onTap: _toggleNudityPermission,
+              child: IgnorePointer(
+                ignoring: !_areVideoControlsVisible,
+                child: AnimatedOpacity(
+                  opacity: _areVideoControlsVisible ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 250),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Nudity Mode Micro-Pill
+                      _buildFloatingMicroPill(
+                        icon: isNudityAllowed ? Icons.shield_rounded : Icons.shield_outlined,
+                        label: isNudityAllowed ? '18+ Allowed' : 'Safety Shield',
+                        isActive: isNudityAllowed,
+                        activeColor: const Color(0xFFEC4899),
+                        onTap: () {
+                          _resetVideoControlsTimer();
+                          _toggleNudityPermission();
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      // Video Filter Micro-Pill
+                      _buildFloatingMicroPill(
+                        icon: Icons.face_retouching_natural_rounded,
+                        label: activeVideoFilter == VideoPrivacyFilter.none ? 'Filters' : 'Filter ON',
+                        isActive: activeVideoFilter != VideoPrivacyFilter.none,
+                        activeColor: const Color(0xFFA855F7),
+                        onTap: () {
+                          _resetVideoControlsTimer();
+                          _videoFilters();
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      // Speaker Micro-Pill
+                      _buildFloatingMicroPill(
+                        icon: speaker ? Icons.volume_up_rounded : Icons.volume_down_rounded,
+                        label: speaker ? 'Speaker' : 'Earpiece',
+                        isActive: speaker,
+                        activeColor: const Color(0xFF38BDF8),
+                        onTap: () {
+                          _resetVideoControlsTimer();
+                          _toggleSpeaker();
+                        },
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  // Video Filter Micro-Pill
-                  _buildFloatingMicroPill(
-                    icon: Icons.face_retouching_natural_rounded,
-                    label: activeVideoFilter == VideoPrivacyFilter.none ? 'Filters' : 'Filter ON',
-                    isActive: activeVideoFilter != VideoPrivacyFilter.none,
-                    activeColor: const Color(0xFFA855F7),
-                    onTap: _videoFilters,
-                  ),
-                  const SizedBox(width: 8),
-                  // Speaker Micro-Pill
-                  _buildFloatingMicroPill(
-                    icon: speaker ? Icons.volume_up_rounded : Icons.volume_down_rounded,
-                    label: speaker ? 'Speaker' : 'Earpiece',
-                    isActive: speaker,
-                    activeColor: const Color(0xFF38BDF8),
-                    onTap: _toggleSpeaker,
-                  ),
-                ],
+                ),
               ),
             ),
 
@@ -3381,81 +3473,97 @@ void initState() {
               left: 16,
               right: 16,
               bottom: bottomPadding + 14,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0F172A).withValues(alpha: 0.90),
-                  borderRadius: BorderRadius.circular(40),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.14),
-                    width: 1.2,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.6),
-                      blurRadius: 30,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    // Mic
-                    _buildVideoGlassButton(
-                      icon: mic ? Icons.mic_rounded : Icons.mic_off_rounded,
-                      isActive: mic,
-                      tooltip: mic ? 'Mute microphone' : 'Unmute microphone',
-                      onTap: _toggleMic,
-                    ),
-                    // Video Camera
-                    _buildVideoGlassButton(
-                      icon: camera ? Icons.videocam_rounded : Icons.videocam_off_rounded,
-                      isActive: camera,
-                      tooltip: camera ? 'Turn off camera' : 'Turn on camera',
-                      onTap: _toggleCamera,
-                    ),
-                    // Virtual Gift Button (Centerpiece Jewel for both Caller & Listener)
-                    _buildInCallGiftButton(compact: false),
-                    // Camera Switch (Front/Back)
-                    _buildVideoGlassButton(
-                      icon: Icons.flip_camera_ios_rounded,
-                      isActive: true,
-                      tooltip: 'Switch camera',
-                      onTap: _switchCamera,
-                    ),
-                    // End Call Button
-                    GestureDetector(
-                      onTap: () {
-                        HapticFeedback.heavyImpact();
-                        _end();
-                      },
-                      child: Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFFFF5252), Color(0xFFDC2626)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFFDC2626).withValues(alpha: 0.5),
-                              blurRadius: 16,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.call_end_rounded,
-                          color: Colors.white,
-                          size: 26,
-                        ),
+              child: IgnorePointer(
+                ignoring: !_areVideoControlsVisible,
+                child: AnimatedOpacity(
+                  opacity: _areVideoControlsVisible ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 250),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A).withValues(alpha: 0.90),
+                      borderRadius: BorderRadius.circular(40),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.14),
+                        width: 1.2,
                       ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.6),
+                          blurRadius: 30,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
                     ),
-                  ],
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        // Mic
+                        _buildVideoGlassButton(
+                          icon: mic ? Icons.mic_rounded : Icons.mic_off_rounded,
+                          isActive: mic,
+                          tooltip: mic ? 'Mute microphone' : 'Unmute microphone',
+                          onTap: () {
+                            _resetVideoControlsTimer();
+                            _toggleMic();
+                          },
+                        ),
+                        // Video Camera
+                        _buildVideoGlassButton(
+                          icon: camera ? Icons.videocam_rounded : Icons.videocam_off_rounded,
+                          isActive: camera,
+                          tooltip: camera ? 'Turn off camera' : 'Turn on camera',
+                          onTap: () {
+                            _resetVideoControlsTimer();
+                            _toggleCamera();
+                          },
+                        ),
+                        // Virtual Gift Button (Centerpiece Jewel for both Caller & Listener)
+                        _buildInCallGiftButton(compact: false),
+                        // Camera Switch (Front/Back)
+                        _buildVideoGlassButton(
+                          icon: Icons.flip_camera_ios_rounded,
+                          isActive: true,
+                          tooltip: 'Switch camera',
+                          onTap: () {
+                            _resetVideoControlsTimer();
+                            _switchCamera();
+                          },
+                        ),
+                        // End Call Button
+                        GestureDetector(
+                          onTap: () {
+                            HapticFeedback.heavyImpact();
+                            _end();
+                          },
+                          child: Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFFFF5252), Color(0xFFDC2626)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFDC2626).withValues(alpha: 0.5),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.call_end_rounded,
+                              color: Colors.white,
+                              size: 26,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
