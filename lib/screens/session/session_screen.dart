@@ -1269,6 +1269,26 @@ void initState() {
       }
       return;
     }
+    if (type == 'gift_requested') {
+      final giftType = '${s['giftType'] ?? 'HEART'}';
+      final giftName = '${s['giftName'] ?? 'Gift'}';
+      final giftEmoji = '${s['giftEmoji'] ?? '🎁'}';
+      final price = (s['giftPrice'] as num?)?.toDouble() ?? 10.0;
+      final note = '${s['note'] ?? ''}'.trim();
+      final senderName = '${s['senderName'] ?? peerName}';
+
+      if (widget.callerSide && mounted) {
+        _showGiftRequestedPrompt(
+          giftType: giftType,
+          giftName: giftName,
+          giftEmoji: giftEmoji,
+          price: price,
+          note: note.isNotEmpty ? note : null,
+          senderName: senderName,
+        );
+      }
+      return;
+    }
     if (type == 'TOPIC_BROADCAST') {
       if (mounted) setState(() => banner = '💡 Topic: ${s['topic'] ?? ''}');
       return;
@@ -2828,103 +2848,142 @@ void initState() {
     );
   }
 
-  /// Bottom Controls Dock (3 circular buttons: Mic, Speaker, End Call)
+  /// Bottom Controls Dock for Audio Calls (Mic, Speaker, Gift, Tools, End Call)
   Widget _buildLiveAudioControls() {
     return Padding(
-      padding: const EdgeInsets.only(left: 24, right: 24, bottom: 28),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // 1. Microphone Toggle
-          GestureDetector(
-            onTap: () {
-              HapticFeedback.lightImpact();
-              _toggleMic();
-            },
-            child: Container(
-              width: 66,
-              height: 66,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: mic ? const Color(0xFFF7ECE4) : const Color(0xFFFFE4E1),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.07),
-                    blurRadius: 18,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: Icon(
-                mic ? Icons.mic_rounded : Icons.mic_off_rounded,
-                color: mic ? const Color(0xFF475569) : const Color(0xFFE11D48),
-                size: 28,
-              ),
-            ),
+      padding: const EdgeInsets.only(left: 16, right: 16, bottom: 24),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF111827).withOpacity(0.85),
+          borderRadius: BorderRadius.circular(38),
+          border: Border.all(
+            color: Colors.white.withOpacity(0.12),
+            width: 1.0,
           ),
-
-          // 2. Speaker Toggle
-          GestureDetector(
-            onTap: () {
-              HapticFeedback.lightImpact();
-              _toggleSpeaker();
-            },
-            child: Container(
-              width: 66,
-              height: 66,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFFF7ECE4),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.07),
-                    blurRadius: 18,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: Icon(
-                speaker ? Icons.volume_up_rounded : Icons.volume_down_rounded,
-                color: const Color(0xFF475569),
-                size: 28,
-              ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.4),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
             ),
-          ),
-
-          // 3. End Call Button
-          GestureDetector(
-            onTap: () {
-              HapticFeedback.heavyImpact();
-              _end();
-            },
-            child: Container(
-              width: 68,
-              height: 68,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFFF5E5E), Color(0xFFE53935)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // 1. Microphone Toggle
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                _toggleMic();
+              },
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: mic ? Colors.white.withOpacity(0.12) : const Color(0xFFEF4444).withOpacity(0.85),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(mic ? 0.2 : 0.4),
+                    width: 0.8,
+                  ),
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFFF4B4B).withValues(alpha: 0.38),
-                    blurRadius: 22,
-                    spreadRadius: 3,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.call_end_rounded,
-                color: Colors.white,
-                size: 30,
+                child: Icon(
+                  mic ? Icons.mic_rounded : Icons.mic_off_rounded,
+                  color: Colors.white,
+                  size: 22,
+                ),
               ),
             ),
-          ),
-        ],
+
+            // 2. Speaker Toggle
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                _toggleSpeaker();
+              },
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: speaker ? const Color(0xFF38BDF8).withOpacity(0.2) : Colors.white.withOpacity(0.12),
+                  border: Border.all(
+                    color: speaker ? const Color(0xFF38BDF8).withOpacity(0.5) : Colors.white.withOpacity(0.2),
+                    width: 0.8,
+                  ),
+                ),
+                child: Icon(
+                  speaker ? Icons.volume_up_rounded : Icons.volume_down_rounded,
+                  color: speaker ? const Color(0xFF38BDF8) : Colors.white,
+                  size: 22,
+                ),
+              ),
+            ),
+
+            // 3. Virtual Gift Jewel (Send or Request)
+            _buildInCallGiftButton(compact: false),
+
+            // 4. In-Call Tools & Effects
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                _showTools();
+              },
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.12),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.2),
+                    width: 0.8,
+                  ),
+                ),
+                child: const Icon(
+                  Icons.auto_awesome,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+            ),
+
+            // 5. End Call Button
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.heavyImpact();
+                _end();
+              },
+              child: Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFF5252), Color(0xFFDC2626)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFDC2626).withOpacity(0.5),
+                      blurRadius: 14,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.call_end_rounded,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -3279,23 +3338,61 @@ void initState() {
               child: _buildSafetyDeterrenceStrip(isVideo: true),
             ),
 
-            // 5. Floating Bottom Controls Dock (Firmly positioned at the bottom)
+            // 4. Secondary Floating Contextual Micro-Pills (Nudity Shield, Video Filters, Speaker)
             Positioned(
               left: 16,
               right: 16,
-              bottom: bottomPadding + 18,
+              bottom: bottomPadding + 82,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Nudity Mode Micro-Pill
+                  _buildFloatingMicroPill(
+                    icon: isNudityAllowed ? Icons.shield_rounded : Icons.shield_outlined,
+                    label: isNudityAllowed ? '18+ Allowed' : 'Safety Shield',
+                    isActive: isNudityAllowed,
+                    activeColor: const Color(0xFFEC4899),
+                    onTap: _toggleNudityPermission,
+                  ),
+                  const SizedBox(width: 8),
+                  // Video Filter Micro-Pill
+                  _buildFloatingMicroPill(
+                    icon: Icons.face_retouching_natural_rounded,
+                    label: activeVideoFilter == VideoPrivacyFilter.none ? 'Filters' : 'Filter ON',
+                    isActive: activeVideoFilter != VideoPrivacyFilter.none,
+                    activeColor: const Color(0xFFA855F7),
+                    onTap: _videoFilters,
+                  ),
+                  const SizedBox(width: 8),
+                  // Speaker Micro-Pill
+                  _buildFloatingMicroPill(
+                    icon: speaker ? Icons.volume_up_rounded : Icons.volume_down_rounded,
+                    label: speaker ? 'Speaker' : 'Earpiece',
+                    isActive: speaker,
+                    activeColor: const Color(0xFF38BDF8),
+                    onTap: _toggleSpeaker,
+                  ),
+                ],
+              ),
+            ),
+
+            // 5. Floating Bottom Controls Dock (5 Balanced Luxury Buttons)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: bottomPadding + 14,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF111520).withValues(alpha: 0.92),
-                  borderRadius: BorderRadius.circular(38),
+                  color: const Color(0xFF0F172A).withValues(alpha: 0.90),
+                  borderRadius: BorderRadius.circular(40),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.16),
+                    color: Colors.white.withValues(alpha: 0.14),
                     width: 1.2,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.55),
+                      color: Colors.black.withValues(alpha: 0.6),
                       blurRadius: 30,
                       offset: const Offset(0, 10),
                     ),
@@ -3308,7 +3405,7 @@ void initState() {
                     _buildVideoGlassButton(
                       icon: mic ? Icons.mic_rounded : Icons.mic_off_rounded,
                       isActive: mic,
-                      tooltip: mic ? 'Mute' : 'Unmute',
+                      tooltip: mic ? 'Mute microphone' : 'Unmute microphone',
                       onTap: _toggleMic,
                     ),
                     // Video Camera
@@ -3318,35 +3415,14 @@ void initState() {
                       tooltip: camera ? 'Turn off camera' : 'Turn on camera',
                       onTap: _toggleCamera,
                     ),
-                    // Camera Switch
+                    // Virtual Gift Button (Centerpiece Jewel for both Caller & Listener)
+                    _buildInCallGiftButton(compact: false),
+                    // Camera Switch (Front/Back)
                     _buildVideoGlassButton(
                       icon: Icons.flip_camera_ios_rounded,
                       isActive: true,
                       tooltip: 'Switch camera',
                       onTap: _switchCamera,
-                    ),
-                    // Video Privacy Filter
-                    _buildVideoGlassButton(
-                      icon: Icons.face_retouching_natural_rounded,
-                      isActive: activeVideoFilter != VideoPrivacyFilter.none,
-                      isFilter: true,
-                      tooltip: 'Video filters',
-                      onTap: _videoFilters,
-                    ),
-                    // Nudity Mode Control (Mutual Consent)
-                    _buildVideoGlassButton(
-                      icon: isNudityAllowed ? Icons.shield_rounded : Icons.shield_outlined,
-                      isActive: isNudityAllowed,
-                      isNudity: true,
-                      tooltip: isNudityAllowed ? 'Nudity allowed (both sides)' : 'Allow nudity (both sides)',
-                      onTap: _toggleNudityPermission,
-                    ),
-                    // Speaker
-                    _buildVideoGlassButton(
-                      icon: speaker ? Icons.volume_up_rounded : Icons.volume_down_rounded,
-                      isActive: speaker,
-                      tooltip: speaker ? 'Speaker' : 'Earpiece',
-                      onTap: _toggleSpeaker,
                     ),
                     // End Call Button
                     GestureDetector(
@@ -4061,47 +4137,681 @@ void initState() {
     setState(() {});
   }
 
+  Widget _buildFloatingMicroPill({
+    required IconData icon,
+    required String label,
+    required bool isActive,
+    required Color activeColor,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+        decoration: BoxDecoration(
+          color: isActive
+              ? activeColor.withValues(alpha: 0.24)
+              : const Color(0xFF10172A).withValues(alpha: 0.78),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isActive ? activeColor.withValues(alpha: 0.6) : Colors.white.withValues(alpha: 0.18),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.35),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+            if (isActive)
+              BoxShadow(
+                color: activeColor.withValues(alpha: 0.28),
+                blurRadius: 8,
+              ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 13,
+              color: isActive ? activeColor : const Color(0xFFE2E8F0),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                color: isActive ? activeColor : const Color(0xFFE2E8F0),
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInCallGiftButton({bool compact = false}) {
+    final isCaller = widget.callerSide;
+    final gradientColors = isCaller
+        ? const [Color(0xFFF59E0B), Color(0xFFEC4899)]
+        : const [Color(0xFF8B5CF6), Color(0xFFEC4899)];
+    final shadowColor = isCaller ? const Color(0xFFF59E0B) : const Color(0xFFEC4899);
+
+    return Tooltip(
+      message: isCaller ? 'Send a Virtual Gift' : 'Request a Virtual Gift',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          HapticFeedback.mediumImpact();
+          _gift();
+        },
+        child: Container(
+          width: compact ? 48 : 52,
+          height: compact ? 48 : 52,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              colors: gradientColors,
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.45),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: shadowColor.withValues(alpha: 0.48),
+                blurRadius: 16,
+                spreadRadius: 1,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text(
+                '🎁',
+                style: TextStyle(fontSize: 19, height: 1.1),
+              ),
+              Text(
+                isCaller ? 'Gift' : 'Ask',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.3,
+                  height: 1.0,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLuxuryToolTile({
+    required IconData icon,
+    required List<Color> gradientColors,
+    required String title,
+    required String subtitle,
+    Widget? trailing,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: gradientColors,
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: gradientColors.first.withValues(alpha: 0.35),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Icon(icon, color: Colors.white, size: 20),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.6),
+                          fontSize: 12,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                if (trailing != null) ...[
+                  const SizedBox(width: 8),
+                  trailing,
+                ] else ...[
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: Colors.white.withValues(alpha: 0.35),
+                    size: 20,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showGiftRequestedPrompt({
+    required String giftType,
+    required String giftName,
+    required String giftEmoji,
+    required double price,
+    String? note,
+    required String senderName,
+  }) {
+    HapticFeedback.heavyImpact();
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF1E1B4B), Color(0xFF0F172A)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: const Color(0xFFEC4899).withValues(alpha: 0.45), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFEC4899).withValues(alpha: 0.25),
+                blurRadius: 30,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFF59E0B), Color(0xFFEC4899)],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFEC4899).withValues(alpha: 0.4),
+                      blurRadius: 16,
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Text(giftEmoji, style: const TextStyle(fontSize: 32)),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'Gift Request from $senderName',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '$senderName requested a $giftName (₹${price.toStringAsFixed(0)})',
+                style: const TextStyle(
+                  color: Color(0xFFCBD5E1),
+                  fontSize: 13,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              if (note != null && note.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '"$note"',
+                    style: const TextStyle(
+                      color: Color(0xFFF472B6),
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text('Maybe Later', style: TextStyle(color: Color(0xFF94A3B8))),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        try {
+                          final sent = await context.read<AppController>().api.sendGift(
+                            session.id,
+                            giftType,
+                            note: note,
+                          );
+                          await _sendSignal({'type': 'gift_sent', 'gift': sent});
+                          if (mounted) {
+                            final giftAmt = (sent['amount'] as num?)?.toDouble() ??
+                                (sent['grossAmount'] as num?)?.toDouble() ??
+                                (sent['price'] as num?)?.toDouble() ??
+                                price;
+                            setState(() {
+                              _callerGiftsSpent += giftAmt;
+                              banner = '🎁 Sent $giftEmoji $giftName (₹${giftAmt.toStringAsFixed(0)}) to $senderName';
+                            });
+                          }
+                        } catch (e) {
+                          if (mounted) showError(context, e);
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 4,
+                      ),
+                      child: Ink(
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFF59E0B), Color(0xFFEC4899)],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Container(
+                          alignment: Alignment.center,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Text(
+                            'Send ₹${price.toStringAsFixed(0)}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _showTools() async {
     await showModalBottomSheet(
       context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Wrap(children: [
-          if (widget.callerSide)
-            ListTile(leading: const Icon(Icons.card_giftcard), title: const Text('Send a virtual gift'), onTap: () { Navigator.pop(ctx); _gift(); }),
-          if (!isChat)
-            ListTile(leading: const Icon(Icons.chat_bubble_outline), title: const Text('In-call chat'), onTap: () { Navigator.pop(ctx); _inCallChat(); }),
-          if (!isChat)
-            ListTile(leading: const Icon(Icons.graphic_eq), title: const Text('Voice privacy effects'), subtitle: Text(_voiceLabel(activeVoiceFilter)), onTap: () { Navigator.pop(ctx); _voiceFilters(); }),
-          if (isVideo)
-            ListTile(leading: const Icon(Icons.masks), title: const Text('Video masks & privacy filters'), subtitle: Text(_videoLabel(activeVideoFilter)), onTap: () { Navigator.pop(ctx); _videoFilters(); }),
-          if (isVideo)
-            ListTile(
-              leading: Icon(
-                isNudityAllowed ? Icons.shield_rounded : Icons.shield_outlined,
-                color: isNudityAllowed ? const Color(0xFFEC4899) : const Color(0xFF10B981),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF0F172A), Color(0xFF0A0F1D)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12), width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.7),
+              blurRadius: 35,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Top Drag Handle
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 12, bottom: 8),
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
               ),
-              title: Text(isNudityAllowed ? 'Nudity Mode is ON (Allowed)' : 'Allow Nudity (Both Sides)'),
-              subtitle: Text(isNudityAllowed ? 'Nudity allowed from both sides. Tap to disable.' : 'Permit adult/nudity on both sides without blur'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _toggleNudityPermission();
-              },
-            ),
-          if (isVideo && !isNudityAllowed)
-            ListTile(
-              leading: const Icon(Icons.shield_outlined, color: Color(0xFFEF4444)),
-              title: const Text('Trigger Safety Blur'),
-              subtitle: const Text('Instantly blur the video feed for privacy'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _triggerNudityBlur(source: 'peer');
-              },
-            ),
-          ListTile(leading: const Icon(Icons.lightbulb_outline), title: const Text('Send an icebreaker topic'), onTap: () { Navigator.pop(ctx); _topic(); }),
-          ListTile(leading: const Icon(Icons.sports_esports), title: const Text('Open mini games'), subtitle: const Text('Tic-Tac-Toe • Would You Rather • 20 Questions'), onTap: () { Navigator.pop(ctx); _openGames(); }),
-          ListTile(leading: const Icon(Icons.report_outlined), title: const Text('Report the other person'), onTap: () { Navigator.pop(ctx); _report(); }),
-        ]),
+
+              // Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'In-Call Tools & Features',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                          Text(
+                            'Enhance conversation, privacy & engagement',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.55),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, color: Color(0xFF94A3B8), size: 22),
+                      onPressed: () => Navigator.pop(ctx),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+              ),
+
+              const Divider(color: Colors.white10, height: 16),
+
+              // Scrollable list of luxury cards
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Column(
+                    children: [
+                      // Virtual Gift Hero Card
+                      _buildLuxuryToolTile(
+                        icon: widget.callerSide ? Icons.card_giftcard_rounded : Icons.volunteer_activism_rounded,
+                        gradientColors: widget.callerSide
+                            ? const [Color(0xFFF59E0B), Color(0xFFEC4899)]
+                            : const [Color(0xFF8B5CF6), Color(0xFFEC4899)],
+                        title: widget.callerSide ? 'Send a Virtual Gift' : 'Request a Virtual Gift',
+                        subtitle: widget.callerSide
+                            ? 'Surprise $peerName with flowers, chocolates or a crown'
+                            : 'Ask $peerName for a token of appreciation',
+                        trailing: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: widget.callerSide
+                                  ? const [Color(0xFFF59E0B), Color(0xFFEC4899)]
+                                  : const [Color(0xFF8B5CF6), Color(0xFFEC4899)],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            widget.callerSide ? 'Send 🎁' : 'Request 🎁',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _gift();
+                        },
+                      ),
+
+                      // In-Call Chat
+                      if (!isChat)
+                        _buildLuxuryToolTile(
+                          icon: Icons.chat_bubble_outline_rounded,
+                          gradientColors: const [Color(0xFF06B6D4), Color(0xFF3B82F6)],
+                          title: 'In-Call Chat',
+                          subtitle: 'Exchange text messages quietly while talking',
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            _inCallChat();
+                          },
+                        ),
+
+                      // Voice Privacy Effects
+                      if (!isChat)
+                        _buildLuxuryToolTile(
+                          icon: Icons.graphic_eq_rounded,
+                          gradientColors: const [Color(0xFF8B5CF6), Color(0xFF6366F1)],
+                          title: 'Voice Privacy Effects',
+                          subtitle: _voiceLabel(activeVoiceFilter),
+                          trailing: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF8B5CF6).withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFF8B5CF6).withValues(alpha: 0.35)),
+                            ),
+                            child: Text(
+                              activeVoiceFilter == AndroidVoiceFx.normal ? 'Natural' : 'Active',
+                              style: const TextStyle(color: Color(0xFFC4B5FD), fontSize: 11, fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            _voiceFilters();
+                          },
+                        ),
+
+                      // Video Masks & Privacy Filters
+                      if (isVideo)
+                        _buildLuxuryToolTile(
+                          icon: Icons.face_retouching_natural_rounded,
+                          gradientColors: const [Color(0xFFEC4899), Color(0xFFA855F7)],
+                          title: 'Video Masks & Privacy Filters',
+                          subtitle: _videoLabel(activeVideoFilter),
+                          trailing: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEC4899).withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFEC4899).withValues(alpha: 0.35)),
+                            ),
+                            child: Text(
+                              activeVideoFilter == VideoPrivacyFilter.none ? 'Original' : 'Filter ON',
+                              style: const TextStyle(color: Color(0xFFF9A8D4), fontSize: 11, fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            _videoFilters();
+                          },
+                        ),
+
+                      // Nudity Mode Mutual Consent
+                      if (isVideo)
+                        _buildLuxuryToolTile(
+                          icon: isNudityAllowed ? Icons.shield_rounded : Icons.shield_outlined,
+                          gradientColors: isNudityAllowed
+                              ? const [Color(0xFFEC4899), Color(0xFFD946EF)]
+                              : const [Color(0xFF10B981), Color(0xFF059669)],
+                          title: isNudityAllowed ? 'Nudity Mode is ON (Allowed)' : 'Mutual Nudity Consent',
+                          subtitle: isNudityAllowed
+                              ? 'Adult content permitted from both sides. Tap to disable.'
+                              : 'Both sides must consent to permit adult content without blur',
+                          trailing: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: (isNudityAllowed ? const Color(0xFFEC4899) : const Color(0xFF10B981)).withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: (isNudityAllowed ? const Color(0xFFEC4899) : const Color(0xFF10B981)).withValues(alpha: 0.4),
+                              ),
+                            ),
+                            child: Text(
+                              isNudityAllowed ? '18+ ON' : 'PROTECTED',
+                              style: TextStyle(
+                                color: isNudityAllowed ? const Color(0xFFF472B6) : const Color(0xFF6EE7B7),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            _toggleNudityPermission();
+                          },
+                        ),
+
+                      // Trigger Safety Blur
+                      if (isVideo && !isNudityAllowed)
+                        _buildLuxuryToolTile(
+                          icon: Icons.visibility_off_rounded,
+                          gradientColors: const [Color(0xFFEF4444), Color(0xFFDC2626)],
+                          title: 'Trigger Instant Safety Blur',
+                          subtitle: 'Instantly blur video stream on both ends for privacy',
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            _triggerNudityBlur(source: 'peer');
+                          },
+                        ),
+
+                      // Icebreaker Topics
+                      _buildLuxuryToolTile(
+                        icon: Icons.lightbulb_rounded,
+                        gradientColors: const [Color(0xFFF59E0B), Color(0xFFD97706)],
+                        title: 'Icebreaker Topics',
+                        subtitle: 'AI conversation sparkers & deep questions',
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _topic();
+                        },
+                      ),
+
+                      // Mini Games
+                      _buildLuxuryToolTile(
+                        icon: Icons.sports_esports_rounded,
+                        gradientColors: const [Color(0xFF10B981), Color(0xFF0D9488)],
+                        title: 'Open Mini Games',
+                        subtitle: 'Tic-Tac-Toe • Would You Rather • 20 Questions',
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _openGames();
+                        },
+                      ),
+
+                      // Report
+                      _buildLuxuryToolTile(
+                        icon: Icons.flag_rounded,
+                        gradientColors: const [Color(0xFF64748B), Color(0xFF475569)],
+                        title: 'Report Participant',
+                        subtitle: 'Discreetly flag abusive or non-consensual behavior',
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _report();
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -4293,10 +5003,12 @@ void initState() {
 
   Future<void> _gift() async {
     try {
-      final sent = await InCallGiftingSheet.show(
+      final isListener = !widget.callerSide;
+      final result = await InCallGiftingSheet.show(
         context,
         sessionId: session.id,
-        listenerName: session.listenerName,
+        listenerName: peerName,
+        isListenerRequest: isListener,
         onRechargeRequested: () {
           Navigator.push(
             context,
@@ -4304,15 +5016,41 @@ void initState() {
           );
         },
       );
-      if (sent != null && mounted) {
-        final giftAmt = (sent['amount'] as num?)?.toDouble() ??
-            (sent['grossAmount'] as num?)?.toDouble() ??
-            (sent['price'] as num?)?.toDouble() ??
-            0.0;
-        setState(() {
-          _callerGiftsSpent += giftAmt;
-          banner = '🎁 Gift sent: ${sent['giftEmoji'] ?? '🎁'} ${sent['giftName'] ?? 'Gift'}${giftAmt > 0 ? " (₹${giftAmt.toStringAsFixed(0)})" : ""}';
-        });
+      if (result != null && mounted) {
+        if (isListener) {
+          final emoji = result['giftEmoji'] ?? '🎁';
+          final name = result['giftName'] ?? 'Gift';
+          final price = (result['giftPrice'] as num?)?.toDouble() ?? 0.0;
+          setState(() {
+            banner = '🎁 Requested $emoji $name${price > 0 ? " (₹${price.toStringAsFixed(0)})" : ""} from $peerName';
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Text(emoji, style: const TextStyle(fontSize: 18)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Requested $name from $peerName!'),
+                  ),
+                ],
+              ),
+              backgroundColor: const Color(0xFF1E293B),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        } else {
+          final giftAmt = (result['amount'] as num?)?.toDouble() ??
+              (result['grossAmount'] as num?)?.toDouble() ??
+              (result['price'] as num?)?.toDouble() ??
+              0.0;
+          setState(() {
+            _callerGiftsSpent += giftAmt;
+            banner = '🎁 Gift sent: ${result['giftEmoji'] ?? '🎁'} ${result['giftName'] ?? 'Gift'}${giftAmt > 0 ? " (₹${giftAmt.toStringAsFixed(0)})" : ""}';
+          });
+        }
       }
     } catch (e) {
       if (mounted) showError(context, e);

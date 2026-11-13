@@ -6,23 +6,29 @@ import '../models/app_models.dart';
 class InCallGiftingSheet extends StatefulWidget {
   final String sessionId;
   final String listenerName;
+  final bool isListenerRequest;
   final VoidCallback? onRechargeRequested;
   final Function(Map<String, dynamic> gift)? onGiftSent;
+  final Function(Map<String, dynamic> request)? onGiftRequested;
 
   const InCallGiftingSheet({
     super.key,
     required this.sessionId,
     required this.listenerName,
+    this.isListenerRequest = false,
     this.onRechargeRequested,
     this.onGiftSent,
+    this.onGiftRequested,
   });
 
   static Future<Map<String, dynamic>?> show(
     BuildContext context, {
     required String sessionId,
     required String listenerName,
+    bool isListenerRequest = false,
     VoidCallback? onRechargeRequested,
     Function(Map<String, dynamic> gift)? onGiftSent,
+    Function(Map<String, dynamic> request)? onGiftRequested,
   }) {
     return showModalBottomSheet<Map<String, dynamic>>(
       context: context,
@@ -31,8 +37,10 @@ class InCallGiftingSheet extends StatefulWidget {
       builder: (ctx) => InCallGiftingSheet(
         sessionId: sessionId,
         listenerName: listenerName,
+        isListenerRequest: isListenerRequest,
         onRechargeRequested: onRechargeRequested,
         onGiftSent: onGiftSent,
+        onGiftRequested: onGiftRequested,
       ),
     );
   }
@@ -123,6 +131,48 @@ class _InCallGiftingSheetState extends State<InCallGiftingSheet> {
   bool get hasEnoughBalance {
     final balance = wallet?.totalBalance ?? 0.0;
     return balance >= selectedPrice;
+  }
+
+  Future<void> _handleRequest() async {
+    setState(() {
+      sending = true;
+      error = null;
+    });
+
+    try {
+      final note = noteController.text.trim();
+      final giftType = '${selectedGift['id'] ?? selectedGift['giftType'] ?? selectedGift['name']}';
+      final giftName = '${selectedGift['name'] ?? 'Gift'}';
+      final giftEmoji = '${selectedGift['emoji'] ?? '🎁'}';
+      final payload = {
+        'type': 'gift_requested',
+        'giftType': giftType,
+        'giftName': giftName,
+        'giftEmoji': giftEmoji,
+        'giftPrice': selectedPrice,
+        'note': note.isNotEmpty ? note : null,
+      };
+
+      await context.read<AppController>().api.sendSignal(
+        widget.sessionId,
+        payload,
+      );
+
+      if (widget.onGiftRequested != null) {
+        widget.onGiftRequested!(payload);
+      }
+
+      if (mounted) {
+        Navigator.pop(context, payload);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          error = e.toString().replaceFirst('Exception: ', '');
+          sending = false;
+        });
+      }
+    }
   }
 
   Future<void> _handleSend() async {
@@ -223,21 +273,30 @@ class _InCallGiftingSheetState extends State<InCallGiftingSheet> {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFF59E0B), Color(0xFFEC4899)],
+                        gradient: LinearGradient(
+                          colors: widget.isListenerRequest
+                              ? const [Color(0xFF8B5CF6), Color(0xFFEC4899)]
+                              : const [Color(0xFFF59E0B), Color(0xFFEC4899)],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
                         borderRadius: BorderRadius.circular(10),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFFF59E0B).withOpacity(0.4),
+                            color: (widget.isListenerRequest
+                                    ? const Color(0xFF8B5CF6)
+                                    : const Color(0xFFF59E0B))
+                                .withOpacity(0.4),
                             blurRadius: 10,
                           ),
                         ],
                       ),
-                      child: const Center(
-                        child: Icon(Icons.card_giftcard_rounded, color: Colors.white, size: 20),
+                      child: Center(
+                        child: Icon(
+                          widget.isListenerRequest ? Icons.volunteer_activism_rounded : Icons.card_giftcard_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -245,9 +304,9 @@ class _InCallGiftingSheetState extends State<InCallGiftingSheet> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Send a Virtual Gift',
-                            style: TextStyle(
+                          Text(
+                            widget.isListenerRequest ? 'Request a Virtual Gift' : 'Send a Virtual Gift',
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 16,
                               fontWeight: FontWeight.w800,
@@ -255,7 +314,9 @@ class _InCallGiftingSheetState extends State<InCallGiftingSheet> {
                             ),
                           ),
                           Text(
-                            'Express appreciation to ${widget.listenerName}',
+                            widget.isListenerRequest
+                                ? 'Choose a gift you would like ${widget.listenerName} to send'
+                                : 'Express appreciation to ${widget.listenerName}',
                             style: const TextStyle(
                               color: Color(0xFF94A3B8),
                               fontSize: 12,
@@ -276,67 +337,92 @@ class _InCallGiftingSheetState extends State<InCallGiftingSheet> {
                 ),
               ),
 
-              // Wallet Balance Bar
+              // Wallet Balance Bar or Listener Earnings Banner
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.04),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white.withOpacity(0.08)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFFF59E0B), size: 18),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Wallet Balance: ₹${totalBalance.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          color: Color(0xFFE2E8F0),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                child: widget.isListenerRequest
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF8B5CF6).withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.28)),
                         ),
-                      ),
-                      const Spacer(),
-                      if (!hasEnoughBalance)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          margin: const EdgeInsets.only(right: 6),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEF4444).withOpacity(0.18),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.35)),
-                          ),
-                          child: const Text(
-                            'Low Balance',
-                            style: TextStyle(color: Color(0xFFFCA5A5), fontSize: 10, fontWeight: FontWeight.w700),
-                          ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.stars_rounded, color: Color(0xFFA78BFA), size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Gift Value: ₹${selectedPrice.toStringAsFixed(0)} • Direct wallet credit when sent',
+                                style: const TextStyle(
+                                  color: Color(0xFFDDD6FE),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      if (widget.onRechargeRequested != null)
-                        InkWell(
-                          onTap: widget.onRechargeRequested,
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                            child: Row(
-                              children: [
-                                Icon(Icons.add_circle_outline_rounded, color: Color(0xFF38BDF8), size: 14),
-                                SizedBox(width: 4),
-                                Text(
-                                  'Recharge',
-                                  style: TextStyle(
-                                    color: Color(0xFF38BDF8),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
+                      )
+                    : Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.04),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white.withOpacity(0.08)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFFF59E0B), size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Wallet Balance: ₹${totalBalance.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                color: Color(0xFFE2E8F0),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const Spacer(),
+                            if (!hasEnoughBalance)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                margin: const EdgeInsets.only(right: 6),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEF4444).withOpacity(0.18),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.35)),
+                                ),
+                                child: const Text(
+                                  'Low Balance',
+                                  style: TextStyle(color: Color(0xFFFCA5A5), fontSize: 10, fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                            if (widget.onRechargeRequested != null)
+                              InkWell(
+                                onTap: widget.onRechargeRequested,
+                                child: const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.add_circle_outline_rounded, color: Color(0xFF38BDF8), size: 14),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Recharge',
+                                        style: TextStyle(
+                                          color: Color(0xFF38BDF8),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
+                              ),
+                          ],
                         ),
-                    ],
-                  ),
-                ),
+                      ),
               ),
 
               // Scrollable Cards Grid & Notes
@@ -565,64 +651,87 @@ class _InCallGiftingSheetState extends State<InCallGiftingSheet> {
                 ),
               ),
 
-              // Bottom Send Action Button
+              // Bottom Action Button (Send or Request)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
                 child: SizedBox(
                   width: double.infinity,
-                  height: 46,
+                  height: 48,
                   child: ElevatedButton(
-                    onPressed: (sending || !hasEnoughBalance) ? (hasEnoughBalance ? null : widget.onRechargeRequested) : _handleSend,
+                    onPressed: sending
+                        ? null
+                        : widget.isListenerRequest
+                            ? _handleRequest
+                            : (!hasEnoughBalance ? widget.onRechargeRequested : _handleSend),
                     style: ElevatedButton.styleFrom(
                       padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       elevation: 4,
                       backgroundColor: Colors.transparent,
                     ),
                     child: Ink(
                       decoration: BoxDecoration(
-                        gradient: hasEnoughBalance
+                        gradient: widget.isListenerRequest
                             ? const LinearGradient(
-                                colors: [Color(0xFFF59E0B), Color(0xFFEC4899)],
+                                colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)],
                                 begin: Alignment.centerLeft,
                                 end: Alignment.centerRight,
                               )
-                            : LinearGradient(
-                                colors: [Colors.grey.shade700, Colors.grey.shade800],
-                                begin: Alignment.centerLeft,
-                                end: Alignment.centerRight,
-                              ),
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: hasEnoughBalance
-                            ? [
-                                BoxShadow(
-                                  color: const Color(0xFFF59E0B).withOpacity(0.4),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 3),
-                                ),
-                              ]
-                            : null,
+                            : (hasEnoughBalance
+                                ? const LinearGradient(
+                                    colors: [Color(0xFFF59E0B), Color(0xFFEC4899)],
+                                    begin: Alignment.centerLeft,
+                                    end: Alignment.centerRight,
+                                  )
+                                : LinearGradient(
+                                    colors: [Colors.grey.shade700, Colors.grey.shade800],
+                                    begin: Alignment.centerLeft,
+                                    end: Alignment.centerRight,
+                                  )),
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: (widget.isListenerRequest
+                                    ? const Color(0xFF8B5CF6)
+                                    : (hasEnoughBalance ? const Color(0xFFF59E0B) : Colors.black))
+                                .withOpacity(0.4),
+                            blurRadius: 12,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
                       ),
                       child: Center(
                         child: sending
                             ? const SizedBox(
-                                width: 20,
-                                height: 20,
+                                width: 22,
+                                height: 22,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
                                   valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                                 ),
                               )
-                            : Text(
-                                hasEnoughBalance
-                                    ? 'Send ${gift['emoji'] ?? '🎁'} for ₹${selectedPrice.toStringAsFixed(0)}'
-                                    : 'Insufficient Balance (Recharge ₹${selectedPrice.toStringAsFixed(0)})',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.3,
-                                ),
+                            : Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    gift['emoji'] ?? '🎁',
+                                    style: const TextStyle(fontSize: 18),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    widget.isListenerRequest
+                                        ? 'Request ${gift['name'] ?? 'Gift'} (₹${selectedPrice.toStringAsFixed(0)})'
+                                        : (hasEnoughBalance
+                                            ? 'Send ${gift['name'] ?? 'Gift'} for ₹${selectedPrice.toStringAsFixed(0)}'
+                                            : 'Insufficient Balance (Recharge ₹${selectedPrice.toStringAsFixed(0)})'),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.3,
+                                    ),
+                                  ),
+                                ],
                               ),
                       ),
                     ),
