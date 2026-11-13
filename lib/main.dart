@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'screens/common/first_time_onboarding_screen.dart';
 import 'services/app_lock_service.dart';
 import 'services/call_push_service.dart';
@@ -18,6 +19,16 @@ import 'widgets/global_call_host.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppConfig.initialize();
+  try {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(options: kAndroidFirebaseOptions);
+    }
+  } catch (e) {
+    debugPrint('[Firebase] Main initialization warning: $e');
+    try {
+      if (Firebase.apps.isEmpty) await Firebase.initializeApp();
+    } catch (_) {}
+  }
   await CallPushService.instance.initialize();
 
   runApp(

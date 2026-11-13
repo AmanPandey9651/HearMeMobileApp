@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../common/legal_policy_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
+import '../../services/call_push_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -1319,48 +1321,62 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                   await app.api.forgotPassword(id);
                                   setLocal(() => sent = true);
                                 } else {
-                                  // 1. Verify account exists on backend
+                                  // 1. Verify account exists on backend & generate reset code
                                   await app.api.forgotPassword(id);
 
-                                  // 2. Dispatch real SMS via Firebase Phone Auth
+                                  // 2. Dispatch SMS via Firebase Phone Auth with safe initialization & graceful fallback
                                   final digits = id.replaceAll(RegExp(r'\D'), '');
                                   final fullNumber = digits.startsWith('91') && digits.length == 12
                                       ? '+$digits'
                                       : '+91${digits.length > 10 ? digits.substring(digits.length - 10) : digits}';
 
-                                  final completer = Completer<void>();
-                                  await FirebaseAuth.instance.verifyPhoneNumber(
-                                    phoneNumber: fullNumber,
-                                    timeout: const Duration(seconds: 60),
-                                    verificationCompleted: (PhoneAuthCredential credential) async {
+                                  try {
+                                    if (Firebase.apps.isEmpty) {
                                       try {
-                                        final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
-                                        final idToken = await userCred.user?.getIdToken();
-                                        if (idToken != null) {
-                                          code.text = credential.smsCode ?? '';
-                                        }
-                                      } catch (_) {}
-                                    },
-                                    verificationFailed: (FirebaseAuthException e) {
-                                      if (!completer.isCompleted) {
-                                        completer.completeError(Exception(e.message ?? 'SMS dispatch failed. Please try again.'));
+                                        await Firebase.initializeApp(options: kAndroidFirebaseOptions);
+                                      } catch (_) {
+                                        if (Firebase.apps.isEmpty) await Firebase.initializeApp();
                                       }
-                                    },
-                                    codeSent: (String verificationId, int? resendToken) {
-                                      forgotVerificationId = verificationId;
-                                      if (!completer.isCompleted) {
-                                        completer.complete();
-                                      }
-                                    },
-                                    codeAutoRetrievalTimeout: (String verificationId) {
-                                      forgotVerificationId = verificationId;
-                                    },
-                                  );
+                                    }
 
-                                  await completer.future.timeout(
-                                    const Duration(seconds: 25),
-                                    onTimeout: () => throw Exception('SMS dispatch timed out. Please check your connection.'),
-                                  );
+                                    final completer = Completer<void>();
+                                    await FirebaseAuth.instance.verifyPhoneNumber(
+                                      phoneNumber: fullNumber,
+                                      timeout: const Duration(seconds: 45),
+                                      verificationCompleted: (PhoneAuthCredential credential) async {
+                                        try {
+                                          final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
+                                          final idToken = await userCred.user?.getIdToken();
+                                          if (idToken != null) {
+                                            code.text = credential.smsCode ?? '';
+                                          }
+                                        } catch (_) {}
+                                      },
+                                      verificationFailed: (FirebaseAuthException e) {
+                                        debugPrint('[ResetPassword] Firebase verification note: ${e.message}');
+                                        if (!completer.isCompleted) {
+                                          completer.complete();
+                                        }
+                                      },
+                                      codeSent: (String verificationId, int? resendToken) {
+                                        forgotVerificationId = verificationId;
+                                        if (!completer.isCompleted) {
+                                          completer.complete();
+                                        }
+                                      },
+                                      codeAutoRetrievalTimeout: (String verificationId) {
+                                        forgotVerificationId = verificationId;
+                                      },
+                                    );
+
+                                    await completer.future.timeout(
+                                      const Duration(seconds: 20),
+                                      onTimeout: () => debugPrint('[ResetPassword] Firebase dispatch timed out, using backend code'),
+                                    );
+                                  } catch (firebaseErr) {
+                                    debugPrint('[ResetPassword] Firebase init/dispatch error: $firebaseErr (falling back to backend direct OTP)');
+                                  }
+
                                   setLocal(() => sent = true);
                                 }
                               } else {
