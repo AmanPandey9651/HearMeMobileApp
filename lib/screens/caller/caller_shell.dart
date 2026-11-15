@@ -9,6 +9,7 @@ import '../../models/app_models.dart';
 import '../../services/call_push_service.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/incoming_call_overlay.dart';
+import '../common/chat_inbox_screen.dart';
 import 'anonymous_profile_screen.dart';
 import 'caller_history_screen.dart';
 import 'caller_home_screen.dart';
@@ -28,6 +29,7 @@ class _CallerShellState extends State<CallerShell> {
   Timer? navPoll;
   String? shownCallback;
   int unreadCount = 0;
+  int chatUnreadCount = 0;
   WalletModel? topWallet;
 
   // Curated theme colors for warm luxury light aesthetic
@@ -73,11 +75,16 @@ class _CallerShellState extends State<CallerShell> {
   Future<void> _refreshNav() async {
     try {
       final api = context.read<AppController>().api;
-      final values = await Future.wait<dynamic>([api.unreadCount(), api.wallet()]);
+      final values = await Future.wait<dynamic>([
+        api.unreadCount(),
+        api.wallet(),
+        api.getInboxUnreadCount(),
+      ]);
       if (mounted) {
         setState(() {
           unreadCount = values[0] as int;
           topWallet = values[1] as WalletModel;
+          chatUnreadCount = values[2] as int;
         });
       }
     } catch (_) {}
@@ -139,6 +146,36 @@ class _CallerShellState extends State<CallerShell> {
                 style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 19, color: textDark),
               ),
         actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: InkWell(
+              onTap: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const ChatInboxScreen(isListener: false)),
+                );
+                _refreshNav();
+              },
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                padding: const EdgeInsets.all(7.5),
+                decoration: BoxDecoration(
+                  color: softPeach,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFFCDFD5), width: 1.0),
+                ),
+                child: Badge(
+                  isLabelVisible: chatUnreadCount > 0,
+                  backgroundColor: const Color(0xFFEF4444),
+                  textColor: Colors.white,
+                  label: Text(
+                    chatUnreadCount > 99 ? '99+' : '$chatUnreadCount',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 9),
+                  ),
+                  child: const Icon(Icons.chat_bubble_outline_rounded, size: 19, color: primaryOrange),
+                ),
+              ),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 10),
             child: InkWell(

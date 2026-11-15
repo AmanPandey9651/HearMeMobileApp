@@ -6,6 +6,7 @@ import '../../core/app_controller.dart';
 import '../../models/app_models.dart';
 import '../../widgets/common_widgets.dart';
 import '../auth/login_screen.dart';
+import '../common/direct_chat_screen.dart';
 
 class ListenerDetailScreen extends StatefulWidget {
   final ListenerCardModel listener;
@@ -418,6 +419,43 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
           style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: Color(0xFF1E293B)),
         ),
         actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 8),
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFF1EAE0)),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6, offset: const Offset(0, 2)),
+              ],
+            ),
+            child: IconButton(
+              padding: EdgeInsets.zero,
+              tooltip: 'Direct Message',
+              onPressed: () {
+                final targetId = expertUserId.isNotEmpty ? expertUserId : (widget.listener.userId ?? widget.listener.id);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => DirectChatScreen(
+                      otherUserId: targetId,
+                      otherUserName: displayName,
+                      otherUserAvatar: avatar,
+                      otherUserRole: 'EXPERT',
+                      ratePerMinute: audioRate,
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(
+                Icons.chat_bubble_outline_rounded,
+                color: Color(0xFF64748B),
+                size: 19,
+              ),
+            ),
+          ),
           Container(
             margin: const EdgeInsets.only(right: 8),
             width: 38,

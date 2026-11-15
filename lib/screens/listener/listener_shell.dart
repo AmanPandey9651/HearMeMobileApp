@@ -9,11 +9,11 @@ import '../../models/app_models.dart';
 import '../../services/call_push_service.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/incoming_call_overlay.dart';
+import '../common/chat_inbox_screen.dart';
 import 'listener_dashboard_screen.dart';
 import 'listener_earnings_screen.dart';
 import 'listener_history_screen.dart';
 import 'listener_more_screen.dart';
-import 'listener_profile_screen.dart';
 
 class ListenerShell extends StatefulWidget {
   const ListenerShell({super.key});
@@ -29,14 +29,27 @@ class _ListenerShellState extends State<ListenerShell> {
   String? shownId;
   String? shownNudgeId;
   int unreadCount = 0;
+  int chatUnreadCount = 0;
 
   late final List<Widget> pages = [
-    ListenerDashboardScreen(onNavigateTab: (tabIndex) => setState(() => index = tabIndex)),
+    ListenerDashboardScreen(onNavigateTab: _handleTabNavigate),
+    const ChatInboxScreen(isListener: true),
     const ListenerHistoryScreen(),
     const ListenerEarningsScreen(),
-    const ListenerProfileScreen(),
-    ListenerMoreScreen(onNavigateTab: (tabIndex) => setState(() => index = tabIndex)),
+    ListenerMoreScreen(onNavigateTab: _handleTabNavigate),
   ];
+
+  void _handleTabNavigate(int tabIndex) {
+    if (tabIndex == 1) {
+      setState(() => index = 2); // attendance
+    } else if (tabIndex == 2) {
+      setState(() => index = 3); // earnings
+    } else if (tabIndex == 3 || tabIndex == 4) {
+      setState(() => index = 4); // more/profile
+    } else {
+      setState(() => index = tabIndex);
+    }
+  }
 
   @override
   void initState() {
@@ -110,6 +123,13 @@ class _ListenerShellState extends State<ListenerShell> {
         }
       }
       if (mounted && unreadCount != unread) setState(() => unreadCount = unread);
+
+      try {
+        final cUnread = await app.api.getInboxUnreadCount();
+        if (mounted && chatUnreadCount != cUnread) {
+          setState(() => chatUnreadCount = cUnread);
+        }
+      } catch (_) {}
 
       // If listener is already ONLINE, auto-mark all pending nudges as read and DO NOT show popup
       if (isOnline) {
@@ -215,6 +235,23 @@ class _ListenerShellState extends State<ListenerShell> {
               selectedIcon: Icon(Icons.home_rounded, color: Color(0xFFF95B3D)),
               label: 'Dashboard',
             ),
+            NavigationDestination(
+              icon: Badge(
+                isLabelVisible: chatUnreadCount > 0,
+                backgroundColor: const Color(0xFFEF4444),
+                textColor: Colors.white,
+                label: Text(chatUnreadCount > 99 ? '99+' : '$chatUnreadCount', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
+                child: const Icon(Icons.chat_bubble_outline_rounded),
+              ),
+              selectedIcon: Badge(
+                isLabelVisible: chatUnreadCount > 0,
+                backgroundColor: const Color(0xFFEF4444),
+                textColor: Colors.white,
+                label: Text(chatUnreadCount > 99 ? '99+' : '$chatUnreadCount', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
+                child: const Icon(Icons.chat_bubble_rounded, color: Color(0xFFF95B3D)),
+              ),
+              label: 'Chat',
+            ),
             const NavigationDestination(
               icon: Icon(Icons.calendar_today_outlined),
               selectedIcon: Icon(Icons.calendar_today_rounded, color: Color(0xFFF95B3D)),
@@ -224,11 +261,6 @@ class _ListenerShellState extends State<ListenerShell> {
               icon: Icon(Icons.bar_chart_rounded),
               selectedIcon: Icon(Icons.bar_chart_rounded, color: Color(0xFFF95B3D)),
               label: 'Earnings',
-            ),
-            const NavigationDestination(
-              icon: Icon(Icons.person_outline_rounded),
-              selectedIcon: Icon(Icons.person_rounded, color: Color(0xFFF95B3D)),
-              label: 'Profile',
             ),
             NavigationDestination(
               icon: Badge(

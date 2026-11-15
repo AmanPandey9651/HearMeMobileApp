@@ -535,4 +535,37 @@ class ApiService {
 
   Future<Map<String, dynamic>> applyReferralCode(String code) async =>
       Map<String, dynamic>.from(await client.post('/referrals/apply', body: {'referralCode': code}));
+
+  // Direct Chat & Inbox
+  Future<List<Map<String, dynamic>>> getInboxThreads({int page = 0, int size = 30}) async {
+    final res = await client.get('/inbox/threads?page=$page&size=$size');
+    return _content(res).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Future<Map<String, dynamic>> getOrCreateInboxThread(String otherUserId) async =>
+      Map<String, dynamic>.from(await client.get('/inbox/threads/user/$otherUserId'));
+
+  Future<List<Map<String, dynamic>>> getInboxMessages(String threadId, {int page = 0, int size = 50}) async {
+    final res = await client.get('/inbox/threads/$threadId/messages?page=$page&size=$size');
+    return _content(res).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Future<Map<String, dynamic>> sendInboxMessage(String threadId, String text) async =>
+      Map<String, dynamic>.from(await client.post('/inbox/threads/$threadId/messages', body: {'text': text}));
+
+  Future<Map<String, dynamic>> sendInboxMessageDirect(String recipientId, String text) async =>
+      Map<String, dynamic>.from(await client.post('/inbox/send', body: {'recipientId': recipientId, 'text': text}));
+
+  Future<void> markInboxThreadRead(String threadId) async =>
+      client.patch('/inbox/threads/$threadId/read');
+
+  Future<int> getInboxUnreadCount() async {
+    try {
+      final res = await client.get('/inbox/unread-count');
+      if (res is Map && res['unreadCount'] != null) {
+        return (res['unreadCount'] as num).toInt();
+      }
+    } catch (_) {}
+    return 0;
+  }
 }

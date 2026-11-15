@@ -7,6 +7,7 @@ import '../../core/active_call_manager.dart';
 import '../../core/app_controller.dart';
 import '../../models/app_models.dart';
 import '../../widgets/common_widgets.dart';
+import '../common/direct_chat_screen.dart';
 
 class ListenerDailyAttendance {
   final DateTime date;
@@ -1495,6 +1496,43 @@ class _ListenerHistoryScreenState extends State<ListenerHistoryScreen> {
                       ),
                     ),
                   ),
+                  if (s.callerId != null && s.callerId!.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    InkWell(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => DirectChatScreen(
+                              otherUserId: s.callerId,
+                              otherUserName: s.callerNickname.isNotEmpty ? s.callerNickname : 'Caller',
+                              otherUserAvatar: s.callerAvatarUrl,
+                              otherUserRole: 'CUSTOMER',
+                            ),
+                          ),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFFBEB),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFFDE68A)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.chat_bubble_outline_rounded, size: 14, color: Color(0xFFD97706)),
+                            SizedBox(width: 4),
+                            Text(
+                              'Message',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFD97706)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                   // Call Back / Chat Back / Video Call Back Button (Only for missed calls)
                   if (s.isMissed) ...[
                     const SizedBox(width: 8),

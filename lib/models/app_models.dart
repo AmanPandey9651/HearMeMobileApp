@@ -617,3 +617,85 @@ class RecordingGovernanceModel {
         blockScreenRecordingEnabled: j['blockScreenRecordingEnabled'] != false,
       );
 }
+
+class ChatThreadModel {
+  final String threadId;
+  final String otherUserId;
+  final String otherUserName;
+  final String? otherUserAvatar;
+  final String otherUserRole;
+  final String? lastMessageText;
+  final String? lastMessageAt;
+  final String? lastMessageSenderId;
+  final int unreadCount;
+  final String? presenceStatus;
+  final double? ratePerMinute;
+
+  const ChatThreadModel({
+    required this.threadId,
+    required this.otherUserId,
+    required this.otherUserName,
+    this.otherUserAvatar,
+    required this.otherUserRole,
+    this.lastMessageText,
+    this.lastMessageAt,
+    this.lastMessageSenderId,
+    required this.unreadCount,
+    this.presenceStatus,
+    this.ratePerMinute,
+  });
+
+  factory ChatThreadModel.fromJson(Map<String, dynamic> json) {
+    return ChatThreadModel(
+      threadId: json['threadId']?.toString() ?? '',
+      otherUserId: json['otherUserId']?.toString() ?? '',
+      otherUserName: json['otherUserName']?.toString() ?? 'User',
+      otherUserAvatar: json['otherUserAvatar']?.toString(),
+      otherUserRole: json['otherUserRole']?.toString() ?? 'USER',
+      lastMessageText: json['lastMessageText']?.toString(),
+      lastMessageAt: json['lastMessageAt']?.toString(),
+      lastMessageSenderId: json['lastMessageSenderId']?.toString(),
+      unreadCount: (json['unreadCount'] as num?)?.toInt() ?? 0,
+      presenceStatus: json['presenceStatus']?.toString(),
+      ratePerMinute: (json['ratePerMinute'] as num?)?.toDouble(),
+    );
+  }
+}
+
+class DirectChatMessageModel {
+  final String id;
+  final String threadId;
+  final String senderId;
+  final String senderName;
+  final String senderRole;
+  final String recipientId;
+  final String text;
+  final bool isRead;
+  final String sentAt;
+
+  const DirectChatMessageModel({
+    required this.id,
+    required this.threadId,
+    required this.senderId,
+    required this.senderName,
+    required this.senderRole,
+    required this.recipientId,
+    required this.text,
+    required this.isRead,
+    required this.sentAt,
+  });
+
+  factory DirectChatMessageModel.fromJson(Map<String, dynamic> json) {
+    return DirectChatMessageModel(
+      id: json['id']?.toString() ?? '',
+      threadId: json['threadId']?.toString() ?? '',
+      senderId: json['senderId']?.toString() ?? '',
+      senderName: json['senderName']?.toString() ?? '',
+      senderRole: json['senderRole']?.toString() ?? 'USER',
+      recipientId: json['recipientId']?.toString() ?? '',
+      text: json['text']?.toString() ?? '',
+      isRead: json['isRead'] == true,
+      sentAt: json['sentAt']?.toString() ?? '',
+    );
+  }
+}

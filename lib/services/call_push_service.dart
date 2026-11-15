@@ -12,6 +12,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../core/active_call_manager.dart';
 import '../core/api_client.dart';
 import '../core/app_config.dart';
+import '../main.dart';
+import '../screens/common/direct_chat_screen.dart';
 import 'api_service.dart';
 
 const FirebaseOptions kAndroidFirebaseOptions = FirebaseOptions(
@@ -102,9 +104,24 @@ class CallPushService {
     await _initLocalNotifications();
 
     _onMessageSub = FirebaseMessaging.onMessage.listen(_handleForegroundRemoteMessage);
-    _onOpenedAppSub = FirebaseMessaging.onMessageOpenedApp.listen((_) {
+    _onOpenedAppSub = FirebaseMessaging.onMessageOpenedApp.listen((message) {
       onAlertNotificationReceived?.call();
       onForegroundIncomingCall?.call();
+      final data = message.data;
+      if ('${data['type'] ?? ''}'.toUpperCase() == 'DIRECT_CHAT_MESSAGE') {
+        final threadId = data['threadId']?.toString();
+        final senderId = data['senderId']?.toString();
+        final senderName = data['senderName']?.toString() ?? 'User';
+        FeelAgainApp.navigatorKey.currentState?.push(
+          MaterialPageRoute(
+            builder: (_) => DirectChatScreen(
+              threadId: threadId,
+              otherUserId: senderId,
+              otherUserName: senderName,
+            ),
+          ),
+        );
+      }
     });
 
     _callKitSub = FlutterCallkitIncoming.onEvent.listen(
@@ -125,7 +142,27 @@ class CallPushService {
       const initSettings = InitializationSettings(
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       );
-      await _localNotifications.initialize(settings: initSettings);
+      await _localNotifications.initialize(
+        settings: initSettings,
+        onDidReceiveNotificationResponse: (NotificationResponse response) {
+          final payload = response.payload;
+          if (payload != null && payload.startsWith('DIRECT_CHAT:')) {
+            final parts = payload.substring('DIRECT_CHAT:'.length).split('||');
+            final threadId = parts[0];
+            final senderName = parts.length > 1 ? parts[1] : 'User';
+            final senderId = parts.length > 2 ? parts[2] : null;
+            FeelAgainApp.navigatorKey.currentState?.push(
+              MaterialPageRoute(
+                builder: (_) => DirectChatScreen(
+                  threadId: threadId.isNotEmpty ? threadId : null,
+                  otherUserId: senderId,
+                  otherUserName: senderName,
+                ),
+              ),
+            );
+          }
+        },
+      );
 
       final androidPlugin = _localNotifications
           .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
@@ -167,6 +204,23 @@ class CallPushService {
       if (initialMsg != null) {
         onAlertNotificationReceived?.call();
         onForegroundIncomingCall?.call();
+        final data = initialMsg.data;
+        if ('${data['type'] ?? ''}'.toUpperCase() == 'DIRECT_CHAT_MESSAGE') {
+          final threadId = data['threadId']?.toString();
+          final senderId = data['senderId']?.toString();
+          final senderName = data['senderName']?.toString() ?? 'User';
+          Future.delayed(const Duration(milliseconds: 600), () {
+            FeelAgainApp.navigatorKey.currentState?.push(
+              MaterialPageRoute(
+                builder: (_) => DirectChatScreen(
+                  threadId: threadId,
+                  otherUserId: senderId,
+                  otherUserName: senderName,
+                ),
+              ),
+            );
+          });
+        }
       }
     } catch (_) {}
   }
@@ -310,6 +364,37 @@ class CallPushService {
 
     if (type == 'CALL_ENDED') {
       await handleRemoteMessageData(data, isBackgroundIsolate: false);
+      return;
+    }
+
+    if (type == 'DIRECT_CHAT_MESSAGE') {
+      onAlertNotificationReceived?.call();
+      final threadId = data['threadId']?.toString() ?? '';
+      final senderName = data['senderName']?.toString() ?? 'New Message';
+      final senderId = data['senderId']?.toString() ?? '';
+      final text = data['text']?.toString() ?? (message.notification?.body ?? 'Sent you a message');
+
+      await _initLocalNotifications();
+      try {
+        await _localNotifications.show(
+          id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+          title: senderName,
+          body: text,
+          payload: 'DIRECT_CHAT:$threadId||$senderName||$senderId',
+          notificationDetails: const NotificationDetails(
+            android: AndroidNotificationDetails(
+              _alertChannelId,
+              _alertChannelName,
+              importance: Importance.high,
+              priority: Priority.high,
+              playSound: true,
+              enableVibration: true,
+            ),
+          ),
+        );
+      } catch (e) {
+        debugPrint('[CallPushService] Failed showing direct chat local notification: $e');
+      }
       return;
     }
 

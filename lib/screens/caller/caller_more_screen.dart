@@ -8,6 +8,7 @@ import '../../core/app_controller.dart';
 import '../../core/app_theme.dart';
 import '../../widgets/sign_out_card.dart';
 import '../common/how_it_works_screen.dart';
+import '../common/chat_inbox_screen.dart';
 import '../common/notifications_screen.dart';
 import '../common/safety_support_screen.dart';
 import '../common/legal_policy_screen.dart';
@@ -152,6 +153,16 @@ class _CallerMoreScreenState extends State<CallerMoreScreen> {
           const SizedBox(height: 18),
 
           // 3. Settings Menu Cards matching Screenshot 2 (Right)
+          _MenuItemTile(
+            icon: Icons.chat_bubble_outline_rounded,
+            title: 'Chat Inbox',
+            trailingBadge: 'Direct Messages',
+            onTap: () {
+              final nav = TalkStrangersApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
+              nav.push(MaterialPageRoute(builder: (_) => const ChatInboxScreen(isListener: false)));
+            },
+          ),
+          const SizedBox(height: 10),
           _MenuItemTile(
             icon: Icons.manage_accounts_outlined,
             title: 'Profile',
