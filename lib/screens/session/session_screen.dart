@@ -1818,6 +1818,9 @@ void initState() {
       _sendSignal({'type': 'call_ended', 'reason': 'USER_ENDED'});
       final api = context.read<AppController>().api;
       api.endSession(session.id).catchError((_) => session);
+      if (widget.isListener || _isExpertUser) {
+        api.setPresence('ONLINE').catchError((_) => null);
+      }
     } catch (_) {}
 
     // 4. Cleanup native media in background without blocking UI
@@ -1858,6 +1861,9 @@ void initState() {
       });
       final api = context.read<AppController>().api;
       api.cancelSession(session.id).catchError((_) => session);
+      if (widget.isListener || _isExpertUser) {
+        api.setPresence('ONLINE').catchError((_) => null);
+      }
     } catch (_) {}
 
     unawaited(_cleanupMedia());
@@ -1948,6 +1954,9 @@ void initState() {
     WidgetsBinding.instance.removeObserver(this);
     _pulseController.dispose();
     _cleanupMedia();
+    if (widget.isListener || _isExpertUser) {
+      _api.setPresence('ONLINE').catchError((_) => null);
+    }
     if (registeredActiveSession) {
       try { context.read<AppController>().exitActiveSession(); } catch (_) {}
     }
