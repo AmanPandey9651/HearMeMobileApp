@@ -116,7 +116,10 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
     final api = context.read<AppController>().api;
     try {
       final raw = await api.getInboxThreads();
-      final list = raw.map((e) => ChatThreadModel.fromJson(e)).toList();
+      final list = raw
+          .map((e) => ChatThreadModel.fromJson(e))
+          .where((t) => t.lastMessageText != null && t.lastMessageText!.trim().isNotEmpty && t.lastMessageText != 'Conversation started')
+          .toList();
       if (mounted) {
         setState(() {
           _threads = list;
@@ -134,7 +137,10 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
     final api = context.read<AppController>().api;
     try {
       final raw = await api.getInboxThreads();
-      final list = raw.map((e) => ChatThreadModel.fromJson(e)).toList();
+      final list = raw
+          .map((e) => ChatThreadModel.fromJson(e))
+          .where((t) => t.lastMessageText != null && t.lastMessageText!.trim().isNotEmpty && t.lastMessageText != 'Conversation started')
+          .toList();
       if (mounted) {
         setState(() {
           _threads = list;
