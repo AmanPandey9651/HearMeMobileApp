@@ -52,16 +52,18 @@ class InCallGiftingSheet extends StatefulWidget {
 class _InCallGiftingSheetState extends State<InCallGiftingSheet> {
   static const List<Map<String, dynamic>> defaultGifts = [
     {'id': 'ROSE', 'name': 'Rose', 'emoji': '🌹', 'price': 10, 'description': 'A sweet token of warmth & appreciation'},
-    {'id': 'CHOCOLATE', 'name': 'Chocolate', 'emoji': '🍫', 'price': 20, 'description': 'Sweet treat to brighten the conversation'},
-    {'id': 'COFFEE', 'name': 'Coffee', 'emoji': '☕', 'price': 25, 'description': 'Energizing comfort and good vibes'},
-    {'id': 'HEART', 'name': 'Heart', 'emoji': '💖', 'price': 50, 'description': 'Deep appreciation and heartfelt thanks'},
-    {'id': 'PIZZA', 'name': 'Pizza', 'emoji': '🍕', 'price': 75, 'description': 'Fun snack treat for an awesome listener'},
-    {'id': 'CROWN', 'name': 'Crown', 'emoji': '👑', 'price': 100, 'description': 'For an exceptional, royal listener'},
-    {'id': 'DIAMOND', 'name': 'Diamond', 'emoji': '💎', 'price': 150, 'description': 'Precious advice and priceless time'},
-    {'id': 'LUCKY_BOX', 'name': 'Lucky Box', 'emoji': '🎁', 'price': 200, 'description': 'A bundle of gratitude and positive energy'},
-    {'id': 'ROCKET', 'name': 'Super Star', 'emoji': '🚀', 'price': 250, 'description': 'Outstanding support that made my day'},
-    {'id': 'UNICORN', 'name': 'Unicorn', 'emoji': '🦄', 'price': 350, 'description': 'Magical presence and truly rare connection'},
-    {'id': 'TROPHY', 'name': 'Trophy', 'emoji': '🏆', 'price': 500, 'description': 'Ultimate champion listener & highest gratitude'},
+    {'id': 'CHOCOLATE', 'name': 'Chocolate', 'emoji': '🍫', 'price': 25, 'description': 'Sweet treat to brighten the conversation'},
+    {'id': 'COFFEE', 'name': 'Coffee', 'emoji': '☕', 'price': 50, 'description': 'Energizing comfort and good vibes'},
+    {'id': 'HEART', 'name': 'Heart', 'emoji': '💖', 'price': 100, 'description': 'Deep appreciation and heartfelt thanks'},
+    {'id': 'PIZZA', 'name': 'Pizza', 'emoji': '🍕', 'price': 200, 'description': 'Fun snack treat for an awesome listener'},
+    {'id': 'CROWN', 'name': 'Crown', 'emoji': '👑', 'price': 350, 'description': 'For an exceptional, royal listener'},
+    {'id': 'DIAMOND', 'name': 'Diamond', 'emoji': '💎', 'price': 500, 'description': 'Precious advice and priceless time'},
+    {'id': 'LUCKY_BOX', 'name': 'Lucky Box', 'emoji': '🎁', 'price': 750, 'description': 'A bundle of gratitude and positive energy'},
+    {'id': 'ROCKET', 'name': 'Super Star', 'emoji': '🚀', 'price': 1000, 'description': 'Outstanding support that made my day'},
+    {'id': 'UNICORN', 'name': 'Unicorn', 'emoji': '🦄', 'price': 1500, 'description': 'Magical presence and truly rare connection'},
+    {'id': 'TROPHY', 'name': 'Trophy', 'emoji': '🏆', 'price': 2000, 'description': 'Ultimate champion listener & highest gratitude'},
+    {'id': 'SPORTS_CAR', 'name': 'Supercar', 'emoji': '🏎️', 'price': 2500, 'description': 'Luxury appreciation & incredible connection'},
+    {'id': 'ROYAL_PALACE', 'name': 'Royal Palace', 'emoji': '🏰', 'price': 3000, 'description': 'Grandest royal tribute and highest respect'},
   ];
 
   static const List<String> presetNotes = [
