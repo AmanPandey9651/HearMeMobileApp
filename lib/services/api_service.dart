@@ -568,4 +568,17 @@ class ApiService {
     } catch (_) {}
     return 0;
   }
+
+  Future<List<DiscoverUserModel>> getDiscoverUsers({String status = 'ALL', String search = '', int page = 0, int size = 50}) async {
+    final encSearch = Uri.encodeComponent(search);
+    final encStatus = Uri.encodeComponent(status);
+    final res = await client.get('/inbox/discover-users?status=$encStatus&search=$encSearch&page=$page&size=$size');
+    return _content(res).map((e) => DiscoverUserModel.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+  }
+
+  Future<void> pingPresence() async {
+    try {
+      await client.post('/inbox/presence/ping', body: {});
+    } catch (_) {}
+  }
 }

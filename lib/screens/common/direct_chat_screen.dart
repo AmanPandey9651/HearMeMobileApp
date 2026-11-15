@@ -38,11 +38,12 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
 
   static const List<String> _presets = [
     "Dobara call kar sakte ho",
-    "Sorry, call kat gaya",
     "Call mee",
-    "Call krlo",
-    "Shayad apka network week tha,",
     "Ab idhar chat pe bhi bata sakte ho",
+    "Busy ho msg me bta do",
+    "Call krlo",
+    "Sorry, call kat gaya",
+    "Shayad apka network week tha,",
     "I am free now 😊"
   ];
 

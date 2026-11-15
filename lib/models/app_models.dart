@@ -297,6 +297,7 @@ class InstantSessionModel {
   final String? categorySlug;
   final String? notes;
   final bool promotionalBonusUsed;
+  final bool isNewUser;
   final bool isTest;
   final bool termsAccepted;
   final String? referralCode;
@@ -334,6 +335,7 @@ class InstantSessionModel {
     this.categorySlug,
     this.notes,
     this.promotionalBonusUsed = false,
+    this.isNewUser = false,
     this.isTest = false,
     this.termsAccepted = false,
     this.referralCode,
@@ -396,6 +398,7 @@ class InstantSessionModel {
         categorySlug: j['categorySlug']?.toString(),
         notes: j['notes']?.toString(),
         promotionalBonusUsed: j['promotionalBonusUsed'] == true,
+        isNewUser: j['isNewUser'] == true || '${j['callerNickname'] ?? ''}'.startsWith('[New User]'),
       );
 }
 
@@ -658,6 +661,38 @@ class ChatThreadModel {
       unreadCount: (json['unreadCount'] as num?)?.toInt() ?? 0,
       presenceStatus: json['presenceStatus']?.toString(),
       ratePerMinute: (json['ratePerMinute'] as num?)?.toDouble(),
+    );
+  }
+}
+
+class DiscoverUserModel {
+  final String userId;
+  final String name;
+  final String? avatar;
+  final String status; // 'ONLINE', 'BUSY', 'OFFLINE'
+  final bool isNewUser;
+  final String? threadId;
+  final String? lastSeen;
+
+  const DiscoverUserModel({
+    required this.userId,
+    required this.name,
+    this.avatar,
+    required this.status,
+    required this.isNewUser,
+    this.threadId,
+    this.lastSeen,
+  });
+
+  factory DiscoverUserModel.fromJson(Map<String, dynamic> json) {
+    return DiscoverUserModel(
+      userId: json['userId']?.toString() ?? '',
+      name: json['name']?.toString() ?? 'User',
+      avatar: json['avatar']?.toString(),
+      status: json['status']?.toString() ?? 'OFFLINE',
+      isNewUser: json['isNewUser'] == true,
+      threadId: json['threadId']?.toString(),
+      lastSeen: json['lastSeen']?.toString(),
     );
   }
 }

@@ -606,6 +606,10 @@ void initState() {
         'echoCancellation': true,
         'noiseSuppression': true,
         'autoGainControl': true,
+        'googEchoCancellation': true,
+        'googAutoGainControl': true,
+        'googNoiseSuppression': true,
+        'googHighpassFilter': true,
       },
       'video': isVideo
           ? <String, dynamic>{
@@ -939,8 +943,8 @@ void initState() {
         _finishReconnect();
         _offerWatchdogTimer?.cancel();
         _offerWatchdogTimer = null;
-        // Automatically ensure speakerphone is enabled so incoming audio is loud & clear
-        Helper.setSpeakerphoneOn(true).catchError((_) {});
+        // Route audio according to user preference (earpiece for private audio, speakerphone when enabled)
+        Helper.setSpeakerphoneOn(speaker).catchError((_) {});
         _startRecordingIfEligible();
         // Relax signaling and session polling once connected
         signalPoll?.cancel();
@@ -1127,6 +1131,45 @@ void initState() {
     return lines.join('\r\n');
   }
 
+  static String _optimizeSdp(String sdp) {
+    var result = _preferVP8(sdp);
+    if (result.contains('opus/48000')) {
+      final lines = result.split(RegExp(r'\r\n|\r|\n'));
+      String? opusPayload;
+      for (final line in lines) {
+        if (line.startsWith('a=rtpmap:') && line.contains('opus/48000')) {
+          final m = RegExp(r'a=rtpmap:(\d+)\s+opus/48000').firstMatch(line);
+          if (m != null) {
+            opusPayload = m.group(1);
+            break;
+          }
+        }
+      }
+      if (opusPayload != null) {
+        bool fmtpFound = false;
+        for (int i = 0; i < lines.length; i++) {
+          if (lines[i].startsWith('a=fmtp:$opusPayload ')) {
+            fmtpFound = true;
+            if (!lines[i].contains('useinbandfec=1')) {
+              lines[i] = '${lines[i]};useinbandfec=1;maxaveragebitrate=64000';
+            }
+            break;
+          }
+        }
+        if (!fmtpFound) {
+          for (int i = 0; i < lines.length; i++) {
+            if (lines[i].startsWith('a=rtpmap:$opusPayload ')) {
+              lines.insert(i + 1, 'a=fmtp:$opusPayload minptime=10;useinbandfec=1;maxaveragebitrate=64000');
+              break;
+            }
+          }
+        }
+        result = lines.join('\r\n');
+      }
+    }
+    return result;
+  }
+
   Future<void> _sendOffer({bool restart = false}) async {
     final peer = pc;
     if (peer == null) return;
@@ -1138,7 +1181,7 @@ void initState() {
       'offerToReceiveVideo': isVideo,
       if (restart) 'iceRestart': true,
     });
-    final sdp = _preferVP8(offer.sdp ?? '');
+    final sdp = _optimizeSdp(offer.sdp ?? '');
     final finalOffer = RTCSessionDescription(sdp, offer.type);
     await peer.setLocalDescription(finalOffer);
     _lastLocalDesc = finalOffer;
@@ -1499,7 +1542,7 @@ void initState() {
       try {
         final d = Map<String, dynamic>.from(s['sdp'] as Map);
         final rawSdp = d['sdp']?.toString() ?? '';
-        await peer.setRemoteDescription(RTCSessionDescription(_preferVP8(rawSdp), d['type']?.toString()));
+        await peer.setRemoteDescription(RTCSessionDescription(_optimizeSdp(rawSdp), d['type']?.toString()));
         await _flushCandidates();
       } catch (e) {
         debugPrint('[WebRTC] Error applying answer: $e');
@@ -1534,12 +1577,12 @@ void initState() {
       }
       final d = Map<String, dynamic>.from(s['sdp'] as Map);
       final rawSdp = d['sdp']?.toString() ?? '';
-      await peer.setRemoteDescription(RTCSessionDescription(_preferVP8(rawSdp), d['type']?.toString()));
+      await peer.setRemoteDescription(RTCSessionDescription(_optimizeSdp(rawSdp), d['type']?.toString()));
       final answer = await peer.createAnswer({
         'offerToReceiveAudio': true,
         'offerToReceiveVideo': isVideo,
       });
-      final finalAnswer = RTCSessionDescription(_preferVP8(answer.sdp ?? ''), answer.type);
+      final finalAnswer = RTCSessionDescription(_optimizeSdp(answer.sdp ?? ''), answer.type);
       await peer.setLocalDescription(finalAnswer);
       _lastLocalDesc = finalAnswer;
       await _sendSignal({
