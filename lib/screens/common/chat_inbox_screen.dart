@@ -233,11 +233,11 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // SEGMENTED TAB SWITCHER (FOR LISTENERS)
-            if (isExpert) _buildSegmentedTabBar(),
+            // SEGMENTED TAB SWITCHER (FOR BOTH LISTENERS AND USERS)
+            _buildSegmentedTabBar(),
 
             // FILTER CHIPS ROW (WHEN DISCOVER TAB IS SELECTED)
-            if (isExpert && _selectedTabIndex == 1) _buildFilterChips(),
+            if (_selectedTabIndex == 1) _buildFilterChips(),
 
             // MAIN CONTENT VIEW (THREADS OR DISCOVER USERS)
             Expanded(
@@ -341,7 +341,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      'All Users',
+                      _isExpertUser ? 'All Users' : 'All Listeners',
                       style: TextStyle(
                         fontSize: 13.5,
                         fontWeight: _selectedTabIndex == 1 ? FontWeight.w700 : FontWeight.w500,
@@ -501,7 +501,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
               ),
               const SizedBox(height: 14),
               Text(
-                'No $_statusFilter users found',
+                'No $_statusFilter ${_isExpertUser ? "callers" : "listeners"} found',
                 style: const TextStyle(
                   fontSize: 16.5,
                   fontWeight: FontWeight.w700,
@@ -745,10 +745,10 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
 
   Widget _buildDiscoverUserTile(DiscoverUserModel user) {
     Color statusColor = const Color(0xFF94A3B8);
-    String statusText = user.lastSeen ?? 'Offline';
+    String statusText = 'Offline';
     if (user.status == 'ONLINE') {
       statusColor = const Color(0xFF10B981);
-      statusText = 'Online now';
+      statusText = 'Online';
     } else if (user.status == 'BUSY') {
       statusColor = const Color(0xFFF59E0B);
       statusText = 'In a call';
@@ -763,7 +763,8 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
               otherUserId: user.userId,
               otherUserName: user.name,
               otherUserAvatar: user.avatar,
-              otherUserRole: 'USER',
+              otherUserRole: user.role ?? (_isExpertUser ? 'USER' : 'EXPERT'),
+              ratePerMinute: user.ratePerMinute,
             ),
           ),
         );
@@ -873,6 +874,35 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                               : const Color(0xFF64748B),
                         ),
                       ),
+                      if (user.ratePerMinute != null) ...[
+                        const SizedBox(width: 5),
+                        const Text('•', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                        const SizedBox(width: 5),
+                        Text(
+                          '₹${user.ratePerMinute!.toStringAsFixed(0)}/min',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFFB45309),
+                          ),
+                        ),
+                      ],
+                      if (user.category != null && user.ratePerMinute == null) ...[
+                        const SizedBox(width: 5),
+                        const Text('•', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            user.category!,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF64748B),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ],
@@ -943,7 +973,9 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                   color: Color(0xFF1E293B),
                 ),
                 decoration: InputDecoration(
-                  hintText: _selectedTabIndex == 0 ? 'Search messages...' : 'Search callers by name...',
+                  hintText: _selectedTabIndex == 0
+                      ? 'Search messages...'
+                      : (_isExpertUser ? 'Search callers by name...' : 'Search listeners by name...'),
                   hintStyle: const TextStyle(
                     fontSize: 14.5,
                     color: Color(0xFF94A3B8),

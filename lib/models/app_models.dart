@@ -673,6 +673,9 @@ class DiscoverUserModel {
   final bool isNewUser;
   final String? threadId;
   final String? lastSeen;
+  final double? ratePerMinute;
+  final String? role;
+  final String? category;
 
   const DiscoverUserModel({
     required this.userId,
@@ -682,6 +685,9 @@ class DiscoverUserModel {
     required this.isNewUser,
     this.threadId,
     this.lastSeen,
+    this.ratePerMinute,
+    this.role,
+    this.category,
   });
 
   factory DiscoverUserModel.fromJson(Map<String, dynamic> json) {
@@ -693,6 +699,9 @@ class DiscoverUserModel {
       isNewUser: json['isNewUser'] == true,
       threadId: json['threadId']?.toString(),
       lastSeen: json['lastSeen']?.toString(),
+      ratePerMinute: json['ratePerMinute'] != null ? (num.tryParse(json['ratePerMinute'].toString())?.toDouble()) : null,
+      role: json['role']?.toString(),
+      category: json['category']?.toString(),
     );
   }
 }
