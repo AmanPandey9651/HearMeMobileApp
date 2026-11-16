@@ -73,12 +73,41 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
     });
   }
 
+  String _sanitizeViewerDisplayName(String? name) {
+    if (name == null || name.trim().isEmpty) return 'Caller';
+    final s = name.trim();
+    // Strict Privacy: Never expose email or gmail
+    if (s.contains('@') || s.toLowerCase().contains('gmail') || s.toLowerCase().contains('.com') || s.toLowerCase().contains('email')) {
+      return 'Caller';
+    }
+    // Strict Privacy: Never expose phone numbers (5+ digits)
+    final digits = s.replaceAll(RegExp(r'\D'), '');
+    if (digits.length >= 5) {
+      return 'Caller #${digits.substring(digits.length - 4)}';
+    }
+    if (s.toLowerCase() == 'user' || s.startsWith('+') || s.toLowerCase().startsWith('user (')) {
+      return 'Caller';
+    }
+    return s;
+  }
+
+  String _sanitizeViewerText(String? text) {
+    if (text == null || text.isEmpty) return '';
+    var s = text;
+    // Hide emails / gmail IDs
+    s = s.replaceAll(RegExp(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', caseSensitive: false), '[Email hidden for privacy]');
+    // Hide phone numbers (sequences of 7 or more digits with optional spaces/hyphens)
+    s = s.replaceAll(RegExp(r'(\+?\d[\d\s-]{6,}\d)'), '[Phone number hidden for privacy]');
+    return s;
+  }
+
   void _filterThreads() {
+    final isListenerView = widget.isListener || _isExpertUser;
     if (_searchQuery.isEmpty) {
       _filteredThreads = _threads;
     } else {
       _filteredThreads = _threads.where((t) {
-        final name = t.otherUserName.toLowerCase();
+        final name = (isListenerView ? _sanitizeViewerDisplayName(t.otherUserName) : t.otherUserName).toLowerCase();
         final msg = (t.lastMessageText ?? '').toLowerCase();
         return name.contains(_searchQuery) || msg.contains(_searchQuery);
       }).toList();
@@ -86,11 +115,12 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
   }
 
   void _filterDiscoverUsers() {
+    final isListenerView = widget.isListener || _isExpertUser;
     if (_searchQuery.isEmpty) {
       _filteredDiscoverUsers = _discoverUsers;
     } else {
       _filteredDiscoverUsers = _discoverUsers.where((u) {
-        final name = u.name.toLowerCase();
+        final name = (isListenerView ? _sanitizeViewerDisplayName(u.name) : u.name).toLowerCase();
         return name.contains(_searchQuery);
       }).toList();
     }
@@ -620,6 +650,9 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
   Widget _buildThreadTile(ChatThreadModel thread) {
     final hasUnread = thread.unreadCount > 0;
     final timeStr = _formatTime(thread.lastMessageAt);
+    final isListenerView = widget.isListener || _isExpertUser;
+    final safeDisplayName = isListenerView ? _sanitizeViewerDisplayName(thread.otherUserName) : thread.otherUserName;
+    final safeLastMessage = isListenerView ? _sanitizeViewerText(thread.lastMessageText ?? 'Tap to chat') : (thread.lastMessageText ?? 'Tap to chat');
 
     return InkWell(
       onTap: () async {
@@ -628,7 +661,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
             builder: (_) => DirectChatScreen(
               threadId: thread.threadId,
               otherUserId: thread.otherUserId,
-              otherUserName: thread.otherUserName,
+              otherUserName: safeDisplayName,
               otherUserAvatar: thread.otherUserAvatar,
               otherUserRole: thread.otherUserRole,
               ratePerMinute: thread.ratePerMinute,
@@ -653,7 +686,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                       : null,
                   child: (thread.otherUserAvatar == null || thread.otherUserAvatar!.isEmpty)
                       ? Text(
-                          thread.otherUserName.isNotEmpty ? thread.otherUserName[0].toUpperCase() : 'U',
+                          safeDisplayName.isNotEmpty ? safeDisplayName[0].toUpperCase() : 'U',
                           style: const TextStyle(
                             fontSize: 19,
                             fontWeight: FontWeight.w700,
@@ -686,7 +719,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    thread.otherUserName,
+                    safeDisplayName,
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: hasUnread ? FontWeight.w700 : FontWeight.w600,
@@ -697,7 +730,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    thread.lastMessageText ?? 'Tap to chat',
+                    safeLastMessage,
                     style: TextStyle(
                       fontSize: 13.5,
                       fontWeight: hasUnread ? FontWeight.w500 : FontWeight.w400,
@@ -760,6 +793,9 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
       statusText = 'In a call';
     }
 
+    final isListenerView = widget.isListener || _isExpertUser;
+    final safeDisplayName = isListenerView ? _sanitizeViewerDisplayName(user.name) : user.name;
+
     return InkWell(
       onTap: () async {
         await Navigator.of(context).push(
@@ -767,7 +803,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
             builder: (_) => DirectChatScreen(
               threadId: user.threadId,
               otherUserId: user.userId,
-              otherUserName: user.name,
+              otherUserName: safeDisplayName,
               otherUserAvatar: user.avatar,
               otherUserRole: user.role ?? (_isExpertUser ? 'USER' : 'EXPERT'),
               ratePerMinute: user.ratePerMinute,
@@ -792,7 +828,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                       : null,
                   child: (user.avatar == null || user.avatar!.isEmpty)
                       ? Text(
-                          user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U',
+                          safeDisplayName.isNotEmpty ? safeDisplayName[0].toUpperCase() : 'U',
                           style: const TextStyle(
                             fontSize: 19,
                             fontWeight: FontWeight.w700,
@@ -827,7 +863,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                     children: [
                       Flexible(
                         child: Text(
-                          user.name,
+                          safeDisplayName,
                           style: const TextStyle(
                             fontSize: 15.5,
                             fontWeight: FontWeight.w700,

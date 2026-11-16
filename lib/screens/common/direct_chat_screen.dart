@@ -154,10 +154,42 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
     }
   }
 
+  static String _sanitizeViewerDisplayName(String? name) {
+    if (name == null || name.trim().isEmpty) return 'Caller';
+    final s = name.trim();
+    // Strict Privacy: Never expose email or gmail
+    if (s.contains('@') || s.toLowerCase().contains('gmail') || s.toLowerCase().contains('.com') || s.toLowerCase().contains('email')) {
+      return 'Caller';
+    }
+    // Strict Privacy: Never expose phone numbers (5+ digits)
+    final digits = s.replaceAll(RegExp(r'\D'), '');
+    if (digits.length >= 5) {
+      return 'Caller #${digits.substring(digits.length - 4)}';
+    }
+    if (s.toLowerCase() == 'user' || s.startsWith('+') || s.toLowerCase().startsWith('user (')) {
+      return 'Caller';
+    }
+    return s;
+  }
+
+  static String _sanitizeViewerText(String? text) {
+    if (text == null || text.isEmpty) return '';
+    var s = text;
+    // Hide emails / gmail IDs
+    s = s.replaceAll(RegExp(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', caseSensitive: false), '[Email hidden for privacy]');
+    // Hide phone numbers (sequences of 7 or more digits with optional spaces/hyphens)
+    s = s.replaceAll(RegExp(r'(\+?\d[\d\s-]{6,}\d)'), '[Phone number hidden for privacy]');
+    return s;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final myId = context.read<AppController>().user?.id;
-    final displayName = widget.otherUserName ?? 'Chat';
+    final myUser = context.read<AppController>().user;
+    final myId = myUser?.id;
+    final isExpertViewer = myUser?.role == 'EXPERT' || myUser?.role == 'LISTENER' || widget.otherUserRole != 'EXPERT';
+    final displayName = isExpertViewer
+        ? _sanitizeViewerDisplayName(widget.otherUserName ?? 'Chat')
+        : (widget.otherUserName ?? 'Chat');
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
@@ -257,7 +289,7 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
                                 ),
                               ),
                               child: Text(
-                                msg.text,
+                                isExpertViewer ? _sanitizeViewerText(msg.text) : msg.text,
                                 style: TextStyle(
                                   fontSize: 14.5,
                                   fontWeight: isMe ? FontWeight.w600 : FontWeight.w500,
