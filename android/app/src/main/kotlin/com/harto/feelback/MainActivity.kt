@@ -1,6 +1,9 @@
 package com.harto.feelback
 
 import android.app.Activity
+import android.app.PictureInPictureParams
+import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
@@ -9,6 +12,7 @@ import android.media.MediaRecorder
 import android.os.Bundle
 import android.os.Process
 import android.os.Build
+import android.util.Rational
 import android.view.WindowManager
 import android.app.Activity.ScreenCaptureCallback
 import io.flutter.embedding.android.FlutterActivity
@@ -28,6 +32,8 @@ class MainActivity : FlutterActivity() {
     private var screenCaptureCallback: Any? = null // ScreenCaptureCallback (API 34+)
     private var mediaObserver: android.database.ContentObserver? = null
     private var callAudioRecorder: CallAudioRecorder? = null
+    private var pipMethodChannel: MethodChannel? = null
+    private var isPipEligible = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -106,9 +112,84 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun updateAutoPiP(enabled: Boolean) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            try {
+                val paramsBuilder = PictureInPictureParams.Builder()
+                paramsBuilder.setAspectRatio(Rational(9, 16))
+                paramsBuilder.setAutoEnterEnabled(enabled)
+                setPictureInPictureParams(paramsBuilder.build())
+            } catch (e: Exception) {
+                android.util.Log.w("MainActivity", "Failed setting auto-enter PiP: ${e.message}")
+            }
+        }
+    }
+
+    private fun triggerPiP(): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (!packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
+                return false
+            }
+            try {
+                // Temporarily clear FLAG_SECURE so video renders inside floating PiP window
+                window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                val params = PictureInPictureParams.Builder()
+                    .setAspectRatio(Rational(9, 16))
+                    .build()
+                return enterPictureInPictureMode(params)
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "enterPictureInPictureMode error: ${e.message}")
+            }
+        }
+        return false
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (isPipEligible && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            triggerPiP()
+        }
+    }
+
+    @Suppress("OVERRIDE_DEPRECATION")
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        if (isInPictureInPictureMode) {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            // Restoring from PiP back to full app: restore secure flag
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+        runOnUiThread {
+            pipMethodChannel?.invokeMethod("onPictureInPictureChanged", mapOf("isPip" to isInPictureInPictureMode))
+        }
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         voiceFx = VoiceFxEngine(this)
+
+        pipMethodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "talkstrangers/pip")
+        pipMethodChannel?.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "isSupported" -> {
+                    val supported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+                            packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+                    result.success(supported)
+                }
+                "enableAutoPiP" -> {
+                    val enabled = call.argument<Boolean>("enabled") ?: false
+                    isPipEligible = enabled
+                    updateAutoPiP(enabled)
+                    result.success(true)
+                }
+                "enterPiP" -> {
+                    val ok = triggerPiP()
+                    result.success(ok)
+                }
+                else -> result.notImplemented()
+            }
+        }
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "talkstrangers/voice_fx")
             .setMethodCallHandler { call, result ->

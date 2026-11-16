@@ -3,6 +3,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'screens/common/first_time_onboarding_screen.dart';
 import 'services/app_lock_service.dart';
 import 'services/call_push_service.dart';
+import 'services/pip_service.dart';
+import 'core/active_call_manager.dart';
 import 'widgets/app_lock_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -69,6 +71,7 @@ class _FeelAgainAppState extends State<FeelAgainApp> with WidgetsBindingObserver
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    PipService.instance.initialize();
   }
 
   @override
@@ -81,6 +84,10 @@ class _FeelAgainAppState extends State<FeelAgainApp> with WidgetsBindingObserver
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
       if (mounted) {
+        // Do not lock the app if Picture-in-Picture or an active call is running
+        if (PipService.instance.isPipMode.value || ActiveCallManager.instance.hasActiveCall) {
+          return;
+        }
         context.read<AppLockService>().lockApp();
       }
     }

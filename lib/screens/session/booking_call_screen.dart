@@ -17,6 +17,7 @@ import '../../widgets/in_call_mini_games.dart';
 import '../../widgets/video_privacy_filter.dart';
 import '../../widgets/nudity_guard_overlay.dart';
 import '../../services/in_call_voice_safety_service.dart';
+import '../../services/pip_service.dart';
 
 /// WebRTC room used by the legacy/scheduled booking flow that still exists in
 /// CustomerBookingsPage on the web client. Billing and call state remain
@@ -616,6 +617,9 @@ void initState() {
         peerName: widget.booking.listenerName,
         isVideo: isVideo,
       );
+      if (isVideo) {
+        PipService.instance.enableAutoPiP(true);
+      }
       if (mounted) setState(() {});
 
       if (!connectedRecorded) {
@@ -1046,6 +1050,9 @@ void initState() {
       CallPushService.instance.dismissOngoingCallNotification();
       _api.endBookingCall(widget.booking.id).catchError((_) {});
     } else if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      if (PipService.instance.isPipMode.value) {
+        return;
+      }
       if (isVideo && localStream != null) {
         for (final t in localStream!.getVideoTracks()) {
           try { t.enabled = false; } catch (_) {}
@@ -1063,6 +1070,7 @@ void initState() {
   @override
   void dispose() {
     CallPushService.instance.dismissOngoingCallNotification();
+    PipService.instance.enableAutoPiP(false);
     _isDisposed = true;
     signalPoll?.cancel();
     signalPoll = null;
@@ -1092,7 +1100,24 @@ void initState() {
   @override
   Widget build(BuildContext context) {
     final elapsed = status?.elapsedSeconds ?? 0;
-    return PopScope(
+    return ValueListenableBuilder<bool>(
+      valueListenable: PipService.instance.isPipMode,
+      builder: (context, inPip, _) {
+        if (inPip && isVideo) {
+          return Scaffold(
+            backgroundColor: Colors.black,
+            body: Center(
+              child: remoteRenderer.srcObject != null
+                  ? FilteredVideoView(
+                      filter: peerVideoFilter,
+                      child: RTCVideoView(remoteRenderer, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
+                    )
+                  : const CircularProgressIndicator(color: Colors.white),
+            ),
+          );
+        }
+
+        return PopScope(
       canPop: ending,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
@@ -1256,7 +1281,10 @@ void initState() {
           ]),
         ),
       ]),
+        );
+      },
     );
+  }
 
   Widget _round(IconData icon, bool active, VoidCallback onTap) => FloatingActionButton.small(
         heroTag: null,

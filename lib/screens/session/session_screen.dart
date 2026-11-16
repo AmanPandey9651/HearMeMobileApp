@@ -21,6 +21,7 @@ import '../caller/wallet_screen.dart';
 import '../../widgets/video_privacy_filter.dart';
 import '../../widgets/nudity_guard_overlay.dart';
 import '../../services/in_call_voice_safety_service.dart';
+import '../../services/pip_service.dart';
 
 class SessionScreen extends StatefulWidget {
   final InstantSessionModel initialSession;
@@ -951,6 +952,9 @@ void initState() {
           peerName: peerName,
           isVideo: isVideo,
         );
+        if (isVideo) {
+          PipService.instance.enableAutoPiP(true);
+        }
         // Relax signaling and session polling once connected
         signalPoll?.cancel();
         signalPoll = Timer.periodic(const Duration(milliseconds: 500), (_) => _pollSignals());
@@ -1882,6 +1886,7 @@ void initState() {
 
   Future<void> _cleanupMedia() async {
     CallPushService.instance.dismissOngoingCallNotification();
+    PipService.instance.enableAutoPiP(false);
     _nudityCooldownTimer?.cancel();
     _nudityCooldownTimer = null;
     sessionPoll?.cancel();
@@ -1938,7 +1943,11 @@ void initState() {
       CallPushService.instance.dismissOngoingCallNotification();
       _api.endSession(session.id).catchError((_) => session);
     } else if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
-      // User switched to another app (e.g. WhatsApp / Instagram):
+      // If Picture-in-Picture floating window is active, keep both camera and audio running!
+      if (PipService.instance.isPipMode.value) {
+        return;
+      }
+      // User switched to another app without PiP:
       // Keep audio stream alive, but safely mute video track so Android camera hardware does not crash/freeze
       if (isVideo && localStream != null) {
         for (final t in localStream!.getVideoTracks()) {
@@ -2075,7 +2084,29 @@ void initState() {
     }
 
     final isMinimized = widget.isHostedInGlobalManager && ActiveCallManager.instance.isMinimized;
-    return PopScope(
+    return ValueListenableBuilder<bool>(
+      valueListenable: PipService.instance.isPipMode,
+      builder: (context, inPip, _) {
+        if (inPip && isVideo) {
+          return Scaffold(
+            backgroundColor: Colors.black,
+            body: Center(
+              child: (remoteRenderer.srcObject != null &&
+                      remoteStream != null &&
+                      remoteStream!.getVideoTracks().isNotEmpty)
+                  ? FilteredVideoView(
+                      filter: peerVideoFilter,
+                      child: RTCVideoView(
+                        remoteRenderer,
+                        objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                      ),
+                    )
+                  : _buildVideoConnectingFallback(peerName, peerAvatar),
+            ),
+          );
+        }
+
+        return PopScope(
       canPop: isMinimized || session.ended,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop || isMinimized) return;
@@ -3646,6 +3677,8 @@ void initState() {
         ),
         ),
       ),
+    );
+      },
     );
   }
 
