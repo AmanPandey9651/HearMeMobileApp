@@ -61,6 +61,9 @@ class CallPushService {
 
   static const String _alertChannelId = 'feelback_alerts';
   static const String _alertChannelName = 'FeelBack Alerts';
+  static const String _ongoingCallChannelId = 'feelback_ongoing_call';
+  static const String _ongoingCallChannelName = 'Ongoing Call';
+  static const int _ongoingCallNotificationId = 99998;
 
   static final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
@@ -174,6 +177,16 @@ class CallPushService {
           importance: Importance.high,
           playSound: true,
           enableVibration: true,
+        ),
+      );
+      await androidPlugin?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          _ongoingCallChannelId,
+          _ongoingCallChannelName,
+          description: 'Active call audio and connection notification.',
+          importance: Importance.max,
+          playSound: false,
+          enableVibration: false,
         ),
       );
       _localNotificationsReady = true;
@@ -632,6 +645,47 @@ class CallPushService {
     final extraId = '${params.extra?['sessionId'] ?? ''}'.trim();
     if (extraId.isNotEmpty) return extraId;
     return params.id.trim();
+  }
+
+  Future<void> showOngoingCallNotification({
+    required String peerName,
+    required bool isVideo,
+  }) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      await initialize();
+      final typeLabel = isVideo ? 'Video Call' : 'Audio Call';
+      final androidDetails = AndroidNotificationDetails(
+        _ongoingCallChannelId,
+        _ongoingCallChannelName,
+        channelDescription: 'Active call audio and connection notification.',
+        importance: Importance.max,
+        priority: Priority.max,
+        ongoing: true,
+        autoCancel: false,
+        showWhen: true,
+        usesChronometer: true,
+        category: AndroidNotificationCategory.call,
+        visibility: NotificationVisibility.public,
+        icon: '@mipmap/ic_launcher',
+      );
+      final details = NotificationDetails(android: androidDetails);
+      await _localNotifications.show(
+        _ongoingCallNotificationId,
+        'Active $typeLabel with $peerName',
+        'Call in progress • Tap to return to conversation',
+        details,
+      );
+    } catch (e) {
+      debugPrint('[CallPushService] Ongoing notification warning: $e');
+    }
+  }
+
+  Future<void> dismissOngoingCallNotification() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      await _localNotifications.cancel(_ongoingCallNotificationId);
+    } catch (_) {}
   }
 }
 

@@ -612,6 +612,10 @@ void initState() {
       _finishReconnect();
       Helper.setSpeakerphoneOn(true).catchError((_) {});
       _startRecordingIfEligible();
+      CallPushService.instance.showOngoingCallNotification(
+        peerName: widget.booking.listenerName,
+        isVideo: isVideo,
+      );
       if (mounted) setState(() {});
 
       if (!connectedRecorded) {
@@ -1039,12 +1043,26 @@ void initState() {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.detached && !ending) {
+      CallPushService.instance.dismissOngoingCallNotification();
       _api.endBookingCall(widget.booking.id).catchError((_) {});
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      if (isVideo && localStream != null) {
+        for (final t in localStream!.getVideoTracks()) {
+          try { t.enabled = false; } catch (_) {}
+        }
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      if (isVideo && localStream != null && !isVideoOff) {
+        for (final t in localStream!.getVideoTracks()) {
+          try { t.enabled = true; } catch (_) {}
+        }
+      }
     }
   }
 
   @override
   void dispose() {
+    CallPushService.instance.dismissOngoingCallNotification();
     _isDisposed = true;
     signalPoll?.cancel();
     signalPoll = null;

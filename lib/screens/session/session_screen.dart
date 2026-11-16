@@ -946,6 +946,11 @@ void initState() {
         // Route audio according to user preference (earpiece for private audio, speakerphone when enabled)
         Helper.setSpeakerphoneOn(speaker).catchError((_) {});
         _startRecordingIfEligible();
+        // Show ongoing call notification so Android OS prioritizes background audio and lets user tap to return
+        CallPushService.instance.showOngoingCallNotification(
+          peerName: peerName,
+          isVideo: isVideo,
+        );
         // Relax signaling and session polling once connected
         signalPoll?.cancel();
         signalPoll = Timer.periodic(const Duration(milliseconds: 500), (_) => _pollSignals());
@@ -1876,6 +1881,7 @@ void initState() {
   }
 
   Future<void> _cleanupMedia() async {
+    CallPushService.instance.dismissOngoingCallNotification();
     _nudityCooldownTimer?.cancel();
     _nudityCooldownTimer = null;
     sessionPoll?.cancel();
@@ -1929,7 +1935,24 @@ void initState() {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.detached && !session.ended && !ending) {
+      CallPushService.instance.dismissOngoingCallNotification();
       _api.endSession(session.id).catchError((_) => session);
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      // User switched to another app (e.g. WhatsApp / Instagram):
+      // Keep audio stream alive, but safely mute video track so Android camera hardware does not crash/freeze
+      if (isVideo && localStream != null) {
+        for (final t in localStream!.getVideoTracks()) {
+          try { t.enabled = false; } catch (_) {}
+        }
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      // User returned back to FeelBack app:
+      // Smoothly re-enable video track
+      if (isVideo && localStream != null && !isVideoOff) {
+        for (final t in localStream!.getVideoTracks()) {
+          try { t.enabled = true; } catch (_) {}
+        }
+      }
     }
   }
 
