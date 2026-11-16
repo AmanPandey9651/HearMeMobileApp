@@ -399,13 +399,11 @@ class _ListenerMoreScreenState extends State<ListenerMoreScreen> {
                               ],
                             ),
                             InkWell(
-                              onTap: () {
-                                if (widget.onNavigateTab != null) {
-                                  widget.onNavigateTab!(3); // Switch to Profile
-                                } else {
-                                  final nav = TalkStrangersApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
-                                  nav.push(MaterialPageRoute(builder: (_) => const ListenerProfileScreen()));
-                                }
+                              onTap: () async {
+                                await Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (_) => const ListenerProfileScreen()),
+                                );
+                                if (mounted) _loadDashboardData();
                               },
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -558,9 +556,12 @@ class _ListenerMoreScreenState extends State<ListenerMoreScreen> {
                               audioNet: netShareAudio,
                               videoNet: netShareVideo,
                               chatNet: netShareChat,
-                              onEditRates: () {
+                              onEditRates: () async {
                                 Navigator.of(context).pop();
-                                widget.onNavigateTab?.call(3);
+                                await Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (_) => const ListenerProfileScreen()),
+                                );
+                                if (mounted) _loadDashboardData();
                               },
                             );
                           },
@@ -739,15 +740,11 @@ class _ListenerMoreScreenState extends State<ListenerMoreScreen> {
                         _MenuRowItem(
                           icon: Icons.person_outline_rounded,
                           title: 'Profile Settings',
-                          onTap: () {
-                            if (widget.onNavigateTab != null) {
-                              widget.onNavigateTab!(3); // Switch to Profile Tab
-                            } else {
-                              final nav = TalkStrangersApp.navigatorKey.currentState ?? Navigator.of(context, rootNavigator: true);
-                              nav.push(
-                                MaterialPageRoute(builder: (_) => const ListenerProfileScreen()),
-                              );
-                            }
+                          onTap: () async {
+                            await Navigator.of(context).push(
+                              MaterialPageRoute(builder: (_) => const ListenerProfileScreen()),
+                            );
+                            if (mounted) _loadDashboardData();
                           },
                         ),
                         const Divider(height: 1, color: borderWarm, indent: 64),

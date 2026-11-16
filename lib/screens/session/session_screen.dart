@@ -2918,91 +2918,13 @@ void initState() {
     );
   }
 
-  /// Real-time live money badge (shows money decreasing for caller, increasing for listener)
+  /// Real-time live money badge (hidden for caller during call per requirement; shown for listener as earnings)
   Widget _buildLiveMoneyBadge({bool isDark = false, bool compact = false}) {
     if (widget.callerSide) {
-      final balance = _callerRemainingBalance;
-      final cost = _currentLiveCost;
-      return Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: compact ? 8 : 12,
-          vertical: compact ? 3 : 5,
-        ),
-        decoration: BoxDecoration(
-          color: isDark
-              ? const Color(0xFF881337).withValues(alpha: 0.45)
-              : const Color(0xFFFFF1F2),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isDark
-                ? const Color(0xFFF43F5E).withValues(alpha: 0.45)
-                : const Color(0xFFFECDD3),
-            width: 1.0,
-          ),
-          boxShadow: isDark
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.25),
-                    blurRadius: 6,
-                  )
-                ]
-              : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            if (reconnecting) ...[
-              const Icon(
-                Icons.pause_circle_filled_rounded,
-                size: 13,
-                color: Color(0xFFF59E0B),
-              ),
-              const SizedBox(width: 3),
-              const Text(
-                'PAUSED',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFFD97706),
-                  letterSpacing: -0.2,
-                ),
-              ),
-              const SizedBox(width: 4),
-            ],
-            Icon(
-              Icons.arrow_downward_rounded,
-              size: compact ? 11 : 13,
-              color: isDark ? const Color(0xFFFB7185) : const Color(0xFFE11D48),
-            ),
-            const SizedBox(width: 3),
-            Text(
-              '₹${balance.toStringAsFixed(2)}',
-              style: TextStyle(
-                fontSize: compact ? 11.5 : 13,
-                fontWeight: FontWeight.w800,
-                color: isDark ? const Color(0xFFFECDD3) : const Color(0xFFBE123C),
-                fontFamily: 'monospace',
-                letterSpacing: -0.2,
-              ),
-            ),
-            if (!compact) ...[
-              const SizedBox(width: 4),
-              Text(
-                '(-₹${cost.toStringAsFixed(2)})',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? const Color(0xFFFDA4AF) : const Color(0xFFE11D48),
-                  fontFamily: 'monospace',
-                ),
-              ),
-            ],
-          ],
-        ),
-      );
-    } else {
-      final earned = _listenerTotalEarnings;
+      // Caller should not see money decreasing during call. Deductions are shown upon call conclusion.
+      return const SizedBox.shrink();
+    }
+    final earned = _listenerTotalEarnings;
       return Container(
         padding: EdgeInsets.symmetric(
           horizontal: compact ? 8 : 12,
