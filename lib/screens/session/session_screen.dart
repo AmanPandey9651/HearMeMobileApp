@@ -2143,6 +2143,24 @@ void initState() {
     _privacyAlerts.stop();
     WidgetsBinding.instance.removeObserver(this);
     _pulseController.dispose();
+    // 1. Detach video renderers first so native C++ stops drawing frames to textures
+    try { localRenderer.srcObject = null; } catch (_) {}
+    try { remoteRenderer.srcObject = null; } catch (_) {}
+
+    // 2. Synchronously stop all media tracks BEFORE disposing renderers to prevent native SIGSEGV crash
+    try {
+      for (final t in localStream?.getTracks() ?? <MediaStreamTrack>[]) {
+        try { t.stop(); } catch (_) {}
+      }
+      for (final t in remoteStream?.getTracks() ?? <MediaStreamTrack>[]) {
+        try { t.stop(); } catch (_) {}
+      }
+    } catch (_) {}
+
+    // 3. Now safely dispose renderers after tracks are completely dead
+    try { localRenderer.dispose(); } catch (_) {}
+    try { remoteRenderer.dispose(); } catch (_) {}
+
     _cleanupMedia();
     if (!widget.callerSide) {
       _api.updatePresence('ONLINE').catchError((_) => null);
@@ -2150,10 +2168,6 @@ void initState() {
     if (registeredActiveSession) {
       try { context.read<AppController>().exitActiveSession(); } catch (_) {}
     }
-    try { localRenderer.srcObject = null; } catch (_) {}
-    try { remoteRenderer.srcObject = null; } catch (_) {}
-    localRenderer.dispose();
-    remoteRenderer.dispose();
     _peerTypingTimer?.cancel();
     _myTypingTimer?.cancel();
     _chatScrollController.dispose();
