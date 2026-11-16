@@ -498,7 +498,7 @@ void initState() {
         timer.cancel();
         return;
       }
-      if (isLive) {
+      if (isLive && !reconnecting) {
         everLive = true;
         final startStr = session.connectedAt ?? session.startedAt;
         if (startStr != null && startStr.isNotEmpty) {
@@ -977,7 +977,9 @@ void initState() {
           setState(() {});
         }
       } else if (state ==
-          RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
+              RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
+          state ==
+              RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
         _beginReconnect();
       }
     };
@@ -1769,9 +1771,129 @@ void initState() {
   }
 
 
+  Future<void> _showCallSummaryDialog({
+    required int finalSeconds,
+    required double deductedAmount,
+    required double remainingBalance,
+    required double listenerEarned,
+  }) async {
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 24),
+            SizedBox(width: 8),
+            Text('Call Summary', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Call with $peerName has concluded.', style: const TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Duration:', style: TextStyle(color: Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w500)),
+                      Text(_time(finalSeconds), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                    ],
+                  ),
+                  const Divider(height: 16),
+                  if (widget.callerSide) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Amount Deducted:', style: TextStyle(color: Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w500)),
+                        Text(
+                          finalSeconds < 5
+                              ? '₹0.00 (Grace <5s)'
+                              : (deductedAmount > 0
+                                  ? '-₹${deductedAmount.toStringAsFixed(2)}'
+                                  : '₹0.00 (Free Trial)'),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13.5,
+                            color: deductedAmount > 0 && finalSeconds >= 5
+                                ? const Color(0xFFDC2626)
+                                : const Color(0xFF059669),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Remaining Balance:', style: TextStyle(color: Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w500)),
+                        Text(
+                          '₹${remainingBalance.toStringAsFixed(2)}',
+                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Color(0xFF0F172A)),
+                        ),
+                      ],
+                    ),
+                  ] else ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Earned From Call:', style: TextStyle(color: Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w500)),
+                        Text(
+                          finalSeconds < 5
+                              ? '₹0.00 (Grace <5s)'
+                              : (listenerEarned > 0
+                                  ? '+₹${listenerEarned.toStringAsFixed(2)}'
+                                  : '₹0.00 (Trial Call)'),
+                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Color(0xFF059669)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6366F1),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Done', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _finishFromPeer() async {
     if (ending) return;
     ending = true;
+
+    final finalSecs = seconds;
+    final finalCost = _currentLiveCost;
+    final finalBalance = _callerRemainingBalance;
+    final finalEarned = _listenerTotalEarnings;
+    final wasLive = everLive || seconds > 0;
 
     // Immediately stop timer and pollers
     clock?.cancel();
@@ -1798,6 +1920,15 @@ void initState() {
 
     unawaited(_cleanupMedia());
 
+    if (wasLive && mounted) {
+      await _showCallSummaryDialog(
+        finalSeconds: finalSecs,
+        deductedAmount: finalCost,
+        remainingBalance: finalBalance,
+        listenerEarned: finalEarned,
+      );
+    }
+
     if (widget.isHostedInGlobalManager) {
       ActiveCallManager.instance.clearCall();
     } else if (mounted) {
@@ -1809,6 +1940,12 @@ void initState() {
     _stopRingtone();
     if (ending) return;
     ending = true;
+
+    final finalSecs = seconds;
+    final finalCost = _currentLiveCost;
+    final finalBalance = _callerRemainingBalance;
+    final finalEarned = _listenerTotalEarnings;
+    final wasLive = everLive || seconds > 0;
 
     // 1. Immediately freeze duration timer and cancel all polling
     _videoControlsTimer?.cancel();
@@ -1846,6 +1983,15 @@ void initState() {
 
     // 4. Cleanup native media in background without blocking UI
     unawaited(_cleanupMedia());
+
+    if (wasLive && mounted) {
+      await _showCallSummaryDialog(
+        finalSeconds: finalSecs,
+        deductedAmount: finalCost,
+        remainingBalance: finalBalance,
+        listenerEarned: finalEarned,
+      );
+    }
 
     // 5. Instantly dismiss call UI
     if (widget.isHostedInGlobalManager) {
@@ -2806,6 +2952,24 @@ void initState() {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
+            if (reconnecting) ...[
+              const Icon(
+                Icons.pause_circle_filled_rounded,
+                size: 13,
+                color: Color(0xFFF59E0B),
+              ),
+              const SizedBox(width: 3),
+              const Text(
+                'PAUSED',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFFD97706),
+                  letterSpacing: -0.2,
+                ),
+              ),
+              const SizedBox(width: 4),
+            ],
             Icon(
               Icons.arrow_downward_rounded,
               size: compact ? 11 : 13,

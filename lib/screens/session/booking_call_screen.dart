@@ -972,9 +972,119 @@ void initState() {
     if (mounted) setState(() => banner = 'Connection restored.');
   }
 
+  Future<void> _showCallSummaryDialog({
+    required int finalSeconds,
+    required double cost,
+    required double remainingHold,
+  }) async {
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 24),
+            SizedBox(width: 8),
+            Text('Booking Call Summary', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Session with $peerName has concluded.', style: const TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Call Duration:', style: TextStyle(color: Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w500)),
+                      Text(_time(finalSeconds), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                    ],
+                  ),
+                  const Divider(height: 16),
+                  if (widget.callerSide) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Amount Deducted:', style: TextStyle(color: Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w500)),
+                        Text(
+                          cost > 0 ? '-₹${cost.toStringAsFixed(2)}' : '₹0.00',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13.5,
+                            color: cost > 0 ? const Color(0xFFDC2626) : const Color(0xFF059669),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Remaining Hold Balance:', style: TextStyle(color: Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w500)),
+                        Text(
+                          '₹${remainingHold.toStringAsFixed(2)}',
+                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Color(0xFF0F172A)),
+                        ),
+                      ],
+                    ),
+                  ] else ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Total Earned:', style: TextStyle(color: Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w500)),
+                        Text(
+                          '₹${(cost * 0.8).toStringAsFixed(2)}',
+                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Color(0xFF059669)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6366F1),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Done', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _peerEnded() async {
     if (ending) return;
     ending = true;
+
+    final elapsed = status?.elapsedSeconds ?? 0;
+    final dur = widget.booking.durationMinutes > 0 ? widget.booking.durationMinutes : 15;
+    final rate = widget.booking.holdAmount > 0 ? (widget.booking.holdAmount / dur) : 20.0;
+    final cost = (elapsed / 60.0) * rate;
+    final rem = (widget.booking.holdAmount - cost).clamp(0.0, double.infinity);
+
     signalPoll?.cancel();
     statusPoll?.cancel();
     reconnectTimer?.cancel();
@@ -983,12 +1093,28 @@ void initState() {
     try { localRenderer.srcObject = null; } catch (_) {}
     try { remoteRenderer.srcObject = null; } catch (_) {}
     unawaited(_cleanup());
+
+    if (elapsed > 0 && mounted) {
+      await _showCallSummaryDialog(
+        finalSeconds: elapsed,
+        cost: cost,
+        remainingHold: rem,
+      );
+    }
+
     if (mounted) Navigator.pop(context);
   }
 
   Future<void> _end() async {
     if (ending) return;
     ending = true;
+
+    final elapsed = status?.elapsedSeconds ?? 0;
+    final dur = widget.booking.durationMinutes > 0 ? widget.booking.durationMinutes : 15;
+    final rate = widget.booking.holdAmount > 0 ? (widget.booking.holdAmount / dur) : 20.0;
+    final cost = (elapsed / 60.0) * rate;
+    final rem = (widget.booking.holdAmount - cost).clamp(0.0, double.infinity);
+
     signalPoll?.cancel();
     statusPoll?.cancel();
     reconnectTimer?.cancel();
@@ -1003,6 +1129,15 @@ void initState() {
     } catch (_) {}
 
     unawaited(_cleanup());
+
+    if (elapsed > 0 && mounted) {
+      await _showCallSummaryDialog(
+        finalSeconds: elapsed,
+        cost: cost,
+        remainingHold: rem,
+      );
+    }
+
     if (mounted) Navigator.pop(context);
   }
 
