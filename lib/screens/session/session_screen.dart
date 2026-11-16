@@ -1371,7 +1371,7 @@ void initState() {
       final giftType = '${s['giftType'] ?? 'HEART'}';
       final giftName = '${s['giftName'] ?? 'Gift'}';
       final giftEmoji = '${s['giftEmoji'] ?? '🎁'}';
-      final price = (s['giftPrice'] as num?)?.toDouble() ?? 10.0;
+      final price = (s['giftPrice'] as num?)?.toDouble() ?? 15.0;
       final note = '${s['note'] ?? ''}'.trim();
       final senderName = '${s['senderName'] ?? peerName}';
 

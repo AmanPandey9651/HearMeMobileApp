@@ -51,7 +51,7 @@ class InCallGiftingSheet extends StatefulWidget {
 
 class _InCallGiftingSheetState extends State<InCallGiftingSheet> {
   static const List<Map<String, dynamic>> defaultGifts = [
-    {'id': 'ROSE', 'name': 'Rose', 'emoji': '🌹', 'price': 10, 'description': 'A sweet token of warmth & appreciation'},
+    {'id': 'ROSE', 'name': 'Rose', 'emoji': '🌹', 'price': 15, 'description': 'A sweet token of warmth & appreciation'},
     {'id': 'CHOCOLATE', 'name': 'Chocolate', 'emoji': '🍫', 'price': 25, 'description': 'Sweet treat to brighten the conversation'},
     {'id': 'COFFEE', 'name': 'Coffee', 'emoji': '☕', 'price': 50, 'description': 'Energizing comfort and good vibes'},
     {'id': 'HEART', 'name': 'Heart', 'emoji': '💖', 'price': 100, 'description': 'Deep appreciation and heartfelt thanks'},
