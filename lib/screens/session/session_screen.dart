@@ -22,6 +22,7 @@ import '../../widgets/video_privacy_filter.dart';
 import '../../widgets/nudity_guard_overlay.dart';
 import '../../services/in_call_voice_safety_service.dart';
 import '../../services/pip_service.dart';
+import '../../services/call_push_service.dart';
 
 class SessionScreen extends StatefulWidget {
   final InstantSessionModel initialSession;
@@ -1838,8 +1839,8 @@ void initState() {
       _sendSignal({'type': 'call_ended', 'reason': 'USER_ENDED'});
       final api = context.read<AppController>().api;
       api.endSession(session.id).catchError((_) => session);
-      if (widget.isListener || _isExpertUser) {
-        api.setPresence('ONLINE').catchError((_) => null);
+      if (!widget.callerSide) {
+        api.updatePresence('ONLINE').catchError((_) => null);
       }
     } catch (_) {}
 
@@ -1881,8 +1882,8 @@ void initState() {
       });
       final api = context.read<AppController>().api;
       api.cancelSession(session.id).catchError((_) => session);
-      if (widget.isListener || _isExpertUser) {
-        api.setPresence('ONLINE').catchError((_) => null);
+      if (!widget.callerSide) {
+        api.updatePresence('ONLINE').catchError((_) => null);
       }
     } catch (_) {}
 
@@ -1968,7 +1969,7 @@ void initState() {
     } else if (state == AppLifecycleState.resumed) {
       // User returned back to FeelBack app:
       // Smoothly re-enable video track
-      if (isVideo && localStream != null && !isVideoOff) {
+      if (isVideo && localStream != null && camera) {
         for (final t in localStream!.getVideoTracks()) {
           try { t.enabled = true; } catch (_) {}
         }
@@ -1997,8 +1998,8 @@ void initState() {
     WidgetsBinding.instance.removeObserver(this);
     _pulseController.dispose();
     _cleanupMedia();
-    if (widget.isListener || _isExpertUser) {
-      _api.setPresence('ONLINE').catchError((_) => null);
+    if (!widget.callerSide) {
+      _api.updatePresence('ONLINE').catchError((_) => null);
     }
     if (registeredActiveSession) {
       try { context.read<AppController>().exitActiveSession(); } catch (_) {}
@@ -2491,6 +2492,8 @@ void initState() {
               : isVideo
                   ? _buildLiveVideoScreen(peerName, peerAvatar)
                   : _buildLiveAudioScreen(peerName, peerAvatar)),
+        );
+      },
     );
   }
 
@@ -3688,8 +3691,6 @@ void initState() {
         ),
         ),
       ),
-    );
-      },
     );
   }
 

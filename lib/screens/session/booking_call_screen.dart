@@ -18,6 +18,7 @@ import '../../widgets/video_privacy_filter.dart';
 import '../../widgets/nudity_guard_overlay.dart';
 import '../../services/in_call_voice_safety_service.dart';
 import '../../services/pip_service.dart';
+import '../../services/call_push_service.dart';
 
 /// WebRTC room used by the legacy/scheduled booking flow that still exists in
 /// CustomerBookingsPage on the web client. Billing and call state remain
@@ -614,7 +615,7 @@ void initState() {
       Helper.setSpeakerphoneOn(true).catchError((_) {});
       _startRecordingIfEligible();
       CallPushService.instance.showOngoingCallNotification(
-        peerName: widget.booking.listenerName,
+        peerName: peerName,
         isVideo: isVideo,
       );
       if (isVideo) {
@@ -1059,7 +1060,7 @@ void initState() {
         }
       }
     } else if (state == AppLifecycleState.resumed) {
-      if (isVideo && localStream != null && !isVideoOff) {
+      if (isVideo && localStream != null && camera) {
         for (final t in localStream!.getVideoTracks()) {
           try { t.enabled = true; } catch (_) {}
         }
@@ -1195,6 +1196,8 @@ void initState() {
               ]),
       ),
     );
+      },
+    );
   }
 
   Widget _buildSafetyDeterrenceStrip() {
@@ -1281,10 +1284,7 @@ void initState() {
           ]),
         ),
       ]),
-        );
-      },
     );
-  }
 
   Widget _round(IconData icon, bool active, VoidCallback onTap) => FloatingActionButton.small(
         heroTag: null,

@@ -671,10 +671,10 @@ class CallPushService {
       );
       final details = NotificationDetails(android: androidDetails);
       await _localNotifications.show(
-        _ongoingCallNotificationId,
-        'Active $typeLabel with $peerName',
-        'Call in progress • Tap to return to conversation',
-        details,
+        id: _ongoingCallNotificationId,
+        title: 'Active $typeLabel with $peerName',
+        body: 'Call in progress • Tap to return to conversation',
+        notificationDetails: details,
       );
     } catch (e) {
       debugPrint('[CallPushService] Ongoing notification warning: $e');
@@ -684,7 +684,7 @@ class CallPushService {
   Future<void> dismissOngoingCallNotification() async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
     try {
-      await _localNotifications.cancel(_ongoingCallNotificationId);
+      await _localNotifications.cancel(id: _ongoingCallNotificationId);
     } catch (_) {}
   }
 }
