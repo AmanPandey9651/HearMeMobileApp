@@ -55,6 +55,7 @@ late final Future<void> _renderersReady;
   Timer? _peerTypingTimer;
   Timer? _myTypingTimer;
   bool _isMyTypingActive = false;
+  bool _chatStarted = false;
 
   void _startRingtone() {
     try {
@@ -447,6 +448,11 @@ void initState() {
   // Sub-second connection: join media immediately if already live on mount
   if (isLive && !isChat && pc == null && !joining) {
     unawaited(_joinMedia());
+  } else if (isLive && isChat && !_chatStarted) {
+    _chatStarted = true;
+    _api.startSession(session.id).then((s) {
+      if (mounted) setState(() => session = s);
+    }).catchError((_) {});
   }
 }
 
@@ -597,6 +603,11 @@ void initState() {
         return;
       } else if (isLive && !isChat && pc == null && !joining) {
         await _joinMedia();
+      } else if (isLive && isChat && !_chatStarted) {
+        _chatStarted = true;
+        _api.startSession(session.id).then((s) {
+          if (mounted) setState(() => session = s);
+        }).catchError((_) {});
       }
     } catch (_) {}
   }
