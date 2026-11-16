@@ -225,8 +225,6 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isExpert = _isExpertUser;
-
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(

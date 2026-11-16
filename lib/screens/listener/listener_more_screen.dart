@@ -403,7 +403,7 @@ class _ListenerMoreScreenState extends State<ListenerMoreScreen> {
                                 await Navigator.of(context).push(
                                   MaterialPageRoute(builder: (_) => const ListenerProfileScreen()),
                                 );
-                                if (mounted) _loadDashboardData();
+                                if (mounted) _fetchData();
                               },
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -561,7 +561,7 @@ class _ListenerMoreScreenState extends State<ListenerMoreScreen> {
                                 await Navigator.of(context).push(
                                   MaterialPageRoute(builder: (_) => const ListenerProfileScreen()),
                                 );
-                                if (mounted) _loadDashboardData();
+                                if (mounted) _fetchData();
                               },
                             );
                           },
@@ -744,7 +744,7 @@ class _ListenerMoreScreenState extends State<ListenerMoreScreen> {
                             await Navigator.of(context).push(
                               MaterialPageRoute(builder: (_) => const ListenerProfileScreen()),
                             );
-                            if (mounted) _loadDashboardData();
+                            if (mounted) _fetchData();
                           },
                         ),
                         const Divider(height: 1, color: borderWarm, indent: 64),

@@ -2980,7 +2980,6 @@ void initState() {
           ],
         ),
       );
-    }
   }
 
   /// Center glowing avatar orb with concentric aura and silhouette
