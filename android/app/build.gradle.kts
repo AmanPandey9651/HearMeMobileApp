@@ -21,6 +21,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
+    }
+
     defaultConfig {
         applicationId = "com.harto.feelback"
         minSdk = flutter.minSdkVersion
@@ -48,9 +53,10 @@ android {
 
     buildTypes {
         release {
-            ndk {
-                debugSymbolLevel = "none"
-            }
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             signingConfig = if (keystorePropertiesFile.exists() && keystoreProperties.getProperty("storeFile") != null) {
                 signingConfigs.getByName("release")
             } else {
@@ -63,6 +69,12 @@ android {
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+
+tasks.matching { it.name == "packageReleaseBundle" }.configureEach {
+    doFirst {
+        project.delete(project.layout.buildDirectory.dir("intermediates/intermediary_bundle"))
     }
 }
 

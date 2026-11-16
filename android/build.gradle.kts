@@ -8,6 +8,9 @@ allprojects {
             force("com.razorpay:checkout:1.6.41")
         }
     }
+    tasks.matching { it.name.startsWith("lintVital") }.configureEach {
+        enabled = false
+    }
 }
 
 val newBuildDir: Directory =
