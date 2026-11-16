@@ -119,12 +119,14 @@ late final Future<void> _renderersReady;
   DateTime? _lastNudityReportTime;
 
   Future<String?> _captureUnblurredSnapshot({String? source}) async {
+    if (_isDisposed || ending) return null;
     try {
       final isLocal = (source == 'local' || (source == 'user' && widget.callerSide) || (source == 'listener' && !widget.callerSide));
       final stream = isLocal ? localStream : (remoteStream ?? localStream);
       final videoTracks = stream?.getVideoTracks() ?? <MediaStreamTrack>[];
       if (videoTracks.isEmpty) return null;
       final track = videoTracks.first;
+      if (!track.enabled) return null;
       final byteBuffer = await track.captureFrame();
       final bytes = byteBuffer.asUint8List();
       if (bytes.isEmpty) return null;
@@ -1216,16 +1218,30 @@ void initState() {
     reconnectTimer = null;
     _privacyAlerts.stop();
     WidgetsBinding.instance.removeObserver(this);
+    // 1. Detach video renderers first so native C++ stops rendering frames to textures
+    try { localRenderer.srcObject = null; } catch (_) {}
+    try { remoteRenderer.srcObject = null; } catch (_) {}
+
+    // 2. Synchronously stop all media tracks BEFORE disposing renderers to prevent native SIGSEGV crash
+    try {
+      for (final track in localStream?.getTracks() ?? <MediaStreamTrack>[]) {
+        try { track.stop(); } catch (_) {}
+      }
+      for (final track in remoteStream?.getTracks() ?? <MediaStreamTrack>[]) {
+        try { track.stop(); } catch (_) {}
+      }
+    } catch (_) {}
+
+    // 3. Now safely dispose renderers after tracks are completely dead
+    try { localRenderer.dispose(); } catch (_) {}
+    try { remoteRenderer.dispose(); } catch (_) {}
+
     _cleanup();
     if (registeredActiveSession) {
       try {
         context.read<AppController>().exitActiveSession();
       } catch (_) {}
     }
-    try { localRenderer.srcObject = null; } catch (_) {}
-    try { remoteRenderer.srcObject = null; } catch (_) {}
-    localRenderer.dispose();
-    remoteRenderer.dispose();
     gameSignal.dispose();
     chatController.dispose();
     super.dispose();
