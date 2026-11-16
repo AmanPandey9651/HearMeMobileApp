@@ -254,6 +254,13 @@ class CallPushService {
     } catch (_) {}
 
     try {
+      final canFullScreen = await canUseFullScreenCalls();
+      if (!canFullScreen) {
+        await requestFullScreenCallsPermission();
+      }
+    } catch (_) {}
+
+    try {
       // ignore: deprecated_member_use
       final token = await FirebaseMessaging.instance.getToken();
       if (token != null && token.isNotEmpty) {

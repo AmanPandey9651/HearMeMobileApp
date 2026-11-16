@@ -89,9 +89,19 @@ class _IncomingCallOverlayState extends State<IncomingCallOverlay> {
       FlutterRingtonePlayer().playRingtone(
         volume: 1.0,
         looping: true,
-        asAlarm: false,
+        asAlarm: true, // Ring loud on alarm channel so phone rings even if on silent/vibrate
       );
-    } catch (_) {}
+    } catch (_) {
+      try {
+        FlutterRingtonePlayer().play(
+          android: AndroidSounds.ringtone,
+          ios: IosSounds.glass,
+          looping: true,
+          volume: 1.0,
+          asAlarm: true,
+        );
+      } catch (_) {}
+    }
 
     try {
       HapticFeedback.heavyImpact();
