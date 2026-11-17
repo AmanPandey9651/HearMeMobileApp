@@ -366,6 +366,10 @@ void initState() {
   ringRemaining = _initRingRemaining();
   _listenerGiftEarnings = session.giftEarnings;
 
+  if (widget.callerSide && !isLive && !isChat && !session.ended) {
+    _startRingtone();
+  }
+
   if (isVideo) {
     _resetVideoControlsTimer();
   }
@@ -588,6 +592,7 @@ void initState() {
       if (next.ended) {
         if (!ending) {
           ending = true;
+          _stopRingtone();
           clock?.cancel();
           sessionPoll?.cancel();
           signalPoll?.cancel();
@@ -603,6 +608,7 @@ void initState() {
         }
         return;
       } else if (isLive && !isChat && pc == null && !joining) {
+        _stopRingtone();
         await _joinMedia();
       } else if (isLive && isChat && !_chatStarted) {
         _chatStarted = true;
@@ -673,6 +679,8 @@ void initState() {
     final permissions = <Permission>[
       Permission.microphone,
       if (isVideo) Permission.camera,
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
+        Permission.bluetoothConnect,
     ];
 
     Map<Permission, PermissionStatus> statuses = {};
@@ -820,8 +828,9 @@ void initState() {
     final peer = await createPeerConnection({
       'iceServers': ice,
       'sdpSemantics': 'unified-plan',
-      'bundlePolicy': 'balanced',
+      'bundlePolicy': 'max-bundle',
       'rtcpMuxPolicy': 'require',
+      'iceCandidatePoolSize': 4,
     });
 
     peer.onIceConnectionState = (state) {
@@ -953,6 +962,7 @@ void initState() {
 
       if (state ==
           RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
+        _stopRingtone();
         _finishReconnect();
         _offerWatchdogTimer?.cancel();
         _offerWatchdogTimer = null;
@@ -1886,6 +1896,7 @@ void initState() {
   }
 
   Future<void> _finishFromPeer() async {
+    _stopRingtone();
     if (ending) return;
     ending = true;
 
@@ -2043,6 +2054,7 @@ void initState() {
   }
 
   Future<void> _cleanupMedia() async {
+    _stopRingtone();
     CallPushService.instance.dismissOngoingCallNotification();
     PipService.instance.enableAutoPiP(false);
     _nudityCooldownTimer?.cancel();
@@ -2126,6 +2138,7 @@ void initState() {
   @override
   void dispose() {
     _isDisposed = true;
+    _stopRingtone();
     _videoControlsTimer?.cancel();
     _videoControlsTimer = null;
     sessionPoll?.cancel();

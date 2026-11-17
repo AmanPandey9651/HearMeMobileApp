@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_callkit_incoming/entities/entities.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../core/active_call_manager.dart';
@@ -85,18 +86,25 @@ class CallPushService {
   final Set<String> _inFlightAcceptIds = <String>{};
   CallKitParams? _pendingAcceptedCallKit;
 
+  static bool get isPlatformSupported =>
+      !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
+
   static Future<void> ensureFirebaseInitialized() async {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    if (!isPlatformSupported) return;
     if (Firebase.apps.isNotEmpty) return;
     try {
-      await Firebase.initializeApp(options: kAndroidFirebaseOptions);
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        await Firebase.initializeApp(options: kAndroidFirebaseOptions);
+      } else {
+        await Firebase.initializeApp();
+      }
     } catch (e) {
       debugPrint('[CallPushService] Firebase init warning: $e');
     }
   }
 
   Future<void> initialize() async {
-    if (_initialized || kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+    if (_initialized || !isPlatformSupported) {
       return;
     }
     _initialized = true;
@@ -197,7 +205,7 @@ class CallPushService {
 
   Future<void> onUserAuthenticated(ApiService api) async {
     _api = api;
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    if (!isPlatformSupported) return;
 
     await initialize();
     await _requestPermissionsAndRegisterToken(api);
@@ -317,7 +325,7 @@ class CallPushService {
       } catch (_) {}
     }
 
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    if (isPlatformSupported) {
       try {
         await FlutterCallkitIncoming.endAllCalls();
       } catch (_) {}
@@ -334,7 +342,7 @@ class CallPushService {
   }
 
   Future<void> dismissCallNotification(String sessionId) async {
-    if (sessionId.isEmpty || kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+    if (sessionId.isEmpty || !isPlatformSupported) {
       return;
     }
     try {
@@ -455,6 +463,9 @@ class CallPushService {
 
     if (type == 'CALL_ENDED') {
       try {
+        FlutterRingtonePlayer().stop();
+      } catch (_) {}
+      try {
         if (sessionId.isNotEmpty) {
           await FlutterCallkitIncoming.endCall(sessionId);
         } else {
@@ -518,7 +529,7 @@ class CallPushService {
       android: AndroidParams(
         isCustomNotification: true,
         isShowLogo: false,
-        ringtonePath: 'ringtone_default',
+        ringtonePath: 'system_ringtone_default',
         backgroundColor: '#1E1B4B',
         actionColor: '#10B981',
         textColor: '#FFFFFF',
@@ -568,7 +579,7 @@ class CallPushService {
   }
 
   Future<void> syncPendingCallKitAction(ApiService api) async {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    if (!isPlatformSupported) return;
     try {
       final calls = await FlutterCallkitIncoming.activeCalls();
       for (final call in calls) {
