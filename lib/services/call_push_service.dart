@@ -475,11 +475,14 @@ class CallPushService {
       final expires = DateTime.tryParse(expiresRaw);
       if (expires != null) {
         final remaining = expires.difference(DateTime.now()).inMilliseconds;
-        if (remaining < -2000) {
-          debugPrint('[CallPushService] Skipping expired INCOMING_CALL push for $sessionId');
+        // Allow generous drift leeway; server FCM TTL already guards network expiration
+        if (remaining < -45000) {
+          debugPrint('[CallPushService] Skipping stale INCOMING_CALL push for $sessionId (expired ${-remaining}ms ago)');
           return;
         }
-        durationMs = remaining.clamp(5000, 90000);
+        if (remaining > 5000) {
+          durationMs = remaining.clamp(10000, 60000);
+        }
       }
     }
 
