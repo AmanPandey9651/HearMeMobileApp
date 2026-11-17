@@ -515,11 +515,11 @@ class CallPushService {
       android: AndroidParams(
         isCustomNotification: true,
         isShowLogo: false,
-        ringtonePath: 'system_ringtone_default',
+        ringtonePath: 'ringtone_default',
         backgroundColor: '#1E1B4B',
         actionColor: '#10B981',
         textColor: '#FFFFFF',
-        incomingCallNotificationChannelName: 'Incoming Calls',
+        incomingCallNotificationChannelName: 'FeelBack Incoming Calls',
         missedCallNotificationChannelName: 'Missed Calls',
         isShowFullLockedScreen: true,
         isImportant: true,
