@@ -61,18 +61,14 @@ late final Future<void> _renderersReady;
   bool _chatStarted = false;
 
   void _startRingtone() {
-    try {
-      FlutterRingtonePlayer().playRingtone(
-        volume: 0.8,
-        looping: true,
-        asAlarm: false,
-      );
-    } catch (_) {}
+    if (widget.callerSide && !isLive && !isChat && !session.ended) {
+      FeelBackRingtone.start(widget.initialSession.id, source: 'SessionScreen._startRingtone_CallerRingback');
+    }
   }
 
   void _stopRingtone() {
+    FeelBackRingtone.stop(callId: widget.initialSession.id, source: 'SessionScreen._stopRingtone');
     try {
-      FeelBackRingtone.stop();
       FlutterRingtonePlayer().stop();
     } catch (_) {}
   }
@@ -370,6 +366,11 @@ void initState() {
     FlutterCallkitIncoming.endAllCalls();
   } catch (_) {}
 
+  if (!widget.callerSide) {
+    FeelBackRingtone.markAccepted(widget.initialSession.id, source: 'SessionScreen.initState_listener');
+    _stopRingtone();
+  }
+
   everLive = isLive;
   ringRemaining = _initRingRemaining();
   _listenerGiftEarnings = session.giftEarnings;
@@ -378,6 +379,8 @@ void initState() {
   final shouldPlayRingback = widget.callerSide && !isCallback && !isLive && !isChat && !session.ended;
   if (shouldPlayRingback) {
     _startRingtone();
+  } else {
+    _stopRingtone();
   }
 
   if (isVideo) {

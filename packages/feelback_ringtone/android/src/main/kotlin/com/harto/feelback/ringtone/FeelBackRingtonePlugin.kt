@@ -25,16 +25,40 @@ class FeelBackRingtonePlugin : FlutterPlugin, MethodCallHandler {
 
     override fun onMethodCall(call: MethodCall, result: Result) {
         val ctx = context
+        val callId = call.argument<String>("callId")
+        val source = call.argument<String>("source") ?: "MethodChannel"
+
         when (call.method) {
             "start" -> {
                 if (ctx != null) {
-                    NativeRingtoneManager.start(ctx)
+                    NativeRingtoneManager.start(ctx, callId = callId, source = source)
                 }
                 result.success(true)
             }
             "stop" -> {
-                NativeRingtoneManager.stop(ctx)
+                NativeRingtoneManager.stop(ctx, callId = callId, source = source)
                 result.success(true)
+            }
+            "markAccepted" -> {
+                if (callId != null) {
+                    NativeRingtoneManager.markAccepted(callId, source = source, context = ctx)
+                } else {
+                    NativeRingtoneManager.stop(ctx, source = source)
+                }
+                result.success(true)
+            }
+            "markTerminal" -> {
+                val status = call.argument<String>("status") ?: "TERMINAL"
+                if (callId != null) {
+                    NativeRingtoneManager.markTerminal(callId, status = status, source = source, context = ctx)
+                } else {
+                    NativeRingtoneManager.stop(ctx, source = source)
+                }
+                result.success(true)
+            }
+            "isGuarded" -> {
+                val guarded = if (callId != null) NativeRingtoneManager.isCallAcceptedOrTerminal(callId) else false
+                result.success(guarded)
             }
             else -> result.notImplemented()
         }

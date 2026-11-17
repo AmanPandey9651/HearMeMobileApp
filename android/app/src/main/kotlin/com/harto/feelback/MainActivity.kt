@@ -38,7 +38,7 @@ class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         try {
-            com.harto.feelback.ringtone.NativeRingtoneManager.stop(this)
+            com.harto.feelback.ringtone.NativeRingtoneManager.stop(this, source = "MainActivity:onCreate")
         } catch (_: Exception) {}
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
     }
@@ -46,14 +46,14 @@ class MainActivity : FlutterActivity() {
     override fun onResume() {
         super.onResume()
         try {
-            com.harto.feelback.ringtone.NativeRingtoneManager.stop(this)
+            com.harto.feelback.ringtone.NativeRingtoneManager.stop(this, source = "MainActivity:onResume")
         } catch (_: Exception) {}
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         try {
-            com.harto.feelback.ringtone.NativeRingtoneManager.stop(this)
+            com.harto.feelback.ringtone.NativeRingtoneManager.stop(this, source = "MainActivity:onNewIntent")
         } catch (_: Exception) {}
     }
 

@@ -72,6 +72,18 @@ class _IncomingCallOverlayState extends State<IncomingCallOverlay> {
   void initState() {
     super.initState();
     _secondsRemaining = _calculateRemainingSeconds();
+    if (FeelBackRingtone.isCallGuarded(widget.session.id)) {
+      FeelBackRingtone.logEvent(
+        event: 'OVERLAY_INIT_GUARDED_IGNORED',
+        source: 'IncomingCallOverlay.initState',
+        callId: widget.session.id,
+        details: 'session already accepted or terminal - aborting overlay',
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.of(context).pop(null);
+      });
+      return;
+    }
     _startRingtoneAndVibration();
     _startCountdown();
     _startStatusPolling();
@@ -86,26 +98,7 @@ class _IncomingCallOverlayState extends State<IncomingCallOverlay> {
   }
 
   void _startRingtoneAndVibration() {
-    try {
-      FeelBackRingtone.start();
-    } catch (_) {}
-    try {
-      FlutterRingtonePlayer().playRingtone(
-        volume: 1.0,
-        looping: true,
-        asAlarm: true, // Ring loud on alarm channel so phone rings even if on silent/vibrate
-      );
-    } catch (_) {
-      try {
-        FlutterRingtonePlayer().play(
-          android: AndroidSounds.ringtone,
-          ios: IosSounds.glass,
-          looping: true,
-          volume: 1.0,
-          asAlarm: true,
-        );
-      } catch (_) {}
-    }
+    FeelBackRingtone.start(widget.session.id, source: 'IncomingCallOverlay');
 
     try {
       HapticFeedback.heavyImpact();
@@ -119,8 +112,8 @@ class _IncomingCallOverlayState extends State<IncomingCallOverlay> {
   }
 
   void _stopRingtoneAndVibration() {
+    FeelBackRingtone.stop(callId: widget.session.id, source: 'IncomingCallOverlay._stopRingtoneAndVibration');
     try {
-      FeelBackRingtone.stop();
       FlutterRingtonePlayer().stop();
     } catch (_) {}
     _vibrateTimer?.cancel();
@@ -149,6 +142,11 @@ class _IncomingCallOverlayState extends State<IncomingCallOverlay> {
         final current = await context.read<AppController>().api.session(widget.session.id);
         if (_actionTaken || !mounted) return;
         if (current.ended || current.status != 'REQUESTED') {
+          if (current.status == 'ACCEPTED') {
+            FeelBackRingtone.markAccepted(widget.session.id, source: 'IncomingCallOverlay._statusPoll');
+          } else {
+            FeelBackRingtone.markTerminal(widget.session.id, current.status, source: 'IncomingCallOverlay._statusPoll');
+          }
           _stopRingtoneAndVibration();
           _actionTaken = true;
           if (mounted) {
@@ -173,6 +171,7 @@ class _IncomingCallOverlayState extends State<IncomingCallOverlay> {
   void _handleAccept() {
     if (_actionTaken) return;
     _actionTaken = true;
+    FeelBackRingtone.markAccepted(widget.session.id, source: 'IncomingCallOverlay._handleAccept');
     _stopRingtoneAndVibration();
     HapticFeedback.heavyImpact();
     Navigator.of(context).pop(true);
@@ -181,6 +180,11 @@ class _IncomingCallOverlayState extends State<IncomingCallOverlay> {
   void _handleDecline({bool timeout = false}) {
     if (_actionTaken) return;
     _actionTaken = true;
+    FeelBackRingtone.markTerminal(
+      widget.session.id,
+      timeout ? 'TIMEOUT' : 'DECLINED',
+      source: 'IncomingCallOverlay._handleDecline',
+    );
     _stopRingtoneAndVibration();
     HapticFeedback.mediumImpact();
     Navigator.of(context).pop(false);

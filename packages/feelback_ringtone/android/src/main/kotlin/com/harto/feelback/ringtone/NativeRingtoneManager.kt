@@ -11,20 +11,42 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
+import java.util.Collections
+import java.util.HashSet
 
 object NativeRingtoneManager {
     private const val TAG = "NativeRingtoneMgr"
     @Volatile private var ringtone: Ringtone? = null
     @Volatile private var vibrator: Vibrator? = null
     @Volatile private var isPlaying = false
+    @Volatile private var activeCallId: String? = null
+
+    // Terminal & Accepted state guards to prevent stale FCM/snapshots from restarting audio
+    private val acceptedCallIds = Collections.synchronizedSet(HashSet<String>())
+    private val terminalCallIds = Collections.synchronizedSet(HashSet<String>())
 
     @Synchronized
-    fun start(context: Context) {
-        if (isPlaying && ringtone?.isPlaying == true) {
-            Log.d(TAG, "Already ringing, skipping start")
+    fun start(context: Context, callId: String? = null, source: String = "unknown") {
+        val now = System.currentTimeMillis()
+        val cId = callId?.trim() ?: "unknown"
+
+        if (cId != "unknown") {
+            if (acceptedCallIds.contains(cId)) {
+                Log.w(TAG, "[BLOCKED_START] timestamp=$now callId=$cId source=$source reason=CALL_ALREADY_ACCEPTED")
+                return
+            }
+            if (terminalCallIds.contains(cId)) {
+                Log.w(TAG, "[BLOCKED_START] timestamp=$now callId=$cId source=$source reason=CALL_ALREADY_TERMINAL")
+                return
+            }
+        }
+
+        if (isPlaying && ringtone?.isPlaying == true && (activeCallId == cId || cId == "unknown")) {
+            Log.d(TAG, "[IDEMPOTENT_START] timestamp=$now callId=$cId source=$source already ringing")
             return
         }
-        stop(context)
+
+        stop(context, callId = cId, source = "pre_start_cleanup")
 
         try {
             val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
@@ -36,6 +58,8 @@ object NativeRingtoneManager {
 
             if (ringerMode == AudioManager.RINGER_MODE_SILENT) {
                 isPlaying = true
+                activeCallId = cId
+                Log.d(TAG, "[START_SILENT] timestamp=$now callId=$cId source=$source ringerMode=SILENT")
                 return
             }
 
@@ -61,16 +85,23 @@ object NativeRingtoneManager {
                 r.play()
                 ringtone = r
                 isPlaying = true
-                Log.d(TAG, "Ringtone started with USAGE_ALARM successfully")
+                activeCallId = cId
+                Log.i(TAG, "[START_SUCCESS] timestamp=$now callId=$cId source=$source audioStream=USAGE_ALARM")
+            } else {
+                Log.e(TAG, "[START_FAILED] timestamp=$now callId=$cId source=$source Ringtone instance was null")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start ringtone: ${e.message}", e)
+            Log.e(TAG, "[START_ERROR] timestamp=$now callId=$cId source=$source error=${e.message}", e)
         }
     }
 
     @Synchronized
-    fun stop(context: Context? = null) {
+    fun stop(context: Context? = null, callId: String? = null, source: String = "unknown") {
+        val now = System.currentTimeMillis()
+        val cId = callId ?: activeCallId ?: "ALL"
         isPlaying = false
+        activeCallId = null
+
         try {
             ringtone?.let {
                 if (it.isPlaying) {
@@ -78,7 +109,7 @@ object NativeRingtoneManager {
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Error stopping ringtone: ${e.message}")
+            Log.w(TAG, "[STOP_WARN] timestamp=$now callId=$cId source=$source error=${e.message}")
         } finally {
             ringtone = null
         }
@@ -86,11 +117,38 @@ object NativeRingtoneManager {
         try {
             vibrator?.cancel()
         } catch (e: Exception) {
-            Log.w(TAG, "Error stopping vibrator: ${e.message}")
+            Log.w(TAG, "[VIBRATOR_STOP_WARN] timestamp=$now callId=$cId source=$source error=${e.message}")
         } finally {
             vibrator = null
         }
-        Log.d(TAG, "Native ringtone stopped cleanly")
+        Log.i(TAG, "[STOP_SUCCESS] timestamp=$now callId=$cId source=$source")
+    }
+
+    @Synchronized
+    fun markAccepted(callId: String, source: String = "unknown", context: Context? = null) {
+        val now = System.currentTimeMillis()
+        val cId = callId.trim()
+        if (cId.isNotEmpty()) {
+            acceptedCallIds.add(cId)
+            Log.i(TAG, "[MARK_ACCEPTED_PERMANENT] timestamp=$now callId=$cId source=$source ringtone permanently guarded against restart")
+        }
+        stop(context, callId = cId, source = "markAccepted:$source")
+    }
+
+    @Synchronized
+    fun markTerminal(callId: String, status: String, source: String = "unknown", context: Context? = null) {
+        val now = System.currentTimeMillis()
+        val cId = callId.trim()
+        if (cId.isNotEmpty()) {
+            terminalCallIds.add(cId)
+            Log.i(TAG, "[MARK_TERMINAL_PERMANENT] timestamp=$now callId=$cId status=$status source=$source")
+        }
+        stop(context, callId = cId, source = "markTerminal:$source")
+    }
+
+    fun isCallAcceptedOrTerminal(callId: String): Boolean {
+        val cId = callId.trim()
+        return acceptedCallIds.contains(cId) || terminalCallIds.contains(cId)
     }
 
     private fun startVibrator(context: Context) {

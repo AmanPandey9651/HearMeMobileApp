@@ -7,6 +7,7 @@ import '../../core/active_call_manager.dart';
 import '../../core/app_controller.dart';
 import '../../models/app_models.dart';
 import '../../services/call_push_service.dart';
+import 'package:feelback_ringtone/feelback_ringtone.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/incoming_call_overlay.dart';
 import '../common/chat_inbox_screen.dart';
@@ -82,6 +83,15 @@ class _ListenerShellState extends State<ListenerShell> {
         return;
       }
       if (s.id == shownId || !mounted) return;
+      if (FeelBackRingtone.isCallGuarded(s.id)) {
+        FeelBackRingtone.logEvent(
+          event: 'LISTENER_POLL_GUARDED_IGNORED',
+          source: 'listener_shell._incoming',
+          callId: s.id,
+          details: 'session already accepted or terminal',
+        );
+        return;
+      }
       if (ActiveCallManager.instance.activeSession?.id == s.id) return;
       shownId = s.id;
       await _showIncoming(s);
@@ -196,18 +206,22 @@ class _ListenerShellState extends State<ListenerShell> {
 
       try {
         if (decision == true) {
+          FeelBackRingtone.markAccepted(s.id, source: 'listener_shell._showIncoming_accepted');
           final accepted = await context.read<AppController>().api.acceptSession(s.id);
           ActiveCallManager.instance.startCall(accepted, callerSide: false);
         } else if (decision == false) {
+          FeelBackRingtone.markTerminal(s.id, 'DECLINED', source: 'listener_shell._showIncoming_declined');
           await context.read<AppController>().api.rejectSession(s.id, 'Listener declined');
         }
       } catch (e) {
         if (mounted) showError(context, e);
       }
     } finally {
-      CallPushService.instance.clearSessionHandledInApp(s.id);
+      if (!FeelBackRingtone.isCallGuarded(s.id)) {
+        CallPushService.instance.clearSessionHandledInApp(s.id);
+      }
       unawaited(CallPushService.instance.dismissCallNotification(s.id));
-      shownId = null;
+      shownId = s.id;
     }
   }
 

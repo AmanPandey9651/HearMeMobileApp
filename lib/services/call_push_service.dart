@@ -32,21 +32,36 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await CallPushService.ensureFirebaseInitialized();
   final data = message.data;
   final type = '${data['type'] ?? ''}'.toUpperCase();
+  final sessionId = '${data['sessionId'] ?? ''}'.trim();
+
+  FeelBackRingtone.logEvent(
+    event: 'FCM_BG_EVENT',
+    source: 'firebaseMessagingBackgroundHandler',
+    callId: sessionId,
+    newStatus: type,
+    details: 'messageId=${message.messageId}',
+  );
+
   if (type == 'INCOMING_CALL') {
-    try {
-      await FeelBackRingtone.start();
-    } catch (_) {}
-    try {
-      FlutterRingtonePlayer().playRingtone(
-        volume: 1.0,
-        looping: true,
-        asAlarm: true,
+    if (sessionId.isNotEmpty && FeelBackRingtone.isCallGuarded(sessionId)) {
+      FeelBackRingtone.logEvent(
+        event: 'FCM_BG_INCOMING_IGNORED_GUARDED',
+        source: 'firebaseMessagingBackgroundHandler',
+        callId: sessionId,
+        details: 'call is already accepted or terminal',
       );
-    } catch (_) {}
+      return;
+    }
+    if (sessionId.isNotEmpty) {
+      await FeelBackRingtone.start(sessionId, source: 'firebaseMessagingBackgroundHandler');
+    }
   } else if (type == 'CALL_ENDED' || type == 'CANCEL' || type == 'CALL_CANCELLED' || type == 'CALL_TIMEOUT' || type == 'CALL_REJECTED') {
+    if (sessionId.isNotEmpty) {
+      FeelBackRingtone.markTerminal(sessionId, type, source: 'firebaseMessagingBackgroundHandler');
+    } else {
+      await FeelBackRingtone.stop(source: 'firebaseMessagingBackgroundHandler:terminal');
+    }
     try {
-      await FeelBackRingtone.stop();
-      FlutterRingtonePlayer().stop();
       await FlutterCallkitIncoming.endAllCalls();
     } catch (_) {}
   }
@@ -56,13 +71,20 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 @pragma('vm:entry-point')
 Future<void> callkitBackgroundHandler(CallEvent event) async {
   WidgetsFlutterBinding.ensureInitialized();
-  try {
-    await FeelBackRingtone.stop();
-    FlutterRingtonePlayer().stop();
-  } catch (_) {}
+
+  FeelBackRingtone.logEvent(
+    event: 'CALLKIT_BG_EVENT',
+    source: 'callkitBackgroundHandler',
+    details: 'event=${event.runtimeType}',
+  );
 
   if (event is CallEventActionCallDecline) {
     final sessionId = CallPushService._extractSessionId(event.callKitParams);
+    if (sessionId.isNotEmpty) {
+      FeelBackRingtone.markTerminal(sessionId, 'DECLINED', source: 'callkitBackgroundHandler');
+    } else {
+      await FeelBackRingtone.stop(source: 'callkitBackgroundHandler:decline');
+    }
     if (sessionId.isEmpty) return;
     try {
       const storage = FlutterSecureStorage(
@@ -80,12 +102,15 @@ Future<void> callkitBackgroundHandler(CallEvent event) async {
       await FlutterCallkitIncoming.endCall(event.callKitParams.id);
     } catch (_) {}
   } else if (event is CallEventActionCallAccept) {
+    final sessionId = CallPushService._extractSessionId(event.callKitParams);
+    if (sessionId.isNotEmpty) {
+      FeelBackRingtone.markAccepted(sessionId, source: 'callkitBackgroundHandler');
+    } else {
+      await FeelBackRingtone.stop(source: 'callkitBackgroundHandler:accept');
+    }
     try {
-      await FeelBackRingtone.stop();
-      FlutterRingtonePlayer().stop();
       await FlutterCallkitIncoming.endCall(event.callKitParams.id);
     } catch (_) {}
-    final sessionId = CallPushService._extractSessionId(event.callKitParams);
     if (sessionId.isEmpty) return;
     try {
       const storage = FlutterSecureStorage(
@@ -101,6 +126,20 @@ Future<void> callkitBackgroundHandler(CallEvent event) async {
       }
     } catch (e) {
       debugPrint('[callkitBackgroundHandler] Error accepting call in background isolate: $e');
+    }
+  } else if (event is CallEventActionCallEnded) {
+    final sessionId = CallPushService._extractSessionId(event.callKitParams);
+    if (sessionId.isNotEmpty) {
+      FeelBackRingtone.markTerminal(sessionId, 'ENDED', source: 'callkitBackgroundHandler');
+    } else {
+      await FeelBackRingtone.stop(source: 'callkitBackgroundHandler:ended');
+    }
+  } else if (event is CallEventActionCallTimeout) {
+    final sessionId = event.id;
+    if (sessionId.isNotEmpty) {
+      FeelBackRingtone.markTerminal(sessionId, 'TIMEOUT', source: 'callkitBackgroundHandler');
+    } else {
+      await FeelBackRingtone.stop(source: 'callkitBackgroundHandler:timeout');
     }
   }
 }
@@ -411,7 +450,7 @@ class CallPushService {
       return;
     }
     try {
-      await FeelBackRingtone.stop();
+      await FeelBackRingtone.stop(callId: sessionId, source: 'dismissCallNotification');
       FlutterRingtonePlayer().stop();
       await FlutterCallkitIncoming.endCall(sessionId);
     } catch (_) {}
@@ -437,11 +476,26 @@ class CallPushService {
     final data = message.data;
     final type = '${data['type'] ?? ''}'.toUpperCase();
 
+    final sessionId = '${data['sessionId'] ?? ''}'.trim();
+    FeelBackRingtone.logEvent(
+      event: 'FCM_FOREGROUND_EVENT',
+      source: '_handleForegroundRemoteMessage',
+      callId: sessionId,
+      newStatus: type,
+      details: 'messageId=${message.messageId}',
+    );
+
     if (type == 'INCOMING_CALL') {
-      final sessionId = '${data['sessionId'] ?? ''}';
       if (sessionId.isEmpty) return;
-      if (ActiveCallManager.instance.activeSession?.id == sessionId ||
+      if (FeelBackRingtone.isCallGuarded(sessionId) ||
+          ActiveCallManager.instance.activeSession?.id == sessionId ||
           _handledInAppCallIds.contains(sessionId)) {
+        FeelBackRingtone.logEvent(
+          event: 'FCM_FOREGROUND_INCOMING_IGNORED',
+          source: '_handleForegroundRemoteMessage',
+          callId: sessionId,
+          details: 'reason=ALREADY_GUARDED_OR_HANDLED',
+        );
         return;
       }
 
@@ -457,7 +511,10 @@ class CallPushService {
       return;
     }
 
-    if (type == 'CALL_ENDED') {
+    if (type == 'CALL_ENDED' || type == 'CANCEL' || type == 'CALL_CANCELLED' || type == 'CALL_TIMEOUT' || type == 'CALL_REJECTED') {
+      if (sessionId.isNotEmpty) {
+        FeelBackRingtone.markTerminal(sessionId, type, source: '_handleForegroundRemoteMessage');
+      }
       await handleRemoteMessageData(data, isBackgroundIsolate: false);
       return;
     }
@@ -530,7 +587,7 @@ class CallPushService {
 
     if (type == 'CALL_ENDED') {
       try {
-        await FeelBackRingtone.stop();
+        await FeelBackRingtone.stop(callId: sessionId, source: 'handleRemoteMessageData:CALL_ENDED');
         FlutterRingtonePlayer().stop();
       } catch (_) {}
       try {
@@ -546,6 +603,17 @@ class CallPushService {
     }
 
     if (type != 'INCOMING_CALL' || sessionId.isEmpty) return;
+
+    if (FeelBackRingtone.isCallGuarded(sessionId) ||
+        ActiveCallManager.instance.activeSession?.id == sessionId) {
+      FeelBackRingtone.logEvent(
+        event: 'CALLKIT_SHOW_IGNORED_GUARDED',
+        source: 'handleRemoteMessageData',
+        callId: sessionId,
+        details: 'call is already accepted or active',
+      );
+      return;
+    }
 
     // Ignore stale/delayed FCM messages whose ring window already expired.
     int durationMs = 45000;
@@ -697,12 +765,16 @@ class CallPushService {
   }
 
   Future<void> _processAcceptedCallKit(CallKitParams params, ApiService? api) async {
+    final sessionId = _extractSessionId(params);
+    if (sessionId.isNotEmpty) {
+      FeelBackRingtone.markAccepted(sessionId, source: 'CallPushService._processAcceptedCallKit');
+    } else {
+      await FeelBackRingtone.stop(source: 'CallPushService._processAcceptedCallKit');
+    }
     try {
-      await FeelBackRingtone.stop();
       FlutterRingtonePlayer().stop();
     } catch (_) {}
 
-    final sessionId = _extractSessionId(params);
     if (sessionId.isEmpty) return;
 
     var activeApi = api ?? _api ?? await getFallbackApi();
@@ -719,11 +791,13 @@ class CallPushService {
   Future<void> _processAcceptedSessionId(String sessionId, ApiService api, {bool? isCallbackOverride}) async {
     if (sessionId.isEmpty || _inFlightAcceptIds.contains(sessionId)) return;
 
+    FeelBackRingtone.markAccepted(sessionId, source: 'CallPushService._processAcceptedSessionId');
     _inFlightAcceptIds.add(sessionId);
     _handledInAppCallIds.add(sessionId);
     try {
       final current = await api.session(sessionId);
       if (current.ended) {
+        FeelBackRingtone.markTerminal(sessionId, current.status, source: 'CallPushService._processAcceptedSessionId');
         return;
       }
 
@@ -740,7 +814,7 @@ class CallPushService {
         ActiveCallManager.instance.maximize();
       }
       try {
-        await FeelBackRingtone.stop();
+        await FeelBackRingtone.stop(callId: sessionId, source: 'CallPushService._processAcceptedSessionId');
         FlutterRingtonePlayer().stop();
         await FlutterCallkitIncoming.endAllCalls();
       } catch (_) {}
@@ -752,12 +826,16 @@ class CallPushService {
   }
 
   Future<void> _processDeclinedCallKit(CallKitParams params) async {
+    final sessionId = _extractSessionId(params);
+    if (sessionId.isNotEmpty) {
+      FeelBackRingtone.markTerminal(sessionId, 'DECLINED', source: 'CallPushService._processDeclinedCallKit');
+    } else {
+      await FeelBackRingtone.stop(source: 'CallPushService._processDeclinedCallKit');
+    }
     try {
-      await FeelBackRingtone.stop();
       FlutterRingtonePlayer().stop();
     } catch (_) {}
 
-    final sessionId = _extractSessionId(params);
     if (sessionId.isEmpty) return;
 
     try {

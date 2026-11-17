@@ -34,8 +34,9 @@ class ActiveCallManager extends ChangeNotifier {
     VoidCallback? endCall,
     VoidCallback? maximizeCall,
   }) {
+    FeelBackRingtone.markAccepted(session.id, source: 'ActiveCallManager.startCall');
     try {
-      FeelBackRingtone.stop();
+      FeelBackRingtone.stop(callId: session.id, source: 'ActiveCallManager.startCall');
       FlutterRingtonePlayer().stop();
     } catch (_) {}
     try {
@@ -112,8 +113,12 @@ class ActiveCallManager extends ChangeNotifier {
   }
 
   void clearCall() {
+    final prevId = activeSession?.id;
+    if (prevId != null && prevId.isNotEmpty) {
+      FeelBackRingtone.markTerminal(prevId, 'ENDED', source: 'ActiveCallManager.clearCall');
+    }
     try {
-      FeelBackRingtone.stop();
+      FeelBackRingtone.stop(callId: prevId, source: 'ActiveCallManager.clearCall');
       FlutterRingtonePlayer().stop();
     } catch (_) {}
     try {

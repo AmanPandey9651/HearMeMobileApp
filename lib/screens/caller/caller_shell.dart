@@ -7,6 +7,7 @@ import '../../core/active_call_manager.dart';
 import '../../core/app_controller.dart';
 import '../../models/app_models.dart';
 import '../../services/call_push_service.dart';
+import 'package:feelback_ringtone/feelback_ringtone.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/incoming_call_overlay.dart';
 import '../common/chat_inbox_screen.dart';
@@ -110,18 +111,22 @@ class _CallerShellState extends State<CallerShell> {
 
       try {
         if (yes == true) {
+          FeelBackRingtone.markAccepted(s.id, source: 'caller_shell._showCallback_accepted');
           final accepted = await context.read<AppController>().api.acceptSession(s.id);
           ActiveCallManager.instance.startCall(accepted, callerSide: true);
         } else {
+          FeelBackRingtone.markTerminal(s.id, 'DECLINED', source: 'caller_shell._showCallback_declined');
           await context.read<AppController>().api.rejectSession(s.id, 'Caller declined callback');
         }
       } catch (e) {
         if (mounted) showError(context, e);
       }
     } finally {
-      CallPushService.instance.clearSessionHandledInApp(s.id);
+      if (!FeelBackRingtone.isCallGuarded(s.id)) {
+        CallPushService.instance.clearSessionHandledInApp(s.id);
+      }
       unawaited(CallPushService.instance.dismissCallNotification(s.id));
-      shownCallback = null;
+      shownCallback = s.id;
     }
   }
 
