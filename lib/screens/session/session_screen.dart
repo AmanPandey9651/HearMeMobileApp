@@ -1,4 +1,5 @@
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
+import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
@@ -362,11 +363,18 @@ void initState() {
 
   WidgetsBinding.instance.addObserver(this);
 
+  _stopRingtone();
+  try {
+    FlutterCallkitIncoming.endAllCalls();
+  } catch (_) {}
+
   everLive = isLive;
   ringRemaining = _initRingRemaining();
   _listenerGiftEarnings = session.giftEarnings;
 
-  if (widget.callerSide && !isLive && !isChat && !session.ended) {
+  final isCallback = session.reference.startsWith('CB-');
+  final shouldPlayRingback = widget.callerSide && !isCallback && !isLive && !isChat && !session.ended;
+  if (shouldPlayRingback) {
     _startRingtone();
   }
 
@@ -593,6 +601,9 @@ void initState() {
         if (!ending) {
           ending = true;
           _stopRingtone();
+          try {
+            FlutterCallkitIncoming.endAllCalls();
+          } catch (_) {}
           clock?.cancel();
           sessionPoll?.cancel();
           signalPoll?.cancel();
@@ -758,6 +769,11 @@ void initState() {
   if (joining || ending || _isDisposed) {
     return;
   }
+
+  _stopRingtone();
+  try {
+    FlutterCallkitIncoming.endAllCalls();
+  } catch (_) {}
 
   joining = true;
 
@@ -1905,6 +1921,9 @@ void initState() {
 
   Future<void> _finishFromPeer() async {
     _stopRingtone();
+    try {
+      FlutterCallkitIncoming.endAllCalls();
+    } catch (_) {}
     if (ending) return;
     ending = true;
 

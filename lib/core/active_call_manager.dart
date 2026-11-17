@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
+import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import '../models/app_models.dart';
 
 class ActiveCallManager extends ChangeNotifier {
@@ -31,6 +33,13 @@ class ActiveCallManager extends ChangeNotifier {
     VoidCallback? endCall,
     VoidCallback? maximizeCall,
   }) {
+    try {
+      FlutterRingtonePlayer().stop();
+    } catch (_) {}
+    try {
+      FlutterCallkitIncoming.endAllCalls();
+    } catch (_) {}
+
     activeSession = session;
     isCaller = callerSide;
     isMinimized = false;
@@ -101,6 +110,13 @@ class ActiveCallManager extends ChangeNotifier {
   }
 
   void clearCall() {
+    try {
+      FlutterRingtonePlayer().stop();
+    } catch (_) {}
+    try {
+      FlutterCallkitIncoming.endAllCalls();
+    } catch (_) {}
+
     activeSession = null;
     isMinimized = false;
     elapsedSeconds = 0;

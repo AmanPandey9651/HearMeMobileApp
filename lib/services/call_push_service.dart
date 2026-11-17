@@ -31,17 +31,10 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await CallPushService.ensureFirebaseInitialized();
   final data = message.data;
   final type = '${data['type'] ?? ''}'.toUpperCase();
-  if (type == 'INCOMING_CALL') {
-    try {
-      FlutterRingtonePlayer().playRingtone(
-        volume: 1.0,
-        looping: true,
-        asAlarm: true,
-      );
-    } catch (_) {}
-  } else if (type == 'CALL_ENDED') {
+  if (type == 'CALL_ENDED') {
     try {
       FlutterRingtonePlayer().stop();
+      await FlutterCallkitIncoming.endAllCalls();
     } catch (_) {}
   }
   await CallPushService.handleRemoteMessageData(message.data, isBackgroundIsolate: true);
@@ -73,6 +66,10 @@ Future<void> callkitBackgroundHandler(CallEvent event) async {
       await FlutterCallkitIncoming.endCall(event.callKitParams.id);
     } catch (_) {}
   } else if (event is CallEventActionCallAccept) {
+    try {
+      FlutterRingtonePlayer().stop();
+      await FlutterCallkitIncoming.endCall(event.callKitParams.id);
+    } catch (_) {}
     final sessionId = CallPushService._extractSessionId(event.callKitParams);
     if (sessionId.isEmpty) return;
     try {
@@ -723,6 +720,10 @@ class CallPushService {
       if (ActiveCallManager.instance.isMinimized) {
         ActiveCallManager.instance.maximize();
       }
+      try {
+        FlutterRingtonePlayer().stop();
+        await FlutterCallkitIncoming.endAllCalls();
+      } catch (_) {}
     } catch (e) {
       debugPrint('[CallPushService] Failed accepting call $sessionId: $e');
     } finally {
