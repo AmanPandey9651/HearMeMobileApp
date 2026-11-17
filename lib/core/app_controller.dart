@@ -115,6 +115,9 @@ class AppController extends ChangeNotifier {
       final savedUser = await _storage.read(key: _userKey);
       final savedExpert = await _storage.read(key: _expertProfileKey);
       client.token = token;
+      if (token != null && token.isNotEmpty) {
+        unawaited(CallPushService.instance.onUserAuthenticated(api));
+      }
       if (savedUser != null) user = AppUser.fromJson(Map<String, dynamic>.from(jsonDecode(savedUser)));
       if (savedExpert != null) {
         try {

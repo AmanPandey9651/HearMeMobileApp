@@ -675,13 +675,19 @@ void initState() {
     }
   }
 
-    Future<void> _checkAndPromptPermissions(bool isVideo) async {
+  Future<void> _checkAndPromptPermissions(bool isVideo) async {
     final permissions = <Permission>[
       Permission.microphone,
       if (isVideo) Permission.camera,
-      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
-        Permission.bluetoothConnect,
     ];
+
+    // Request optional bluetooth connect in parallel without blocking the call
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      Permission.bluetoothConnect.request().catchError((e) {
+        debugPrint('[Permissions] optional bluetoothConnect request note: $e');
+        return PermissionStatus.denied;
+      });
+    }
 
     Map<Permission, PermissionStatus> statuses = {};
     try {
@@ -690,8 +696,10 @@ void initState() {
       debugPrint('[Permissions] request error: $e');
     }
 
-    final hasDenied = statuses.values.any((s) => !s.isGranted);
-    if (hasDenied) {
+    final micGranted = statuses[Permission.microphone]?.isGranted == true;
+    final cameraGranted = !isVideo || statuses[Permission.camera]?.isGranted == true;
+
+    if (!micGranted || !cameraGranted) {
       if (mounted) {
         showDialog(
           context: context,

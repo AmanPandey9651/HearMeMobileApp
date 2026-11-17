@@ -29,12 +29,31 @@ const FirebaseOptions kAndroidFirebaseOptions = FirebaseOptions(
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   WidgetsFlutterBinding.ensureInitialized();
   await CallPushService.ensureFirebaseInitialized();
+  final data = message.data;
+  final type = '${data['type'] ?? ''}'.toUpperCase();
+  if (type == 'INCOMING_CALL') {
+    try {
+      FlutterRingtonePlayer().playRingtone(
+        volume: 1.0,
+        looping: true,
+        asAlarm: true,
+      );
+    } catch (_) {}
+  } else if (type == 'CALL_ENDED') {
+    try {
+      FlutterRingtonePlayer().stop();
+    } catch (_) {}
+  }
   await CallPushService.handleRemoteMessageData(message.data, isBackgroundIsolate: true);
 }
 
 @pragma('vm:entry-point')
 Future<void> callkitBackgroundHandler(CallEvent event) async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    FlutterRingtonePlayer().stop();
+  } catch (_) {}
+
   if (event is CallEventActionCallDecline) {
     final sessionId = CallPushService._extractSessionId(event.callKitParams);
     if (sessionId.isEmpty) return;
@@ -53,6 +72,24 @@ Future<void> callkitBackgroundHandler(CallEvent event) async {
     try {
       await FlutterCallkitIncoming.endCall(event.callKitParams.id);
     } catch (_) {}
+  } else if (event is CallEventActionCallAccept) {
+    final sessionId = CallPushService._extractSessionId(event.callKitParams);
+    if (sessionId.isEmpty) return;
+    try {
+      const storage = FlutterSecureStorage(
+        iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+      );
+      final jwt = await storage.read(key: 'talkstrangers_access_token');
+      if (jwt != null && jwt.isNotEmpty) {
+        final client = ApiClient()..token = jwt;
+        await ApiService(client)
+            .acceptSession(sessionId)
+            .timeout(const Duration(seconds: 8));
+        await storage.write(key: 'talkstrangers_pending_accepted_session', value: sessionId);
+      }
+    } catch (e) {
+      debugPrint('[callkitBackgroundHandler] Error accepting call in background isolate: $e');
+    }
   }
 }
 
@@ -144,6 +181,22 @@ class CallPushService {
       await FlutterCallkitIncoming.onBackgroundMessage(callkitBackgroundHandler);
     } catch (e) {
       debugPrint('[CallPushService] CallKit background registration note: $e');
+    }
+
+    try {
+      FlutterCallkitIncoming.acceptCallHandle((data) async {
+        debugPrint('[CallPushService] acceptCallHandle callback received: $data');
+        final rawMap = data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+        final sessionId = '${rawMap['sessionId'] ?? rawMap['id'] ?? ''}'.trim();
+        if (sessionId.isNotEmpty) {
+          final activeApi = _api ?? await getFallbackApi();
+          if (activeApi != null) {
+            await _processAcceptedSessionId(sessionId, activeApi);
+          }
+        }
+      });
+    } catch (e) {
+      debugPrint('[CallPushService] acceptCallHandle registration note: $e');
     }
   }
 
@@ -529,7 +582,7 @@ class CallPushService {
       android: AndroidParams(
         isCustomNotification: true,
         isShowLogo: false,
-        ringtonePath: 'system_ringtone_default',
+        ringtonePath: 'ringtone_default',
         backgroundColor: '#1E1B4B',
         actionColor: '#10B981',
         textColor: '#FFFFFF',
@@ -546,7 +599,7 @@ class CallPushService {
         iconName: 'CallKitLogo',
         handleType: 'generic',
         supportsVideo: callType == 'VIDEO_CALL',
-        ringtonePath: 'system_ringtone_default',
+        ringtonePath: 'ringtone_default',
       ),
     );
 
@@ -557,16 +610,25 @@ class CallPushService {
     }
   }
 
+  static Future<ApiService?> getFallbackApi() async {
+    try {
+      const storage = FlutterSecureStorage(
+        iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+      );
+      final jwt = await storage.read(key: 'talkstrangers_access_token');
+      if (jwt != null && jwt.isNotEmpty) {
+        final client = ApiClient()..token = jwt;
+        return ApiService(client);
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Future<void> _handleCallKitEvent(CallEvent? event) async {
     if (event == null) return;
     switch (event) {
       case CallEventActionCallAccept(:final callKitParams):
-        final api = _api;
-        if (api == null) {
-          _pendingAcceptedCallKit = callKitParams;
-          return;
-        }
-        await _processAcceptedCallKit(callKitParams, api);
+        await _processAcceptedCallKit(callKitParams, _api);
       case CallEventActionCallDecline(:final callKitParams):
         await _processDeclinedCallKit(callKitParams);
       case CallEventActionCallTimeout(:final id):
@@ -581,6 +643,21 @@ class CallPushService {
   Future<void> syncPendingCallKitAction(ApiService api) async {
     if (!isPlatformSupported) return;
     try {
+      // Check if there was a pending accepted session saved from background handler
+      const storage = FlutterSecureStorage(
+        iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+      );
+      final pendingSessionId = await storage.read(key: 'talkstrangers_pending_accepted_session');
+      if (pendingSessionId != null && pendingSessionId.isNotEmpty) {
+        await storage.delete(key: 'talkstrangers_pending_accepted_session');
+        final session = await api.session(pendingSessionId);
+        if (!session.ended) {
+          final isCallback = session.reference.startsWith('CB-');
+          ActiveCallManager.instance.startCall(session, callerSide: isCallback);
+          ActiveCallManager.instance.maximize();
+        }
+      }
+
       final calls = await FlutterCallkitIncoming.activeCalls();
       for (final call in calls) {
         final sessionId = _extractSessionId(call);
@@ -604,8 +681,26 @@ class CallPushService {
     }
   }
 
-  Future<void> _processAcceptedCallKit(CallKitParams params, ApiService api) async {
+  Future<void> _processAcceptedCallKit(CallKitParams params, ApiService? api) async {
+    try {
+      FlutterRingtonePlayer().stop();
+    } catch (_) {}
+
     final sessionId = _extractSessionId(params);
+    if (sessionId.isEmpty) return;
+
+    var activeApi = api ?? _api ?? await getFallbackApi();
+    if (activeApi == null) {
+      _pendingAcceptedCallKit = params;
+      return;
+    }
+
+    final isCb = '${params.extra?['isCallback'] ?? ''}'.toLowerCase() == 'true';
+    await _processAcceptedSessionId(sessionId, activeApi, isCallbackOverride: isCb);
+    await dismissCallNotification(params.id);
+  }
+
+  Future<void> _processAcceptedSessionId(String sessionId, ApiService api, {bool? isCallbackOverride}) async {
     if (sessionId.isEmpty || _inFlightAcceptIds.contains(sessionId)) return;
 
     _inFlightAcceptIds.add(sessionId);
@@ -613,12 +708,10 @@ class CallPushService {
     try {
       final current = await api.session(sessionId);
       if (current.ended) {
-        await dismissCallNotification(params.id);
         return;
       }
 
-      final isCallback = current.reference.startsWith('CB-') ||
-          '${params.extra?['isCallback'] ?? ''}'.toLowerCase() == 'true';
+      final isCallback = isCallbackOverride ?? current.reference.startsWith('CB-');
 
       final sessionToJoin = current.status == 'REQUESTED'
           ? await api.acceptSession(sessionId)
@@ -627,33 +720,28 @@ class CallPushService {
       if (ActiveCallManager.instance.activeSession?.id != sessionToJoin.id) {
         ActiveCallManager.instance.startCall(sessionToJoin, callerSide: isCallback);
       }
-
-      await dismissCallNotification(params.id);
+      if (ActiveCallManager.instance.isMinimized) {
+        ActiveCallManager.instance.maximize();
+      }
     } catch (e) {
-      debugPrint('[CallPushService] Failed accepting CallKit call $sessionId: $e');
-      await dismissCallNotification(params.id);
+      debugPrint('[CallPushService] Failed accepting call $sessionId: $e');
     } finally {
       _inFlightAcceptIds.remove(sessionId);
     }
   }
 
   Future<void> _processDeclinedCallKit(CallKitParams params) async {
+    try {
+      FlutterRingtonePlayer().stop();
+    } catch (_) {}
+
     final sessionId = _extractSessionId(params);
     if (sessionId.isEmpty) return;
 
     try {
-      final api = _api;
+      final api = _api ?? await getFallbackApi();
       if (api != null) {
         await api.rejectSession(sessionId, 'Listener declined');
-      } else {
-        const storage = FlutterSecureStorage(
-          iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
-        );
-        final jwt = await storage.read(key: 'talkstrangers_access_token');
-        if (jwt != null && jwt.isNotEmpty) {
-          final client = ApiClient()..token = jwt;
-          await ApiService(client).rejectSession(sessionId, 'Listener declined');
-        }
       }
     } catch (e) {
       debugPrint('[CallPushService] Failed rejecting CallKit call $sessionId: $e');
