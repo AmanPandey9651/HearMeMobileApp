@@ -1,5 +1,6 @@
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
+import 'package:feelback_ringtone/feelback_ringtone.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
@@ -71,6 +72,7 @@ late final Future<void> _renderersReady;
 
   void _stopRingtone() {
     try {
+      FeelBackRingtone.stop();
       FlutterRingtonePlayer().stop();
     } catch (_) {}
   }

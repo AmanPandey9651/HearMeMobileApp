@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
+import 'package:feelback_ringtone/feelback_ringtone.dart';
 import '../models/app_models.dart';
 
 class ActiveCallManager extends ChangeNotifier {
@@ -34,6 +35,7 @@ class ActiveCallManager extends ChangeNotifier {
     VoidCallback? maximizeCall,
   }) {
     try {
+      FeelBackRingtone.stop();
       FlutterRingtonePlayer().stop();
     } catch (_) {}
     try {
@@ -111,6 +113,7 @@ class ActiveCallManager extends ChangeNotifier {
 
   void clearCall() {
     try {
+      FeelBackRingtone.stop();
       FlutterRingtonePlayer().stop();
     } catch (_) {}
     try {

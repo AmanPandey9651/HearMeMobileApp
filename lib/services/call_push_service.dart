@@ -9,6 +9,7 @@ import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:feelback_ringtone/feelback_ringtone.dart';
 
 import '../core/active_call_manager.dart';
 import '../core/api_client.dart';
@@ -33,6 +34,9 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   final type = '${data['type'] ?? ''}'.toUpperCase();
   if (type == 'INCOMING_CALL') {
     try {
+      await FeelBackRingtone.start();
+    } catch (_) {}
+    try {
       FlutterRingtonePlayer().playRingtone(
         volume: 1.0,
         looping: true,
@@ -41,6 +45,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     } catch (_) {}
   } else if (type == 'CALL_ENDED' || type == 'CANCEL' || type == 'CALL_CANCELLED' || type == 'CALL_TIMEOUT' || type == 'CALL_REJECTED') {
     try {
+      await FeelBackRingtone.stop();
       FlutterRingtonePlayer().stop();
       await FlutterCallkitIncoming.endAllCalls();
     } catch (_) {}
@@ -52,6 +57,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 Future<void> callkitBackgroundHandler(CallEvent event) async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
+    await FeelBackRingtone.stop();
     FlutterRingtonePlayer().stop();
   } catch (_) {}
 
@@ -75,6 +81,7 @@ Future<void> callkitBackgroundHandler(CallEvent event) async {
     } catch (_) {}
   } else if (event is CallEventActionCallAccept) {
     try {
+      await FeelBackRingtone.stop();
       FlutterRingtonePlayer().stop();
       await FlutterCallkitIncoming.endCall(event.callKitParams.id);
     } catch (_) {}
@@ -404,6 +411,7 @@ class CallPushService {
       return;
     }
     try {
+      await FeelBackRingtone.stop();
       FlutterRingtonePlayer().stop();
       await FlutterCallkitIncoming.endCall(sessionId);
     } catch (_) {}
@@ -522,6 +530,7 @@ class CallPushService {
 
     if (type == 'CALL_ENDED') {
       try {
+        await FeelBackRingtone.stop();
         FlutterRingtonePlayer().stop();
       } catch (_) {}
       try {
@@ -689,6 +698,7 @@ class CallPushService {
 
   Future<void> _processAcceptedCallKit(CallKitParams params, ApiService? api) async {
     try {
+      await FeelBackRingtone.stop();
       FlutterRingtonePlayer().stop();
     } catch (_) {}
 
@@ -730,6 +740,7 @@ class CallPushService {
         ActiveCallManager.instance.maximize();
       }
       try {
+        await FeelBackRingtone.stop();
         FlutterRingtonePlayer().stop();
         await FlutterCallkitIncoming.endAllCalls();
       } catch (_) {}
@@ -742,6 +753,7 @@ class CallPushService {
 
   Future<void> _processDeclinedCallKit(CallKitParams params) async {
     try {
+      await FeelBackRingtone.stop();
       FlutterRingtonePlayer().stop();
     } catch (_) {}
 

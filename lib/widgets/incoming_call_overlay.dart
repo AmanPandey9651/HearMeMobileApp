@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
+import 'package:feelback_ringtone/feelback_ringtone.dart';
 import 'package:provider/provider.dart';
 import '../core/app_controller.dart';
 import '../models/app_models.dart';
@@ -86,6 +87,9 @@ class _IncomingCallOverlayState extends State<IncomingCallOverlay> {
 
   void _startRingtoneAndVibration() {
     try {
+      FeelBackRingtone.start();
+    } catch (_) {}
+    try {
       FlutterRingtonePlayer().playRingtone(
         volume: 1.0,
         looping: true,
@@ -116,6 +120,7 @@ class _IncomingCallOverlayState extends State<IncomingCallOverlay> {
 
   void _stopRingtoneAndVibration() {
     try {
+      FeelBackRingtone.stop();
       FlutterRingtonePlayer().stop();
     } catch (_) {}
     _vibrateTimer?.cancel();
