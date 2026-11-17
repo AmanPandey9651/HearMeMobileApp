@@ -31,7 +31,15 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await CallPushService.ensureFirebaseInitialized();
   final data = message.data;
   final type = '${data['type'] ?? ''}'.toUpperCase();
-  if (type == 'CALL_ENDED') {
+  if (type == 'INCOMING_CALL') {
+    try {
+      FlutterRingtonePlayer().playRingtone(
+        volume: 1.0,
+        looping: true,
+        asAlarm: true,
+      );
+    } catch (_) {}
+  } else if (type == 'CALL_ENDED' || type == 'CANCEL' || type == 'CALL_CANCELLED' || type == 'CALL_TIMEOUT' || type == 'CALL_REJECTED') {
     try {
       FlutterRingtonePlayer().stop();
       await FlutterCallkitIncoming.endAllCalls();
@@ -396,6 +404,7 @@ class CallPushService {
       return;
     }
     try {
+      FlutterRingtonePlayer().stop();
       await FlutterCallkitIncoming.endCall(sessionId);
     } catch (_) {}
   }
