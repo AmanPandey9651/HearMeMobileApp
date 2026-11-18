@@ -39,19 +39,35 @@ platform :ios do
       app_identifier: "com.harto.feelback"
     )
 
-    # Build signed IPA with Flutter from project root
-    sh("cd .. && flutter build ipa --release --export-options-plist=ios/ExportOptions.plist")
+    # Resolve absolute path to ExportOptions.plist
+    export_plist_path = [
+      File.expand_path("ExportOptions.plist"),
+      File.expand_path("../ExportOptions.plist"),
+      File.expand_path("../../ExportOptions.plist")
+    ].find { |p| File.exist?(p) } || File.expand_path("ExportOptions.plist")
 
-    ipa_file = Dir[File.expand_path("../build/ios/ipa/*.ipa")].first
+    UI.message("Using ExportOptions.plist at: #{export_plist_path}")
+
+    # Build signed IPA with Flutter from project root
+    sh("flutter build ipa --release --export-options-plist=#{export_plist_path}", chdir: "..")
+
+    # Search for the exported IPA across possible build locations
+    ipa_candidates = Dir[
+      File.expand_path("../../build/ios/ipa/*.ipa"),
+      File.expand_path("../build/ios/ipa/*.ipa"),
+      File.expand_path("build/ios/ipa/*.ipa")
+    ]
+    ipa_file = ipa_candidates.first
 
     if ipa_file && File.exist?(ipa_file)
+      UI.message("Found signed IPA at: #{ipa_file}")
       upload_to_testflight(
         api_key: api_key,
         ipa: ipa_file,
         skip_waiting_for_build_processing: true
       )
     else
-      UI.user_error!("Could not find exported IPA file in build/ios/ipa/")
+      UI.user_error!("Could not find exported IPA file in build/ios/ipa/. Candidates searched: #{ipa_candidates.inspect}")
     end
   end
 end
