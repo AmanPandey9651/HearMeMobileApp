@@ -1,0 +1,44 @@
+default_platform(:ios)
+
+platform :ios do
+  desc "Automatically code sign and upload build to TestFlight / App Store Connect"
+  lane :beta do
+    api_key = app_store_connect_api_key(
+      key_id: ENV["APP_STORE_CONNECT_KEY_ID"] || "P62A9B4S3C",
+      issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"] || "ee73bce7-c132-4a6c-942e-ebb228885b87",
+      key_content: ENV["APP_STORE_CONNECT_PRIVATE_KEY"],
+      is_key_content_base64: false,
+      in_house: false
+    )
+
+    keychain_name = "ci_signing_keychain"
+    keychain_password = "ci_temp_password"
+    create_keychain(
+      name: keychain_name,
+      password: keychain_password,
+      default_keychain: true,
+      unlock: true,
+      timeout: 3600,
+      lock_when_sleeps: false
+    )
+
+    cert(
+      api_key: api_key,
+      keychain_path: keychain_name,
+      keychain_password: keychain_password
+    )
+
+    sigh(
+      api_key: api_key,
+      app_identifier: "com.harto.feelback"
+    )
+
+    sh("cd ../.. && flutter build ipa --release --export-options-plist=ios/ExportOptions.plist")
+
+    upload_to_testflight(
+      api_key: api_key,
+      ipa: Dir["../../build/ios/ipa/*.ipa"].first,
+      skip_waiting_for_build_processing: true
+    )
+  end
+end
