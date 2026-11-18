@@ -54,8 +54,6 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = true
-            keepDebugSymbols.add("**/libapp.so")
-            keepDebugSymbols.add("**/libflutter.so")
         }
     }
 
