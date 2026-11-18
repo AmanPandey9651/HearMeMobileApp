@@ -1,3 +1,5 @@
+opt_out_usage
+
 default_platform(:ios)
 
 platform :ios do
@@ -13,6 +15,8 @@ platform :ios do
 
     keychain_name = "ci_signing_keychain"
     keychain_password = "ci_temp_password"
+    keychain_file = File.expand_path("~/Library/Keychains/#{keychain_name}-db")
+
     create_keychain(
       name: keychain_name,
       password: keychain_password,
@@ -22,9 +26,11 @@ platform :ios do
       lock_when_sleeps: false
     )
 
+    resolved_keychain = File.exist?(keychain_file) ? keychain_file : File.expand_path("~/Library/Keychains/#{keychain_name}")
+
     cert(
       api_key: api_key,
-      keychain_path: keychain_name,
+      keychain_path: resolved_keychain,
       keychain_password: keychain_password
     )
 
@@ -33,12 +39,19 @@ platform :ios do
       app_identifier: "com.harto.feelback"
     )
 
-    sh("cd ../.. && flutter build ipa --release --export-options-plist=ios/ExportOptions.plist")
+    # Build signed IPA with Flutter from project root
+    sh("cd .. && flutter build ipa --release --export-options-plist=ios/ExportOptions.plist")
 
-    upload_to_testflight(
-      api_key: api_key,
-      ipa: Dir["../../build/ios/ipa/*.ipa"].first,
-      skip_waiting_for_build_processing: true
-    )
+    ipa_file = Dir[File.expand_path("../build/ios/ipa/*.ipa")].first
+
+    if ipa_file && File.exist?(ipa_file)
+      upload_to_testflight(
+        api_key: api_key,
+        ipa: ipa_file,
+        skip_waiting_for_build_processing: true
+      )
+    else
+      UI.user_error!("Could not find exported IPA file in build/ios/ipa/")
+    end
   end
 end
