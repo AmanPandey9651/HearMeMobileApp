@@ -39,23 +39,68 @@ platform :ios do
       app_identifier: "com.harto.feelback"
     )
 
-    # Resolve absolute path to ExportOptions.plist
-    export_plist_path = [
-      File.expand_path("ExportOptions.plist"),
-      File.expand_path("../ExportOptions.plist"),
-      File.expand_path("../../ExportOptions.plist")
-    ].find { |p| File.exist?(p) } || File.expand_path("ExportOptions.plist")
+    profile_name = lane_context[SharedValues::SIGH_NAME] || ENV["SIGH_NAME"] || "com.harto.feelback AppStore"
+    profile_uuid = lane_context[SharedValues::SIGH_UUID] || ENV["SIGH_UUID"]
+    profile_path = lane_context[SharedValues::SIGH_PROFILE_PATH] || Dir[File.expand_path("*.mobileprovision")].first
 
-    UI.message("Using ExportOptions.plist at: #{export_plist_path}")
+    UI.message("Installed Profile Name: #{profile_name} (UUID: #{profile_uuid})")
+
+    # Ensure profile is installed in Xcode's search path
+    provisioning_dir = File.expand_path("~/Library/MobileDevice/Provisioning Profiles")
+    FileUtils.mkdir_p(provisioning_dir)
+    if profile_path && File.exist?(profile_path)
+      FileUtils.cp(profile_path, File.join(provisioning_dir, "#{profile_uuid}.mobileprovision")) if profile_uuid
+      FileUtils.cp(profile_path, File.join(provisioning_dir, "#{profile_name}.mobileprovision"))
+    end
+
+    # Write explicit manual ExportOptions.plist with profile mapping
+    export_plist_content = <<~XML
+      <?xml version="1.0" encoding="UTF-8"?>
+      <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+      <plist version="1.0">
+      <dict>
+          <key>method</key>
+          <string>app-store</string>
+          <key>teamID</key>
+          <string>H356C64625</string>
+          <key>signingStyle</key>
+          <string>manual</string>
+          <key>signingCertificate</key>
+          <string>Apple Distribution</string>
+          <key>provisioningProfiles</key>
+          <dict>
+              <key>com.harto.feelback</key>
+              <string>#{profile_name}</string>
+          </dict>
+          <key>stripSwiftSymbols</key>
+          <true/>
+      </dict>
+      </plist>
+    XML
+
+    export_plist_path = File.expand_path("../ExportOptions.plist")
+    File.write(export_plist_path, export_plist_content)
+    File.write(File.expand_path("ExportOptions.plist"), export_plist_content)
+    File.write(File.expand_path("../../ExportOptions.plist"), export_plist_content)
+
+    UI.message("Generated ExportOptions.plist for manual signing with profile: #{profile_name}")
 
     # Build signed IPA with Flutter from project root
-    sh("flutter build ipa --release --export-options-plist=#{export_plist_path}", chdir: "..")
+    begin
+      sh("flutter build ipa --release --export-options-plist=#{export_plist_path}", chdir: "..")
+    rescue => ex
+      UI.important("Flutter build ipa stopped during export. Falling back to direct xcodebuild exportArchive...")
+      archive_path = File.expand_path("../build/ios/archive/Runner.xcarchive")
+      ipa_output_dir = File.expand_path("../build/ios/ipa")
+      FileUtils.mkdir_p(ipa_output_dir)
+      sh("xcodebuild -exportArchive -archivePath '#{archive_path}' -exportOptionsPlist '#{export_plist_path}' -exportPath '#{ipa_output_dir}'")
+    end
 
-    # Search for the exported IPA across possible build locations
     ipa_candidates = Dir[
       File.expand_path("../../build/ios/ipa/*.ipa"),
       File.expand_path("../build/ios/ipa/*.ipa"),
-      File.expand_path("build/ios/ipa/*.ipa")
+      File.expand_path("build/ios/ipa/*.ipa"),
+      File.expand_path("../../build/ios/archive/*.ipa")
     ]
     ipa_file = ipa_candidates.first
 
