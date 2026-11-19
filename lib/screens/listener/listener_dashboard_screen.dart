@@ -1210,7 +1210,7 @@ class _MissedCallsCard extends StatelessWidget {
                   const SizedBox(width: 6),
                   const Expanded(
                     child: Text(
-                      'Missed Calls &\nCallback',
+                      'Missed Calls &\nChats',
                       style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF111827), height: 1.15),
                     ),
                   ),
@@ -1328,7 +1328,7 @@ class _MissedCallsCard extends StatelessWidget {
                           style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF111827)),
                         ),
                         Text(
-                          '${latest.type.toUpperCase().contains('VIDEO') ? '📹 Video' : '📞 Voice'} • ${_formatAgo(latest.requestedAt ?? latest.connectedAt)}',
+                          '${latest.type.toUpperCase().contains('VIDEO') ? '📹 Video' : (latest.type.toUpperCase().contains('CHAT') ? '💬 Chat' : '📞 Voice')} • ${_formatAgo(latest.requestedAt ?? latest.connectedAt)}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 8.5, color: Color(0xFF6B7280)),
@@ -1360,14 +1360,22 @@ class _MissedCallsCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.phone_callback_rounded, color: Colors.white, size: 12),
-                      SizedBox(width: 5),
+                      Icon(
+                        latest.type.toUpperCase().contains('CHAT')
+                            ? Icons.chat_bubble_rounded
+                            : (latest.type.toUpperCase().contains('VIDEO') ? Icons.videocam_rounded : Icons.phone_callback_rounded),
+                        color: Colors.white,
+                        size: 12,
+                      ),
+                      const SizedBox(width: 5),
                       Text(
-                        'Call Back',
-                        style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w800),
+                        latest.type.toUpperCase().contains('CHAT')
+                            ? 'Chat Back'
+                            : (latest.type.toUpperCase().contains('VIDEO') ? 'Video Back' : 'Call Back'),
+                        style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w800),
                       ),
                     ],
                   ),
@@ -1492,7 +1500,7 @@ class _MissedCallsSheet extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Missed Calls (${missedList.length})',
+                              'Missed Calls & Chats (${missedList.length})',
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w900,
@@ -1500,7 +1508,7 @@ class _MissedCallsSheet extends StatelessWidget {
                               ),
                             ),
                             const Text(
-                              'Call back callers who tried to reach you',
+                              'Connect back with callers who tried to reach you',
                               style: TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
                             ),
                           ],
@@ -1534,6 +1542,7 @@ class _MissedCallsSheet extends StatelessWidget {
                     try {
                       final s = missedList[i];
                       final isVideo = s.type.toUpperCase().contains('VIDEO');
+                      final isChat = s.type.toUpperCase().contains('CHAT');
                       final name = s.callerNickname.trim().isNotEmpty ? s.callerNickname.trim() : 'Anonymous Caller';
                       final initial = name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'C';
 
@@ -1586,24 +1595,32 @@ class _MissedCallsSheet extends StatelessWidget {
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                                         decoration: BoxDecoration(
-                                          color: isVideo ? const Color(0xFFEDE9FE) : const Color(0xFFFFECE5),
+                                          color: isVideo
+                                              ? const Color(0xFFEDE9FE)
+                                              : (isChat ? const Color(0xFFFEF3C7) : const Color(0xFFFFECE5)),
                                           borderRadius: BorderRadius.circular(5),
                                         ),
                                         child: Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             Icon(
-                                              isVideo ? Icons.videocam_rounded : Icons.phone_callback_rounded,
+                                              isVideo
+                                                  ? Icons.videocam_rounded
+                                                  : (isChat ? Icons.chat_bubble_rounded : Icons.phone_callback_rounded),
                                               size: 10,
-                                              color: isVideo ? const Color(0xFF7C3AED) : const Color(0xFFF95B3D),
+                                              color: isVideo
+                                                  ? const Color(0xFF7C3AED)
+                                                  : (isChat ? const Color(0xFFD97706) : const Color(0xFFF95B3D)),
                                             ),
                                             const SizedBox(width: 3),
                                             Text(
-                                              isVideo ? 'Video' : 'Voice',
+                                              isVideo ? 'Video' : (isChat ? 'Chat' : 'Voice'),
                                               style: TextStyle(
                                                 fontSize: 9.5,
                                                 fontWeight: FontWeight.w800,
-                                                color: isVideo ? const Color(0xFF7C3AED) : const Color(0xFFF95B3D),
+                                                color: isVideo
+                                                    ? const Color(0xFF7C3AED)
+                                                    : (isChat ? const Color(0xFFD97706) : const Color(0xFFF95B3D)),
                                               ),
                                             ),
                                           ],
@@ -1647,14 +1664,20 @@ class _MissedCallsSheet extends StatelessWidget {
                                       ),
                                     ],
                                   ),
-                                  child: const Row(
+                                  child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.phone_forwarded_rounded, color: Colors.white, size: 12),
-                                      SizedBox(width: 4),
+                                      Icon(
+                                        isChat
+                                            ? Icons.chat_bubble_rounded
+                                            : (isVideo ? Icons.videocam_rounded : Icons.phone_forwarded_rounded),
+                                        color: Colors.white,
+                                        size: 12,
+                                      ),
+                                      const SizedBox(width: 4),
                                       Text(
-                                        'Call Back',
-                                        style: TextStyle(
+                                        isChat ? 'Chat Back' : (isVideo ? 'Video Back' : 'Call Back'),
+                                        style: const TextStyle(
                                           fontSize: 11,
                                           fontWeight: FontWeight.w800,
                                           color: Colors.white,
