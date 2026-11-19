@@ -248,6 +248,12 @@ class ApiService {
   Future<void> clearFcmToken() async =>
       client.delete('/notifications/fcm-token');
 
+  Future<void> deleteAccount() async {
+    try {
+      await client.delete('/auth/account');
+    } catch (_) {}
+  }
+
   Future<AnonymousProfileModel> anonymousProfile() async =>
       AnonymousProfileModel.fromJson(Map<String, dynamic>.from(await client.get('/user/anonymous-profile')));
   Future<AnonymousProfileModel> updateAnonymousProfile(Map<String, dynamic> data) async =>

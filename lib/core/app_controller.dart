@@ -413,6 +413,13 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  Future<void> deleteAccount() async {
+    try {
+      await api.deleteAccount();
+    } catch (_) {}
+    await logout();
+  }
+
   Future<void> logout({bool markOffline = true}) async {
     await PrivacyPlatform.setSecure(false);
     if (markOffline && user?.isListener == true && client.token != null) {

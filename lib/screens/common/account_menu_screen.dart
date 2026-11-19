@@ -15,6 +15,32 @@ class AccountMenuScreen extends StatelessWidget{
     ListTile(leading:const Icon(Icons.notifications_outlined),title:const Text('Notifications'),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const NotificationsScreen()))),
     ListTile(leading:const Icon(Icons.shield_outlined),title:const Text('Safety, blocked users & support'),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const SafetySupportScreen()))),
     ListTile(leading:const Icon(Icons.info_outline),title:const Text('How it works'),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const HowItWorksScreen()))),
-    const Divider(),ListTile(leading:const Icon(Icons.logout,color:Colors.redAccent),title:const Text('Sign out'),onTap:()async{if(await confirm(context,'Sign out?','You will need to sign in again to use your account.'))await context.read<AppController>().logout();}),
+    const Divider(),
+    ListTile(
+      leading: const Icon(Icons.logout, color: Colors.orange),
+      title: const Text('Sign out'),
+      onTap: () async {
+        if (await confirm(context, 'Sign out?', 'You will need to sign in again to use your account.')) {
+          await context.read<AppController>().logout();
+        }
+      },
+    ),
+    ListTile(
+      leading: const Icon(Icons.delete_forever_rounded, color: Colors.redAccent),
+      title: const Text('Delete account', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600)),
+      subtitle: const Text('Permanently remove your account and data', style: TextStyle(fontSize: 12, color: Colors.grey)),
+      onTap: () async {
+        if (await confirm(
+          context,
+          'Delete account permanently?',
+          'This will permanently delete your account, session history, and personal data. This action cannot be reversed.',
+        )) {
+          if (context.mounted) {
+            showSuccess(context, 'Account deletion initiated');
+            await context.read<AppController>().deleteAccount();
+          }
+        }
+      },
+    ),
   ]);}
 }

@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../core/app_controller.dart';
 import '../../core/app_theme.dart';
 import '../../widgets/sign_out_card.dart';
+import '../../widgets/delete_account_card.dart';
 import '../common/how_it_works_screen.dart';
 import '../common/chat_inbox_screen.dart';
 import '../common/notifications_screen.dart';
@@ -250,6 +251,11 @@ class _CallerMoreScreenState extends State<CallerMoreScreen> {
           const BeautifulSignOutCard(
             subtitle: 'End caller session & switch account',
           ),
+
+          const SizedBox(height: 12),
+
+          // 5. Delete Account Card (Apple Guideline 5.1.1(v))
+          const BeautifulDeleteAccountCard(),
         ],
       ),
     );

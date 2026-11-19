@@ -7,6 +7,7 @@ import '../../main.dart';
 import '../../models/app_models.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/sign_out_card.dart';
+import '../../widgets/delete_account_card.dart';
 import '../common/how_it_works_screen.dart';
 import '../common/notifications_screen.dart';
 import '../common/safety_support_screen.dart';
@@ -810,6 +811,11 @@ class _ListenerMoreScreenState extends State<ListenerMoreScreen> {
                   const BeautifulSignOutCard(
                     subtitle: 'End listener session & take a break',
                   ),
+
+                  const SizedBox(height: 12),
+
+                  // 7. Delete Account Card (Apple Guideline 5.1.1(v))
+                  const BeautifulDeleteAccountCard(),
                 ],
               ),
             ),
