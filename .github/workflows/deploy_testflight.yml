@@ -2,6 +2,11 @@ name: Deploy to TestFlight & App Store Connect
 
 on:
   workflow_dispatch:
+    inputs:
+      build_number:
+        description: 'iOS Build Number'
+        required: true
+        default: '81'
 
 jobs:
   deploy:
@@ -40,6 +45,7 @@ jobs:
           APP_STORE_CONNECT_KEY_ID: "P62A9B4S3C"
           APP_STORE_CONNECT_ISSUER_ID: "ee73bce7-c132-4a6c-942e-ebb228885b87"
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          BUILD_NUMBER: ${{ github.event.inputs.build_number || '81' }}
         run: |
           cd ios
           fastlane beta

@@ -85,9 +85,12 @@ platform :ios do
 
     UI.message("Generated ExportOptions.plist for manual signing with profile: #{profile_name}")
 
+    build_num = ENV["BUILD_NUMBER"] || "81"
+    version_name = ENV["VERSION_NAME"] || "1.2.48"
+
     # Build signed IPA with Flutter from project root
     begin
-      sh("flutter build ipa --release --export-options-plist=#{export_plist_path}", chdir: "..")
+      sh("flutter build ipa --release --build-name=#{version_name} --build-number=#{build_num} --export-options-plist=#{export_plist_path}", chdir: "..")
     rescue => ex
       UI.important("Flutter build ipa stopped during export. Falling back to direct xcodebuild exportArchive...")
       archive_path = File.expand_path("../build/ios/archive/Runner.xcarchive")
