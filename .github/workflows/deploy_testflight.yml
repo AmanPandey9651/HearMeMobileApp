@@ -55,5 +55,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: FeelBack-Signed-iOS-IPA
-          path: build/ios/ipa/*.ipa
+          path: |
+            build/ios/ipa/*.ipa
+            ios/*.cer
+            ios/*.p12
+            ios/*.mobileprovision
           retention-days: 14
