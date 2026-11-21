@@ -121,9 +121,13 @@ class ListenerCardItem extends StatelessWidget {
         ? listener.categories
         : ['Anxiety', 'Life Transitions', 'Self-Esteem'];
 
-    final headline = listener.professionalTitle.isNotEmpty
-        ? listener.professionalTitle
-        : 'Empathetic Listener & Guide';
+    final rawHeadline = listener.professionalTitle.trim();
+    final isGenericPeerListener = rawHeadline.isEmpty ||
+        rawHeadline.toLowerCase() == 'empathetic peer listener' ||
+        rawHeadline.toLowerCase() == 'empathetic listener & guide' ||
+        rawHeadline.toLowerCase() == 'empathetic listener' ||
+        rawHeadline.toLowerCase() == 'conversation listener';
+    final headline = isGenericPeerListener ? '' : rawHeadline;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -466,19 +470,19 @@ class ListenerCardItem extends StatelessWidget {
                         ],
                       ),
 
-                      const SizedBox(height: 2),
-
-                      // Line 2: Headline
-                      Text(
-                        headline,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF6B7280),
+                      if (headline.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          headline,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF6B7280),
+                          ),
                         ),
-                      ),
+                      ],
 
                       const SizedBox(height: 5),
 

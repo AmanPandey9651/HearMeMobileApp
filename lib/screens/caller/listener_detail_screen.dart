@@ -7,6 +7,7 @@ import '../../models/app_models.dart';
 import '../../widgets/common_widgets.dart';
 import '../auth/login_screen.dart';
 import '../common/direct_chat_screen.dart';
+import '../common/full_screen_image_viewer.dart';
 
 class ListenerDetailScreen extends StatefulWidget {
   final ListenerCardModel listener;
@@ -555,259 +556,416 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
                         ),
                       ),
 
-                    // 1. Hero Listener Card
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: const Color(0xFFF1EAE0)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF78350F).withValues(alpha: 0.05),
-                            blurRadius: 16,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
-                      ),
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        children: [
-                          Center(
-                            child: Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(3.5),
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    gradient: LinearGradient(
-                                      colors: isOnline
-                                          ? [const Color(0xFF10B981), const Color(0xFF34D399)]
-                                          : [const Color(0xFFE2E8F0), const Color(0xFFCBD5E1)],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
+                    // 1. Large Prominent Portrait Profile Image Card
+                    GestureDetector(
+                      onTap: () {
+                        final imgUrl = avatar.trim();
+                        if (imgUrl.isNotEmpty) {
+                          Navigator.push(
+                            context,
+                            PageRouteBuilder(
+                              pageBuilder: (context, animation, secondaryAnimation) => FullScreenImageViewerScreen(
+                                imageUrl: imgUrl,
+                                displayName: displayName,
+                                heroTag: 'listener_avatar_${widget.listener.id}',
+                              ),
+                              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                return FadeTransition(opacity: animation, child: child);
+                              },
+                            ),
+                          );
+                        }
+                      },
+                      child: Container(
+                        height: 350,
+                        margin: const EdgeInsets.only(bottom: 14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E293B),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: const Color(0xFFF1EAE0), width: 1.2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF78350F).withValues(alpha: 0.12),
+                              blurRadius: 20,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(24),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              // Large Profile Photo with Hero Animation
+                              Hero(
+                                tag: 'listener_avatar_${widget.listener.id}',
+                                child: buildAvatarImage(
+                                  avatar,
+                                  width: double.infinity,
+                                  height: double.infinity,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    decoration: const BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [Color(0xFFF95B3D), Color(0xFFFF8A65)],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
                                     ),
-                                    boxShadow: [
-                                      if (isOnline)
-                                        BoxShadow(
-                                          color: const Color(0xFF10B981).withValues(alpha: 0.3),
-                                          blurRadius: 14,
-                                          spreadRadius: 2,
-                                        ),
-                                    ],
-                                  ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(60),
-                                    child: RemoteAvatar(url: avatar, radius: 48, fallback: displayName),
-                                  ),
-                                ),
-                                if (isOnline)
-                                  Positioned(
-                                    bottom: 2,
-                                    right: 4,
-                                    child: Container(
-                                      width: 18,
-                                      height: 18,
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF10B981),
-                                        shape: BoxShape.circle,
-                                        border: Border.all(color: Colors.white, width: 3),
+                                    child: Center(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            displayName.isNotEmpty ? displayName.substring(0, 1).toUpperCase() : 'L',
+                                            style: const TextStyle(
+                                              fontSize: 72,
+                                              fontWeight: FontWeight.w900,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            displayName,
+                                            style: const TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white70,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  displayName,
-                                  style: const TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w800,
-                                    color: Color(0xFF1E293B),
-                                    letterSpacing: -0.3,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              const SizedBox(width: 6),
-                              const Icon(Icons.verified_rounded, size: 20, color: Color(0xFFE05D44)),
-                              if (isStarListener) ...[
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+
+                              // Top subtle gradient vignette
+                              Positioned(
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                height: 75,
+                                child: Container(
                                   decoration: BoxDecoration(
-                                    gradient: const LinearGradient(
-                                      colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        Colors.black.withValues(alpha: 0.45),
+                                        Colors.transparent,
+                                      ],
                                     ),
-                                    borderRadius: BorderRadius.circular(8),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
-                                        blurRadius: 6,
-                                        offset: const Offset(0, 2),
+                                  ),
+                                ),
+                              ),
+
+                              // Bottom gradient overlay for clear typography
+                              Positioned(
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                height: 180,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      stops: const [0.0, 0.35, 0.7, 1.0],
+                                      colors: [
+                                        Colors.transparent,
+                                        Colors.black.withValues(alpha: 0.35),
+                                        Colors.black.withValues(alpha: 0.78),
+                                        Colors.black.withValues(alpha: 0.94),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                              // Top-Left: Availability Status Pill
+                              Positioned(
+                                top: 14,
+                                left: 14,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.68),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: statusColor.withValues(alpha: 0.6),
+                                      width: 1.0,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: BoxDecoration(
+                                          color: statusColor,
+                                          shape: BoxShape.circle,
+                                          boxShadow: isOnline
+                                              ? [BoxShadow(color: statusColor, blurRadius: 6, spreadRadius: 1)]
+                                              : null,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        statusLabel.toUpperCase(),
+                                        style: TextStyle(
+                                          color: isOnline ? const Color(0xFF34D399) : Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: 0.5,
+                                        ),
                                       ),
                                     ],
+                                  ),
+                                ),
+                              ),
+
+                              // Top-Right: Fullscreen Image Hint Pill
+                              Positioned(
+                                top: 14,
+                                right: 14,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.65),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(color: Colors.white24, width: 0.8),
                                   ),
                                   child: const Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.star_rounded, size: 12, color: Colors.white),
-                                      SizedBox(width: 3),
+                                      Icon(Icons.fullscreen_rounded, color: Colors.white, size: 16),
+                                      SizedBox(width: 4),
                                       Text(
-                                        'STAR LISTENER',
+                                        'Full Photo',
                                         style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w800,
                                           color: Colors.white,
-                                          letterSpacing: 0.4,
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.w700,
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
-                              ],
-                              if (isAdult) ...[
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFFF1F2),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: const Color(0xFFFDA4AF),
-                                      width: 1.0,
+                              ),
+
+                              // Bottom: Listener Name, Star Badge, Rating & Details Overlay
+                              Positioned(
+                                bottom: 16,
+                                left: 16,
+                                right: 16,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // Row 1: Name + Verified + Star Listener Badge + 18+
+                                    Wrap(
+                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                      spacing: 6,
+                                      runSpacing: 4,
+                                      children: [
+                                        Text(
+                                          displayName,
+                                          style: const TextStyle(
+                                            fontSize: 24,
+                                            fontWeight: FontWeight.w900,
+                                            color: Colors.white,
+                                            letterSpacing: -0.4,
+                                            shadows: [
+                                              Shadow(color: Colors.black87, blurRadius: 8, offset: Offset(0, 1)),
+                                            ],
+                                          ),
+                                        ),
+                                        const Icon(Icons.verified_rounded, size: 20, color: Color(0xFFF95B3D)),
+                                        if (isStarListener)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              gradient: const LinearGradient(
+                                                colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
+                                              ),
+                                              borderRadius: BorderRadius.circular(8),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: const Color(0xFFF59E0B).withValues(alpha: 0.4),
+                                                  blurRadius: 6,
+                                                  offset: const Offset(0, 2),
+                                                ),
+                                              ],
+                                            ),
+                                            child: const Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(Icons.star_rounded, size: 13, color: Colors.white),
+                                                SizedBox(width: 3),
+                                                Text(
+                                                  'STAR LISTENER',
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w900,
+                                                    color: Colors.white,
+                                                    letterSpacing: 0.4,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        if (isAdult)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFE11D48),
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: const Text(
+                                              '🔞 18+',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w800,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
                                     ),
-                                  ),
-                                  child: const Text(
-                                    '🔞 18+ Adult Talk',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w800,
-                                      color: Color(0xFFE11D48),
+
+                                    const SizedBox(height: 5),
+
+                                    // Row 2: Headline / Title
+                                    if (title.isNotEmpty &&
+                                        title.toLowerCase() != 'empathetic peer listener' &&
+                                        title.toLowerCase() != 'empathetic listener & guide')
+                                      Text(
+                                        title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFFE2E8F0),
+                                          shadows: [
+                                            Shadow(color: Colors.black87, blurRadius: 6),
+                                          ],
+                                        ),
+                                      ),
+
+                                    const SizedBox(height: 8),
+
+                                    // Row 3: Rating Badge & Country Origin
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withValues(alpha: 0.22),
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(color: Colors.white24, width: 0.6),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(Icons.star_rounded, size: 14, color: Color(0xFFFBBF24)),
+                                              const SizedBox(width: 3),
+                                              Text(
+                                                rating.toStringAsFixed(1),
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w800,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                              Text(
+                                                ' (${reviewCount > 0 ? reviewCount : 120})',
+                                                style: const TextStyle(
+                                                  color: Colors.white70,
+                                                  fontWeight: FontWeight.w500,
+                                                  fontSize: 11,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withValues(alpha: 0.22),
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(color: Colors.white24, width: 0.6),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                isInternational
+                                                    ? (country.toLowerCase().contains('united states') || country.toLowerCase().contains('usa') ? '🇺🇸' :
+                                                       country.toLowerCase().contains('united kingdom') || country.toLowerCase().contains('uk') ? '🇬🇧' :
+                                                       country.toLowerCase().contains('canada') ? '🇨🇦' :
+                                                       country.toLowerCase().contains('australia') ? '🇦🇺' :
+                                                       country.toLowerCase().contains('uae') ? '🇦🇪' : '🌐')
+                                                    : '🇮🇳',
+                                                style: const TextStyle(fontSize: 11),
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                isInternational ? country : 'India',
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 11,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ),
+                                  ],
                                 ),
-                              ],
+                              ),
                             ],
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            title.isNotEmpty ? title : 'Empathy & Wellness Listener',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF64748B),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3.5),
-                            decoration: BoxDecoration(
-                              color: isInternational ? const Color(0xFFEFF6FF) : const Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: isInternational ? const Color(0xFF93C5FD) : const Color(0xFFE2E8F0),
-                                width: 0.8,
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  isInternational
-                                      ? (country.toLowerCase().contains('united states') || country.toLowerCase().contains('usa') ? '🇺🇸' :
-                                         country.toLowerCase().contains('united kingdom') || country.toLowerCase().contains('uk') ? '🇬🇧' :
-                                         country.toLowerCase().contains('canada') ? '🇨🇦' :
-                                         country.toLowerCase().contains('australia') ? '🇦🇺' :
-                                         country.toLowerCase().contains('uae') ? '🇦🇪' : '🌐')
-                                      : '🇮🇳',
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  isInternational ? '$country • International Listener' : 'India • Verified Domestic Listener',
-                                  style: TextStyle(
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: isInternational ? const Color(0xFF1D4ED8) : const Color(0xFF475569),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          // Live Status Badge
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: statusColor.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: statusColor.withValues(alpha: 0.3)),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                    color: statusColor,
-                                    shape: BoxShape.circle,
-                                    boxShadow: isOnline
-                                        ? [BoxShadow(color: statusColor.withValues(alpha: 0.6), blurRadius: 6, spreadRadius: 1)]
-                                        : null,
-                                  ),
-                                ),
-                                const SizedBox(width: 7),
-                                Text(
-                                  statusLabel.toUpperCase(),
-                                  style: TextStyle(
-                                    color: statusColor,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 11.5,
-                                    letterSpacing: 0.6,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          // 4 Modern Stat Badges
-                          Container(
-                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFAF7F2),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: const Color(0xFFF1EAE0)),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              children: [
-                                _statBox('⭐ ${rating.toStringAsFixed(1)}', '$reviewCount reviews'),
-                                _statDivider(),
-                                _statBox('$sessions', 'Sessions'),
-                                _statDivider(),
-                                _statBox('${experience ?? 7}+ Yrs', 'Experience'),
-                                if (response != null && response > 0) ...[
-                                  _statDivider(),
-                                  _statBox('~${response}m', 'Response'),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
 
-                    const SizedBox(height: 20),
+                    // 4 Modern Stat Badges Card
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFF1EAE0)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.03),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _statBox('⭐ ${rating.toStringAsFixed(1)}', '$reviewCount reviews'),
+                          _statDivider(),
+                          _statBox('$sessions', 'Sessions'),
+                          _statDivider(),
+                          _statBox('${experience ?? 7}+ Yrs', 'Experience'),
+                          if (response != null && response > 0) ...[
+                            _statDivider(),
+                            _statBox('~${response}m', 'Response'),
+                          ],
+                        ],
+                      ),
+                    ),
 
                     // 2. Services & Live Rates Section
                     Padding(
