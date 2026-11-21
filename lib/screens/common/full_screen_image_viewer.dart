@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import '../../widgets/common_widgets.dart';
 
 class FullScreenImageViewerScreen extends StatefulWidget {
-  final String imageUrl;
+  final String? imageUrl;
   final String displayName;
   final String? heroTag;
 
   const FullScreenImageViewerScreen({
     super.key,
-    required this.imageUrl,
+    this.imageUrl,
     required this.displayName,
     this.heroTag,
   });

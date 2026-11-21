@@ -344,7 +344,7 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
     final displayName = '${expert['name'] ?? l.displayName}';
     final title = '${expert['professionalTitle'] ?? l.professionalTitle}';
     final bio = '${expert['bio'] ?? l.bio}';
-    final avatar = expert['avatarUrl']?.toString() ?? l.avatarUrl;
+    final avatar = expert['avatarUrl']?.toString() ?? l.avatarUrl ?? '';
     final rating = _number(expert['ratingAvg'], l.rating);
     final reviewCount = (expert['reviewCount'] as num?)?.toInt() ?? l.reviewCount;
     final sessions = (expert['totalConsultations'] as num?)?.toInt() ?? l.totalConsultations;
@@ -559,7 +559,7 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
                     // 1. Large Prominent Portrait Profile Image Card
                     GestureDetector(
                       onTap: () {
-                        final imgUrl = avatar.trim();
+                        final imgUrl = (avatar ?? '').trim();
                         if (imgUrl.isNotEmpty) {
                           Navigator.push(
                             context,
