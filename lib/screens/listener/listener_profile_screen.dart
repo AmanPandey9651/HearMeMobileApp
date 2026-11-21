@@ -149,6 +149,8 @@ class _ListenerProfileScreenState extends State<ListenerProfileScreen> {
     }
   }
 
+  bool get _isStarListener => p?['isStarListener'] == true;
+
   bool get _isInternational {
     final c = (p?['country'] ?? context.read<AppController>().user?.country ?? '').toString().trim().toLowerCase();
     return c.isNotEmpty && c != 'india' && c != 'in';
@@ -206,10 +208,19 @@ class _ListenerProfileScreenState extends State<ListenerProfileScreen> {
       if (selectedLanguageCodes.isEmpty) throw Exception('Select at least one language.');
       if (selectedCategoryIds.isEmpty) throw Exception('Select at least one topic/category.');
 
-      final a = double.tryParse(audio.text) ?? 0;
-      final v = double.tryParse(video.text) ?? 0;
-      final c = double.tryParse(chat.text) ?? 0;
-      _validateRates(a, v, c);
+      final double a;
+      final double v;
+      final double c;
+      if (_isStarListener) {
+        a = double.tryParse(audio.text) ?? 0;
+        v = double.tryParse(video.text) ?? 0;
+        c = double.tryParse(chat.text) ?? 0;
+        _validateRates(a, v, c);
+      } else {
+        a = (p?['ratePerMinute'] as num?)?.toDouble() ?? (p?['audioRatePerMinute'] as num?)?.toDouble() ?? 15.0;
+        v = (p?['videoRatePerMinute'] as num?)?.toDouble() ?? 30.0;
+        c = (p?['chatRatePerMinute'] as num?)?.toDouble() ?? 11.0;
+      }
 
       final data = <String, dynamic>{
         'firstName': first.text.trim(),
@@ -562,6 +573,62 @@ class _ListenerProfileScreenState extends State<ListenerProfileScreen> {
                         ),
                         const SizedBox(height: 12),
 
+                        // Star Listener vs Standard Fixed Pricing Banner
+                        if (_isStarListener)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFFFEF3C7), Color(0xFFFDE68A)],
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFF59E0B)),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.stars_rounded, size: 20, color: Color(0xFFB45309)),
+                                SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    '⭐ Star Listener: You are authorized to customize your consultation rates within the limits below.',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF78350F),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        else
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFCBD5E1)),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.lock_rounded, size: 18, color: Color(0xFF64748B)),
+                                SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    '🔒 Admin-Governed Fixed Rates: Rates are fixed by admin policy (₹15 Audio, ₹30 Video, ₹11 Chat). Only Star Listeners can edit rates.',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF475569),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
                         // Consultation Type Label & Dropdown
                         const Text(
                           'Consultation type',
@@ -601,6 +668,7 @@ class _ListenerProfileScreenState extends State<ListenerProfileScreen> {
                                 label: 'Audio (₹/min)',
                                 controller: audio,
                                 keyboardType: TextInputType.number,
+                                enabled: _isStarListener,
                               ),
                             ),
                             const SizedBox(width: 10),
@@ -610,6 +678,7 @@ class _ListenerProfileScreenState extends State<ListenerProfileScreen> {
                                 label: 'Video (₹/min)',
                                 controller: video,
                                 keyboardType: TextInputType.number,
+                                enabled: _isStarListener,
                               ),
                             ),
                             const SizedBox(width: 10),
@@ -619,6 +688,7 @@ class _ListenerProfileScreenState extends State<ListenerProfileScreen> {
                                 label: 'Chat (₹/min)',
                                 controller: chat,
                                 keyboardType: TextInputType.number,
+                                enabled: _isStarListener,
                               ),
                             ),
                           ],
@@ -895,6 +965,7 @@ class _ListenerProfileScreenState extends State<ListenerProfileScreen> {
     String? hint,
     int minLines = 1,
     int maxLines = 1,
+    bool enabled = true,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -903,23 +974,32 @@ class _ListenerProfileScreenState extends State<ListenerProfileScreen> {
         const SizedBox(height: 6),
         TextField(
           controller: controller,
+          enabled: enabled,
           keyboardType: keyboardType,
           minLines: minLines,
           maxLines: maxLines,
-          style: const TextStyle(fontWeight: FontWeight.w700, color: textDark, fontSize: 14.5),
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            color: enabled ? textDark : const Color(0xFF94A3B8),
+            fontSize: 14.5,
+          ),
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontWeight: FontWeight.normal),
             filled: true,
-            fillColor: const Color(0xFFFFFBF7),
+            fillColor: enabled ? const Color(0xFFFFFBF7) : const Color(0xFFF1F5F9),
             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: borderWarm),
+              borderSide: BorderSide(color: enabled ? borderWarm : const Color(0xFFE2E8F0)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
               borderSide: const BorderSide(color: borderWarm),
+            ),
+            disabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),

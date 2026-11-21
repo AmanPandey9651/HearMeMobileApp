@@ -27,6 +27,7 @@ class AppUser {
   final String? idNumber;
   final bool idVerified;
   final bool isTest;
+  final bool isStarListener;
   final bool termsAccepted;
   final String? referralCode;
   final String? referredByCode;
@@ -48,6 +49,7 @@ class AppUser {
     this.idNumber,
     this.idVerified = false,
     this.isTest = false,
+    this.isStarListener = false,
     this.termsAccepted = false,
     this.referralCode,
     this.referredByCode,
@@ -72,6 +74,7 @@ class AppUser {
         idNumber: j['idNumber']?.toString(),
         idVerified: j['idVerified'] == true,
         isTest: j['isTest'] == true || j['test'] == true,
+        isStarListener: j['isStarListener'] == true || j['starListener'] == true || j['isStar'] == true,
         termsAccepted: j['termsAccepted'] == true,
         referralCode: j['referralCode']?.toString(),
         referredByCode: j['referredByCode']?.toString(),
@@ -130,6 +133,7 @@ class ListenerCardModel {
   final bool videoAvailable;
   final bool adultTalkAllowed;
   final bool isTest;
+  final bool isStarListener;
   final bool termsAccepted;
   final String? referralCode;
   final String? referredByCode;
@@ -162,6 +166,7 @@ class ListenerCardModel {
     this.videoAvailable = true,
     this.adultTalkAllowed = false,
     this.isTest = false,
+    this.isStarListener = false,
     this.termsAccepted = false,
     this.referralCode,
     this.referredByCode,
@@ -194,6 +199,7 @@ class ListenerCardModel {
     bool? videoAvailable,
     bool? adultTalkAllowed,
     bool? isTest,
+    bool? isStarListener,
   }) => ListenerCardModel(
         id: id,
         userId: userId ?? this.userId,
@@ -222,6 +228,7 @@ class ListenerCardModel {
         videoAvailable: videoAvailable ?? this.videoAvailable,
         adultTalkAllowed: adultTalkAllowed ?? this.adultTalkAllowed,
         isTest: isTest ?? this.isTest,
+        isStarListener: isStarListener ?? this.isStarListener,
       );
 
   factory ListenerCardModel.fromJson(Map<String, dynamic> j) {
@@ -261,6 +268,7 @@ class ListenerCardModel {
       videoAvailable: j['videoAvailable'] != false,
       adultTalkAllowed: isAdultVal,
       isTest: j['isTest'] == true || j['test'] == true,
+      isStarListener: j['isStarListener'] == true || j['star'] == true || j['isStar'] == true,
     );
   }
 }
@@ -299,6 +307,7 @@ class InstantSessionModel {
   final bool promotionalBonusUsed;
   final bool isNewUser;
   final bool isTest;
+  final bool isStarListener;
   final bool termsAccepted;
   final String? referralCode;
   final String? referredByCode;
@@ -337,6 +346,7 @@ class InstantSessionModel {
     this.promotionalBonusUsed = false,
     this.isNewUser = false,
     this.isTest = false,
+    this.isStarListener = false,
     this.termsAccepted = false,
     this.referralCode,
     this.referredByCode,
@@ -676,6 +686,7 @@ class DiscoverUserModel {
   final double? ratePerMinute;
   final String? role;
   final String? category;
+  final bool isStarListener;
 
   const DiscoverUserModel({
     required this.userId,
@@ -688,6 +699,7 @@ class DiscoverUserModel {
     this.ratePerMinute,
     this.role,
     this.category,
+    this.isStarListener = false,
   });
 
   factory DiscoverUserModel.fromJson(Map<String, dynamic> json) {
@@ -702,6 +714,7 @@ class DiscoverUserModel {
       ratePerMinute: json['ratePerMinute'] != null ? (num.tryParse(json['ratePerMinute'].toString())?.toDouble()) : null,
       role: json['role']?.toString(),
       category: json['category']?.toString(),
+      isStarListener: json['isStarListener'] == true || json['star'] == true,
     );
   }
 }

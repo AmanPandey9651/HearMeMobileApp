@@ -216,6 +216,14 @@ class _CallerHomeScreenState extends State<CallerHomeScreen> {
       visible = visible.where((x) => x.isAdult).toList();
     }
 
+    // 8. Priority Ordering: Star Listeners appear first while preserving secondary ordering
+    visible.sort((a, b) {
+      if (a.isStarListener != b.isStarListener) {
+        return a.isStarListener ? -1 : 1;
+      }
+      return 0;
+    });
+
     return ColoredBox(
       color: bgCream,
       child: RefreshIndicator(

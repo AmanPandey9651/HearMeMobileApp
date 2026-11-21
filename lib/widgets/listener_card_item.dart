@@ -125,10 +125,6 @@ class ListenerCardItem extends StatelessWidget {
         ? listener.professionalTitle
         : 'Empathetic Listener & Guide';
 
-    final bio = listener.bio.isNotEmpty
-        ? listener.bio
-        : 'Here to listen, without judgment. You deserve to be heard.';
-
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
@@ -341,6 +337,45 @@ class ListenerCardItem extends StatelessWidget {
                                       ),
                                     ),
                                   ),
+                                  if (listener.isStarListener)
+                                    WidgetSpan(
+                                      alignment: PlaceholderAlignment.middle,
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(left: 4),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                          decoration: BoxDecoration(
+                                            gradient: const LinearGradient(
+                                              colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
+                                            ),
+                                            borderRadius: BorderRadius.circular(6),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
+                                                blurRadius: 4,
+                                                offset: const Offset(0, 1),
+                                              ),
+                                            ],
+                                          ),
+                                          child: const Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.star_rounded, size: 9.5, color: Colors.white),
+                                              SizedBox(width: 2),
+                                              Text(
+                                                'STAR',
+                                                style: TextStyle(
+                                                  fontSize: 8.5,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: Colors.white,
+                                                  letterSpacing: 0.3,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   if (listener.isTest)
                                     WidgetSpan(
                                       alignment: PlaceholderAlignment.middle,
@@ -474,19 +509,6 @@ class ListenerCardItem extends StatelessWidget {
                         }).toList(),
                       ),
 
-                      const SizedBox(height: 5),
-
-                      // Line 4: Bio Quote Snippet
-                      Text(
-                        bio,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 10.5,
-                          color: Color(0xFF6B7280),
-                          height: 1.2,
-                        ),
-                      ),
                     ],
                   ),
                 ),

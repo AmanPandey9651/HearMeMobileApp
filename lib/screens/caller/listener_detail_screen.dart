@@ -45,6 +45,7 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
         (DateTime.now().timeZoneOffset.inMinutes != 330);
   }
 
+  bool get isStarListener => expert['isStarListener'] == true || widget.listener.isStarListener;
   bool get showDualRate => isInternational || isCallerIntl;
 
   double get effectiveAudioRate {
@@ -637,6 +638,41 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
                               ),
                               const SizedBox(width: 6),
                               const Icon(Icons.verified_rounded, size: 20, color: Color(0xFFE05D44)),
+                              if (isStarListener) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
+                                    ),
+                                    borderRadius: BorderRadius.circular(8),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
+                                        blurRadius: 6,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.star_rounded, size: 12, color: Colors.white),
+                                      SizedBox(width: 3),
+                                      Text(
+                                        'STAR LISTENER',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w800,
+                                          color: Colors.white,
+                                          letterSpacing: 0.4,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                               if (isAdult) ...[
                                 const SizedBox(width: 6),
                                 Container(
@@ -774,18 +810,48 @@ class _ListenerDetailScreenState extends State<ListenerDetailScreen> {
                     const SizedBox(height: 20),
 
                     // 2. Services & Live Rates Section
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'Choose How to Connect',
-                            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Color(0xFF1E293B)),
+                          Row(
+                            children: [
+                              const Text(
+                                'Choose How to Connect',
+                                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Color(0xFF1E293B)),
+                              ),
+                              if (isStarListener) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFEF3C7),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: const Color(0xFFF59E0B), width: 0.8),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.star_rounded, size: 11, color: Color(0xFFB45309)),
+                                      SizedBox(width: 2),
+                                      Text(
+                                        'STAR RATES',
+                                        style: TextStyle(
+                                          fontSize: 9.5,
+                                          fontWeight: FontWeight.w800,
+                                          color: Color(0xFFB45309),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                           Text(
-                            'Per-minute billing',
-                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF94A3B8)),
+                            isStarListener ? 'Custom rates' : 'Per-minute billing',
+                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF94A3B8)),
                           ),
                         ],
                       ),
